@@ -97,3 +97,27 @@ These are reasons, not preferences:
   each task and report against its acceptance check before continuing.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
+
+## Git workflow
+
+`main` is branch-protected (no direct pushes, no force-push, no deletion).
+Every change ships through a PR:
+
+1. Branch off `main`: `git checkout -b <type>/<short-description>` (e.g.
+   `feat/task1-corpus`, `fix/chunker-heading-split`).
+2. Commit on the branch as work progresses.
+3. Push the branch and open a PR with `gh pr create`. One PR per push to
+   `main` — including scaffolding and doc-only changes.
+4. Merge via **merge commit** (`gh pr merge --merge`), not squash or rebase —
+   keeps per-branch commit history visible on `main`.
+5. Delete the branch after merge.
+
+**Tags:** cut a git tag at each Phase boundary, once that phase's exit
+criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
+exits. Not cut per-task; tasks are checkpoints, phases are releases.
+
+**CI/CD:** intentionally not set up in Phase 1 (build plan §1 do-not-build
+list). It earns its place at Phase 5, gated by the eval harness built in
+Task 7 — no change ships if retrieval/answer quality regresses (Solution
+Design §5). Until then, quality gating is manual: run `pytest` and the eval
+harness locally before opening a PR.
