@@ -76,7 +76,7 @@ These are reasons, not preferences:
 | Env / deps | `uv` (or venv + pip) | same | Lockfile committed |
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
-| LLM | Claude via Anthropic API | Claude via Bedrock | Behind `LLMClient` interface |
+| LLM | DeepSeek API | Claude via Bedrock | Behind `LLMClient` interface; free tier for Phase 1, swapped for Claude/Bedrock in Phase 4 |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
