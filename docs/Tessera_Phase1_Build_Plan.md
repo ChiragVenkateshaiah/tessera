@@ -51,7 +51,7 @@ These are not preferences; they are the reasons the architecture looks the way i
 | Env / deps | `uv` (or venv + pip) | same | Lockfile committed |
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
-| LLM | DeepSeek API | Claude via Bedrock | Behind `LLMClient` interface; free tier for Phase 1, swapped for Claude/Bedrock in Phase 4 |
+| LLM | Gemini API | Claude via Bedrock | Behind `LLMClient` interface; free (Gemini Pro subscription) for Phase 1, swapped for Claude/Bedrock in Phase 4 |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
@@ -91,7 +91,7 @@ tessera/
 │   │   └── retriever.py         # archetype-aware retrieval
 │   ├── generation/
 │   │   ├── base.py              # LLMClient interface
-│   │   ├── deepseek.py          # DeepSeek impl
+│   │   ├── gemini.py            # Gemini impl
 │   │   └── prompts.py           # grounded-answer prompts
 │   ├── pipeline.py              # query -> route -> retrieve -> generate
 │   └── cli.py
