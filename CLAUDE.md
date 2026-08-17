@@ -19,6 +19,9 @@ Full reasoning behind these constraints lives in `docs/`:
   AWS/production target this phase is deliberately not building yet.
 - `docs/Tessera_Phase1_Build_Plan.md` — the authoritative instruction set for
   this phase. Re-read it before making structural decisions.
+- `docs/adr/` — forward-looking architecture decisions for Phase 4+
+  (e.g. the hybrid Go/Python production split). Documentation only; none
+  of it is built in Phase 1.
 
 ## Phase 1 objective and boundaries
 
