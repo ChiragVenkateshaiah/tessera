@@ -7,7 +7,7 @@ from google.genai import types
 
 from tessera.generation.base import LLMClient
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 
 
 class GeminiClient(LLMClient):
@@ -29,6 +29,12 @@ class GeminiClient(LLMClient):
             config=types.GenerateContentConfig(
                 system_instruction=system,
                 temperature=temperature,
+                # No tools are ever passed, so automatic function calling
+                # is irrelevant here — disabling it silences an unrelated
+                # SDK warning on every call.
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                    disable=True
+                ),
             ),
         )
         if not response.text:
