@@ -4,10 +4,10 @@ Last updated: 2026-08-17
 
 ## Status
 
-Task 2 complete and merged (PR #5). Corpus loads and chunks cleanly.
-Retrieval/generation logic still not implemented — everything under
-`src/tessera/` beyond ingestion/ and `__init__.py` is a docstring stub
-naming which task implements it.
+Task 3 complete and merged (PR #7). Corpus loads, chunks, embeds, and
+indexes end-to-end; manual similarity queries return plausible results.
+Nothing under `retrieval/`, `generation/`, or `pipeline.py` implemented
+yet — those are still docstring stubs.
 
 ## Done
 
@@ -49,39 +49,51 @@ naming which task implements it.
       pure functions, no infra coupling) — `chunker.py` already holds it;
       it's now an explicit bar for Tasks 4-6 to be checked against as
       they're built.
+- [x] **Task 3 — Embedding and vector store behind interfaces** (PR #7,
+      merged). `Embedder`/`VectorStore` interfaces defined first;
+      `LocalEmbedder` (sentence-transformers all-MiniLM-L6-v2, 384-dim,
+      CPU) and `ChromaVectorStore` (local persistent, explicit cosine
+      space — Chroma defaults to L2) as the concrete implementations.
+      Along the way, pinned `torch` to the CPU-only wheel index in
+      `pyproject.toml`/`uv.lock` — the default PyPI build on Linux pulls
+      ~2GB of unneeded NVIDIA CUDA packages transitively; confirmed zero
+      `nvidia-*` in the lockfile after the fix. 47 tests total (37 new):
+      all 336 chunks indexed, plausible top results on real queries,
+      off-corpus queries score well below on-corpus ones, and — direct
+      proof of the interface-swap acceptance criterion — the exact same
+      indexing/query function runs unchanged against both real
+      implementations and a pair of fakes defined only in the test file.
 
 ## Next task to pick up
 
-**Task 3 — Embedding and vector store behind interfaces** (build plan §5,
-Task 3). Not started — waiting on go-ahead.
+**Task 4 — Archetype router** (build plan §5, Task 4). Not started —
+waiting on go-ahead.
 
-Task 3 covers:
-1. Define `Embedder` interface (`src/tessera/embedding/base.py`), then the
-   `sentence-transformers` local implementation (`embedding/local.py`).
-2. Define `VectorStore` interface (`src/tessera/store/base.py`), then the
-   Chroma implementation (`store/chroma.py`) — local, persistent, at
-   `data/vectorstore/` (gitignored). This is the decided choice, not
-   pgvector/Pinecone/Milvus — see `CLAUDE.md` tech table and
-   `docs/Tessera_Solution_Design.md` §4; OpenSearch Serverless is the
-   Phase 4 target behind the same interface.
-3. Index the 336 chunks from Task 2 into the store.
+Task 4 covers a lightweight classifier mapping a query to archetype A
+(lookup), B (expertise), C (synthesis), or D (comparative). B returns "not
+yet supported"; D returns the confidentiality refusal. Build plan says
+"LLM-based is acceptable, keep the prompt in prompts.py."
 
-Note the heavy ML deps (`sentence-transformers`, `chromadb`) aren't
-installed in `.venv` yet — Task 2 only installed the lightweight subset
-(`python-frontmatter`, `pyyaml`, `pytest`) to avoid a slow `uv sync`. Task 3
-will need the full `uv sync` (or targeted `uv pip install`), which is slow
-(timed out once at 2 minutes) — plan for that, possibly run in background.
+**Open design question to resolve before/at the start of Task 4:** the
+build plan's Task 6 (not Task 4) is where `generation/base.py`
+(`LLMClient` interface) and `generation/deepseek.py` get implemented — but
+an LLM-based router needs an LLM client to call. Options: (a) pull the
+`LLMClient` interface + DeepSeek implementation forward into Task 4 since
+the router needs it first, keeping Task 6 focused on just the
+grounded-generation prompts; or (b) implement Task 4's router with a
+non-LLM heuristic (keyword/embedding-similarity-based) for now and revisit
+with a real LLM call once Task 6's client exists. Raise this with the user
+before writing router.py — don't just pick one silently.
 
-**Acceptance check for Task 3:** corpus indexed; a manual similarity query
-returns plausible chunks; swapping implementations requires no changes
-outside the `embedding/` and `store/` modules.
+**Acceptance check for Task 4:** the 8 placeholder queries route
+correctly; routing decision is logged and inspectable.
 
 ## Task sequence (build plan §5, for reference)
 
 1. ~~Repo scaffold and synthetic corpus~~ — done (PR #2)
 2. ~~Ingestion and chunking~~ — done (PR #5)
-3. Embedding and vector store behind interfaces ← **next**
-4. Archetype router
+3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
+4. Archetype router ← **next**
 5. Archetype-aware retrieval
 6. Grounded generation with citations
 7. Evaluation harness
