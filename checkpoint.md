@@ -79,6 +79,20 @@ grounded-answer half, and `pipeline.py` still not implemented.
       note in Notes/open flags for why not all 8 landed in one single
       clean run). 10 unit tests (fake LLM client, no network) + 8 live
       tests (opt-in — see Notes/open flags).
+- [x] **Rebuilt `/start-day` and `/end-day`** (PR #11, merged). Both had
+      drifted from actual repo practice as the project grew. Rewritten to
+      genuinely mirror each other, reviewed by Opus against the real repo
+      state (not just the drafts' own claims), which caught: checkpoint.md
+      itself being stale, `end-day.md` describing a single-PR flow the repo
+      has never used (real pattern is two PRs per task — feature PR, then
+      a `chore/checkpoint-taskN-done` follow-up, per PRs #3/#6/#8),
+      `start-day.md`'s `.env` check being wrong (nothing auto-loads it),
+      and neither file documenting the GraphQL-503 workaround or branch
+      cleanup discipline despite both being hit repeatedly. Cleaned up 6
+      stale local branches as a direct result. One review claim was
+      independently checked and found wrong before being applied (that
+      all 10 merged branches still existed on `origin` — they didn't;
+      that was a stale local `git fetch` view).
 
 ## Next task to pick up
 
