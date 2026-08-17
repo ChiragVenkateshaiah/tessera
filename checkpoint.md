@@ -4,10 +4,9 @@ Last updated: 2026-08-17
 
 ## Status
 
-Task 3 complete and merged (PR #7). Corpus loads, chunks, embeds, and
-indexes end-to-end; manual similarity queries return plausible results.
-Nothing under `retrieval/`, `generation/`, or `pipeline.py` implemented
-yet — those are still docstring stubs.
+Task 4 complete (PR pending merge). Archetype routing works end-to-end
+against a live LLM. `retrieval/retriever.py`, `generation/prompts.py`'s
+grounded-answer half, and `pipeline.py` still not implemented.
 
 ## Done
 
@@ -66,38 +65,53 @@ yet — those are still docstring stubs.
       proof of the interface-swap acceptance criterion — the exact same
       indexing/query function runs unchanged against both real
       implementations and a pair of fakes defined only in the test file.
+- [x] **Task 4 — Archetype router** (PR pending). `LLMClient` interface
+      (`generation/base.py`) + `GeminiClient` (`generation/gemini.py`)
+      built first (pulled forward from Task 6, per the option-a decision
+      above), then `retrieval/router.py`: LLM-based classification into
+      A/B/C/D via a prompt in `generation/prompts.py`, JSON-parsed with
+      markdown-fence tolerance, returning an inspectable `RoutingDecision`
+      dataclass and logging every decision. `terminal_response_for()`
+      gives B the "not yet supported" message and D the confidentiality
+      refusal, per the build plan. All 8 Discovery Findings §7 placeholder
+      queries confirmed routing correctly against the live Gemini API
+      (each individually verified during this session — see rate-limit
+      note below for why not all 8 landed in one single clean run).
+      10 unit tests (fake LLM client, no network) + 8 live tests (opt-in,
+      see below).
+
+      **Important operational finding: Gemini's free tier caps
+      `gemini-3.6-flash` at 20 requests/*day*** (not just 5/minute) — hit
+      both limits repeatedly while testing this session. Fixed the live
+      test to require an explicit `RUN_LIVE_LLM_TESTS=1` opt-in, not just
+      "a key is present," so a routine `pytest tests/` run never silently
+      spends that budget. **This is a real constraint for Task 7's eval
+      harness** — 20 requests/day cannot run a meaningful eval sweep in
+      one sitting. Options to revisit when Task 7 starts: a paid Gemini
+      tier, spreading eval runs across days, or a different default model
+      with a higher free quota. Flagging now so it isn't a surprise later.
 
 ## Next task to pick up
 
-**Task 4 — Archetype router** (build plan §5, Task 4). Not started —
-waiting on go-ahead.
+**Task 5 — Archetype-aware retrieval** (build plan §5, Task 5). Not
+started — waiting on go-ahead.
 
-Task 4 covers a lightweight classifier mapping a query to archetype A
-(lookup), B (expertise), C (synthesis), or D (comparative). B returns "not
-yet supported"; D returns the confidentiality refusal. Build plan says
-"LLM-based is acceptable, keep the prompt in prompts.py."
+Task 5 covers `retrieval/retriever.py`: retrieval strategy varies by
+archetype — A (lookup) uses narrow k with metadata filtering, C
+(synthesis) uses broader k across sources. Returns chunks with source
+attribution. B and D never reach this — `router.terminal_response_for()`
+(Task 4) already returns their fixed response before retrieval would run.
 
-**Design question resolved:** the build plan's Task 6 (not Task 4) is
-where `generation/base.py` (`LLMClient` interface) gets implemented — but
-an LLM-based router needs an LLM client to call. Decided: pull the
-`LLMClient` interface forward into Task 4 (option a — the router needs it
-first; Task 6 then just adds grounded-generation prompts on top of an
-already-working client). `LLMClient` interface written;
-`generation/gemini.py` (`GeminiClient`) is the concrete implementation —
-see the LLM-decision note above. Still needed before Task 4's live
-acceptance check can run: a `GEMINI_API_KEY` in `.env` (gitignored, not
-committed) — user is generating one at aistudio.google.com/apikey.
-
-**Acceptance check for Task 4:** the 8 placeholder queries route
-correctly; routing decision is logged and inspectable.
+**Acceptance check for Task 5:** same query under A vs C settings returns
+visibly different retrieval breadth.
 
 ## Task sequence (build plan §5, for reference)
 
 1. ~~Repo scaffold and synthetic corpus~~ — done (PR #2)
 2. ~~Ingestion and chunking~~ — done (PR #5)
 3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
-4. Archetype router ← **next**
-5. Archetype-aware retrieval
+4. ~~Archetype router~~ — done (PR pending merge)
+5. Archetype-aware retrieval ← **next**
 6. Grounded generation with citations
 7. Evaluation harness
 8. CLI and README
