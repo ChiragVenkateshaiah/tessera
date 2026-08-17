@@ -70,6 +70,24 @@ These are reasons, not preferences:
    in Phase 5.
 5. **Local-first.** No cloud dependencies in Phase 1 except the LLM API call
    itself.
+6. **The query path stays transport-agnostic.** `router.py`, `retriever.py`,
+   `generation/`, and `pipeline.py` — everything between "a query came in"
+   and "here's a grounded answer" — must be pure with respect to
+   infrastructure: given a query and whatever typed context it needs, they
+   return data (a string, a dataclass, a dict), never touching HTTP, env
+   vars, a session store, or any specific deployment target. No print/log
+   side effects standing in for a return value, no reaching into global
+   config for something that should be a parameter. This is a sibling of
+   "swappable ports" (#1), not a separate idea: it's what lets a future
+   edge/routing layer (see `docs/adr/0002-hybrid-go-python-production-architecture.md`)
+   call into this core via a plain function call, subprocess, or HTTP
+   wrapper without the core itself changing. `chunker.py` already holds this
+   line (verified in Task 2 review) — hold every later module to the same
+   bar as it's built.
+
+   Ingestion code (`loader.py`) is exempt from the no-I/O part of this rule
+   — reading the corpus off disk is its job — but stays parameterized like
+   everything else: no hardcoded paths or credentials, ever.
 
 ## Technology decisions
 
