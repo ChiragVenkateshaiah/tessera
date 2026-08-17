@@ -79,3 +79,8 @@ check before continuing to the next.
   revisiting this decision explicitly.
 - Nothing yet has required an item from the "explicitly NOT in Phase 1"
   list in `CLAUDE.md` — flag here if that changes.
+- Forward context for whoever picks up Phase 4: `docs/adr/` now records a
+  hybrid Go/Python production architecture decision (Go edge/routing +
+  session state, Python RAG core unchanged from Phase 1, serverless →
+  Kubernetes evolution, GitHub Actions + Terraform for CI/CD). Documentation
+  only — doesn't change Task 2-8 scope or the current task sequence below.

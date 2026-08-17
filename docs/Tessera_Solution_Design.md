@@ -128,6 +128,8 @@ Not built in v1. Recorded so the portfolio demonstrates end-to-end thinking and 
 
 **Pilot footprint (when the core moves off local):** the minimum of the above — S3 + a managed vector store + Bedrock + a single query function — sized for a pilot, not a platform.
 
+**Detailed language/runtime decisions for the intended footprint** (a hybrid Go edge/routing layer in front of this Python core, evolving from serverless to Kubernetes) are recorded in `docs/adr/` rather than here — this section stays the service-level architecture; the ADRs carry the concrete decision, trade-offs, and alternatives considered for the API/routing layer this section left unspecified.
+
 ## 5. MLOps / DevOps layer (documented for full production)
 
 Not built in v1. Added after layers 1–3 work.
