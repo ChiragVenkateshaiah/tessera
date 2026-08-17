@@ -19,8 +19,11 @@ yet — those are still docstring stubs.
 - [x] Initialized git tracking, connected GitHub remote, adopted PR-based
       workflow (branch → PR → merge commit, branch-protected `main`, tags at
       phase boundaries, CI/CD deferred to Phase 5).
-- [x] Switched Phase 1 LLM decision from Claude API to DeepSeek API (Claude
-      via Bedrock remains the Phase 4 target).
+- [x] Switched Phase 1 LLM decision from Claude API to DeepSeek API, then
+      from DeepSeek to **Gemini API** (free via existing Gemini Pro
+      subscription — DeepSeek required a funded balance). Claude via
+      Bedrock remains the Phase 4 target throughout; `generation/gemini.py`
+      is the current LLMClient implementation.
 - [x] Added README with Phase 1 architecture diagram.
 - [x] **Task 1 — Repo scaffold and synthetic corpus** (PR #2, merged).
       Full `src/tessera/`, `evals/`, `tests/` scaffold stubbed per build
@@ -74,16 +77,16 @@ Task 4 covers a lightweight classifier mapping a query to archetype A
 yet supported"; D returns the confidentiality refusal. Build plan says
 "LLM-based is acceptable, keep the prompt in prompts.py."
 
-**Open design question to resolve before/at the start of Task 4:** the
-build plan's Task 6 (not Task 4) is where `generation/base.py`
-(`LLMClient` interface) and `generation/deepseek.py` get implemented — but
-an LLM-based router needs an LLM client to call. Options: (a) pull the
-`LLMClient` interface + DeepSeek implementation forward into Task 4 since
-the router needs it first, keeping Task 6 focused on just the
-grounded-generation prompts; or (b) implement Task 4's router with a
-non-LLM heuristic (keyword/embedding-similarity-based) for now and revisit
-with a real LLM call once Task 6's client exists. Raise this with the user
-before writing router.py — don't just pick one silently.
+**Design question resolved:** the build plan's Task 6 (not Task 4) is
+where `generation/base.py` (`LLMClient` interface) gets implemented — but
+an LLM-based router needs an LLM client to call. Decided: pull the
+`LLMClient` interface forward into Task 4 (option a — the router needs it
+first; Task 6 then just adds grounded-generation prompts on top of an
+already-working client). `LLMClient` interface written;
+`generation/gemini.py` (`GeminiClient`) is the concrete implementation —
+see the LLM-decision note above. Still needed before Task 4's live
+acceptance check can run: a `GEMINI_API_KEY` in `.env` (gitignored, not
+committed) — user is generating one at aistudio.google.com/apikey.
 
 **Acceptance check for Task 4:** the 8 placeholder queries route
 correctly; routing decision is logged and inspectable.

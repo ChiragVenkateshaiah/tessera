@@ -67,7 +67,7 @@ flowchart TB
         router["router.py<br/>archetype classifier: A / B / C / D"]
         retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow+filtered, C: broad multi-source)"]
         genIface["LLMClient interface"]
-        genImpl["deepseek.py<br/>DeepSeek API"]
+        genImpl["gemini.py<br/>Gemini API"]
         prompts["prompts.py<br/>grounded-answer prompts,<br/>per-archetype shapes"]
         cli --> router --> retriever
         retriever -->|reads| storeImpl
