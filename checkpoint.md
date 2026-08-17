@@ -4,10 +4,10 @@ Last updated: 2026-08-17
 
 ## Status
 
-Task 1 complete and merged (PR #2). Repo scaffold and synthetic corpus
-exist. No retrieval/generation logic implemented yet — everything under
-`src/tessera/` beyond `__init__.py` is a docstring stub naming which
-task implements it.
+Task 2 complete and merged (PR #5). Corpus loads and chunks cleanly.
+Retrieval/generation logic still not implemented — everything under
+`src/tessera/` beyond ingestion/ and `__init__.py` is a docstring stub
+naming which task implements it.
 
 ## Done
 
@@ -34,33 +34,53 @@ task implements it.
       between rather than a uniform corpus. All validated: front matter
       parses, `doc_type` matches directory, no real/identifiable company
       data.
+- [x] **Task 2 — Ingestion and chunking** (PR #5, merged). `loader.py`
+      parses front matter + body via `python-frontmatter`, validates the
+      5-key schema at load time. `chunker.py` splits on markdown heading
+      boundaries (hand-rolled heading tree, not fixed-size windows), tags
+      every chunk with its full heading path; oversized sections subdivide
+      at paragraph boundaries only, with fenced code blocks and tables
+      always kept atomic even past the word budget. Verified against every
+      structural edge case Task 1 added: 46/46 checkboxes intact, fence
+      markers always balanced, table isolated cleanly from surrounding
+      prose, 3-level heading nesting preserved. 336 chunks from 52 docs, 25
+      tests passing (synthetic fixtures + real-corpus integration). Also
+      added CLAUDE.md constraint #6 (query path stays transport-agnostic —
+      pure functions, no infra coupling) — `chunker.py` already holds it;
+      it's now an explicit bar for Tasks 4-6 to be checked against as
+      they're built.
 
 ## Next task to pick up
 
-**Task 2 — Ingestion and chunking** (build plan §5, Task 2). Not started
-— waiting on go-ahead.
+**Task 3 — Embedding and vector store behind interfaces** (build plan §5,
+Task 3). Not started — waiting on go-ahead.
 
-Task 2 covers:
-1. Implement `src/tessera/ingestion/loader.py` — reads the corpus with
-   front-matter metadata intact.
-2. Implement `src/tessera/ingestion/chunker.py` — section-aware chunking
-   that respects markdown heading boundaries (not fixed-size), preserving
-   framework coherence. Each chunk carries source metadata for citation.
+Task 3 covers:
+1. Define `Embedder` interface (`src/tessera/embedding/base.py`), then the
+   `sentence-transformers` local implementation (`embedding/local.py`).
+2. Define `VectorStore` interface (`src/tessera/store/base.py`), then the
+   Chroma implementation (`store/chroma.py`) — local, persistent, at
+   `data/vectorstore/` (gitignored). This is the decided choice, not
+   pgvector/Pinecone/Milvus — see `CLAUDE.md` tech table and
+   `docs/Tessera_Solution_Design.md` §4; OpenSearch Serverless is the
+   Phase 4 target behind the same interface.
+3. Index the 336 chunks from Task 2 into the store.
 
-The corpus now has real edge cases to test the chunker against: a table
-(must not split mid-row), a 46-item nested checkbox list, 4-level heading
-nesting (`##`→`###`→`####`), fenced code/formula blocks (must not split
-inside a fence), a ~227-word doc (minimum-chunk-size path), a ~1,427-word
-doc (multi-chunk-per-document path), and blockquotes.
+Note the heavy ML deps (`sentence-transformers`, `chromadb`) aren't
+installed in `.venv` yet — Task 2 only installed the lightweight subset
+(`python-frontmatter`, `pyyaml`, `pytest`) to avoid a slow `uv sync`. Task 3
+will need the full `uv sync` (or targeted `uv pip install`), which is slow
+(timed out once at 2 minutes) — plan for that, possibly run in background.
 
-**Acceptance check for Task 2:** chunk count reasonable; no chunk orphaned
-from its source metadata; headings not split mid-section.
+**Acceptance check for Task 3:** corpus indexed; a manual similarity query
+returns plausible chunks; swapping implementations requires no changes
+outside the `embedding/` and `store/` modules.
 
 ## Task sequence (build plan §5, for reference)
 
 1. ~~Repo scaffold and synthetic corpus~~ — done (PR #2)
-2. Ingestion and chunking ← **next**
-3. Embedding and vector store behind interfaces
+2. ~~Ingestion and chunking~~ — done (PR #5)
+3. Embedding and vector store behind interfaces ← **next**
 4. Archetype router
 5. Archetype-aware retrieval
 6. Grounded generation with citations
