@@ -4,7 +4,7 @@ Last updated: 2026-08-17
 
 ## Status
 
-Task 4 complete (PR pending merge). Archetype routing works end-to-end
+Task 4 complete and merged (PR #10). Archetype routing works end-to-end
 against a live LLM. `retrieval/retriever.py`, `generation/prompts.py`'s
 grounded-answer half, and `pipeline.py` still not implemented.
 
@@ -65,7 +65,7 @@ grounded-answer half, and `pipeline.py` still not implemented.
       proof of the interface-swap acceptance criterion — the exact same
       indexing/query function runs unchanged against both real
       implementations and a pair of fakes defined only in the test file.
-- [x] **Task 4 — Archetype router** (PR pending). `LLMClient` interface
+- [x] **Task 4 — Archetype router** (PR #10, merged). `LLMClient` interface
       (`generation/base.py`) + `GeminiClient` (`generation/gemini.py`)
       built first (pulled forward from Task 6, per the option-a decision
       above), then `retrieval/router.py`: LLM-based classification into
@@ -75,21 +75,10 @@ grounded-answer half, and `pipeline.py` still not implemented.
       gives B the "not yet supported" message and D the confidentiality
       refusal, per the build plan. All 8 Discovery Findings §7 placeholder
       queries confirmed routing correctly against the live Gemini API
-      (each individually verified during this session — see rate-limit
-      note below for why not all 8 landed in one single clean run).
-      10 unit tests (fake LLM client, no network) + 8 live tests (opt-in,
-      see below).
-
-      **Important operational finding: Gemini's free tier caps
-      `gemini-3.6-flash` at 20 requests/*day*** (not just 5/minute) — hit
-      both limits repeatedly while testing this session. Fixed the live
-      test to require an explicit `RUN_LIVE_LLM_TESTS=1` opt-in, not just
-      "a key is present," so a routine `pytest tests/` run never silently
-      spends that budget. **This is a real constraint for Task 7's eval
-      harness** — 20 requests/day cannot run a meaningful eval sweep in
-      one sitting. Options to revisit when Task 7 starts: a paid Gemini
-      tier, spreading eval runs across days, or a different default model
-      with a higher free quota. Flagging now so it isn't a surprise later.
+      (each individually verified during this session — see the quota
+      note in Notes/open flags for why not all 8 landed in one single
+      clean run). 10 unit tests (fake LLM client, no network) + 8 live
+      tests (opt-in — see Notes/open flags).
 
 ## Next task to pick up
 
@@ -110,7 +99,7 @@ visibly different retrieval breadth.
 1. ~~Repo scaffold and synthetic corpus~~ — done (PR #2)
 2. ~~Ingestion and chunking~~ — done (PR #5)
 3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
-4. ~~Archetype router~~ — done (PR pending merge)
+4. ~~Archetype router~~ — done (PR #10)
 5. Archetype-aware retrieval ← **next**
 6. Grounded generation with citations
 7. Evaluation harness
@@ -121,6 +110,31 @@ check before continuing to the next.
 
 ## Notes / open flags
 
+- **Gemini free tier caps `gemini-3.6-flash` at 20 requests/*day*** (not
+  just 5/minute) — hit both limits repeatedly while testing Task 4. Live
+  LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` (see `tests/test_router.py`),
+  not just "a key is present," so a routine `pytest tests/` run never
+  silently spends that budget. **Real constraint for Task 7's eval
+  harness** — 20 requests/day cannot run a meaningful eval sweep in one
+  sitting. Options to revisit then: a paid Gemini tier, spreading eval
+  runs across days, or a different default model with a higher free
+  quota.
+- **`gh pr create`/`gh pr merge` occasionally fail with a transient `503`
+  from GitHub's GraphQL API** (hit repeatedly across Tasks 3-4). Retry
+  once; if it persists, fall back to the REST API directly —
+  `gh api -X POST repos/<owner>/<repo>/pulls -f title=... -f head=... -f base=main -f body=...`
+  and `gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=merge`
+  — both have been reliable when GraphQL wasn't. The REST path does
+  **not** delete branches on merge the way `gh pr merge --delete-branch`
+  does — that step (`gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>`
+  for remote, plus `git branch -d <branch>` locally after `git checkout main && git pull`)
+  has to be done explicitly, and was missed a few times this session —
+  cleaned up 6 stale local branches as part of this note being written.
+- Nothing auto-loads `.env` yet — `config.py` is still a stub. Live runs
+  need the vars exported manually: `set -a; source .env; set +a`.
+  `GeminiClient` takes `api_key` as a constructor parameter (never reads
+  the environment itself, per constraint #6), so a populated `.env` file
+  alone does nothing until something exports or loads it.
 - The corpus's `## Related Frameworks` sections (all 30 original methodology
   docs) are deliberately kept as near-duplicate, low-signal chunks — a
   conscious choice to serve as hard negatives for retrieval precision@k,
@@ -133,3 +147,7 @@ check before continuing to the next.
   session state, Python RAG core unchanged from Phase 1, serverless →
   Kubernetes evolution, GitHub Actions + Terraform for CI/CD). Documentation
   only — doesn't change Task 2-8 scope or the current task sequence below.
+- For Task 5 onward: `data/vectorstore/` is gitignored and currently
+  empty, and there's no `tessera ingest` CLI until Task 8. Any manual
+  verification against a real index has to build one ad hoc (load corpus
+  → chunk → embed → index, as Task 3's tests do) until then.
