@@ -1,12 +1,12 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ## Status
 
-Task 4 complete and merged (PR #10). Archetype routing works end-to-end
-against a live LLM. `retrieval/retriever.py`, `generation/prompts.py`'s
-grounded-answer half, and `pipeline.py` still not implemented.
+Task 5 complete and merged (PR #13). Archetype-aware retrieval works
+against the real corpus. `generation/prompts.py`'s grounded-answer half
+and `pipeline.py` still not implemented.
 
 ## Done
 
@@ -93,20 +93,43 @@ grounded-answer half, and `pipeline.py` still not implemented.
       independently checked and found wrong before being applied (that
       all 10 merged branches still existed on `origin` — they didn't;
       that was a stale local `git fetch` view).
+- [x] **Task 5 — Archetype-aware retrieval** (PR #13, merged).
+      `retrieval/retriever.py`'s `retrieve()` varies strategy by
+      archetype: A (lookup) uses a narrow top-k (5); C (synthesis) pulls
+      a broader candidate pool (20) then diversifies by source (max 2
+      chunks/document, trimmed to 10 results) so multiple sources get a
+      chance to surface rather than one high-scoring document dominating.
+      Pure w.r.t. infrastructure per constraint #6 — `Embedder`/
+      `VectorStore` injected, not constructed. B/D raise `ValueError`
+      since `router.terminal_response_for()` already short-circuits them.
+      10 unit tests against fake `Embedder`/`VectorStore`, plus an ad hoc
+      real-corpus check (load → chunk → embed → index → retrieve, same
+      pattern Task 3 used) directly confirming the acceptance check: same
+      query returns 5 chunks/5 sources under A vs 10 chunks/7 sources
+      under C.
 
 ## Next task to pick up
 
-**Task 5 — Archetype-aware retrieval** (build plan §5, Task 5). Not
-started — waiting on go-ahead.
+**Task 6 — Grounded generation with citations** (build plan §5, Task 6).
+Not started — waiting on go-ahead.
 
-Task 5 covers `retrieval/retriever.py`: retrieval strategy varies by
-archetype — A (lookup) uses narrow k with metadata filtering, C
-(synthesis) uses broader k across sources. Returns chunks with source
-attribution. B and D never reach this — `router.terminal_response_for()`
-(Task 4) already returns their fixed response before retrieval would run.
+Task 6 covers finishing `generation/prompts.py`'s grounded-answer half
+(the router-classification prompt already exists from Task 4) and wiring
+generation into `pipeline.py`. Prompt design must enforce: answer only
+from retrieved chunks; cite sources inline; explicitly state when the
+corpus has nothing relevant. Separate prompt shapes for A (found-
+documents summary) and C (multi-source synthesis) — `RetrievalResult`
+(Task 5) already carries the archetype alongside the results so
+generation doesn't have to re-derive it.
 
-**Acceptance check for Task 5:** same query under A vs C settings returns
-visibly different retrieval breadth.
+**Acceptance check for Task 6:** every answer carries citations; an
+off-corpus question ("what's our policy on parental leave") produces a
+clean "we don't have anything on that" rather than invention.
+
+This is the first task subject to the new `genai-architect` /
+`quality-engineer` subagent review process (see `## Architecture & QA
+notes` below) — invoke both after implementation, before reporting the
+task complete.
 
 ## Task sequence (build plan §5, for reference)
 
@@ -114,8 +137,8 @@ visibly different retrieval breadth.
 2. ~~Ingestion and chunking~~ — done (PR #5)
 3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
 4. ~~Archetype router~~ — done (PR #10)
-5. Archetype-aware retrieval ← **next**
-6. Grounded generation with citations
+5. ~~Archetype-aware retrieval~~ — done (PR #13)
+6. Grounded generation with citations ← **next**
 7. Evaluation harness
 8. CLI and README
 
@@ -161,7 +184,26 @@ check before continuing to the next.
   session state, Python RAG core unchanged from Phase 1, serverless →
   Kubernetes evolution, GitHub Actions + Terraform for CI/CD). Documentation
   only — doesn't change Task 2-8 scope or the current task sequence below.
-- For Task 5 onward: `data/vectorstore/` is gitignored and currently
-  empty, and there's no `tessera ingest` CLI until Task 8. Any manual
-  verification against a real index has to build one ad hoc (load corpus
-  → chunk → embed → index, as Task 3's tests do) until then.
+- `data/vectorstore/` is gitignored and currently empty, and there's no
+  `tessera ingest` CLI until Task 8. Manual verification against a real
+  index still has to build one ad hoc (load corpus → chunk → embed →
+  index, as Task 3's tests do and Task 5's verification did) — this
+  worked cleanly for Task 5 and should for Task 6 too.
+
+## Architecture & QA notes
+
+Populated by the `genai-architect` and `quality-engineer` subagents
+(`.claude/agents/`) — independent structural review and acceptance-check
+verification, invoked by the main session (GenAI Engineer, by convention)
+only for Tasks 6, 7, and 8. Tasks 1-5 aren't reviewed here; they already
+had in-session test evidence and constraint checks at the time. Empty
+until Task 6 is reached.
+
+Entry format per review:
+- **Task N — <architect|quality-engineer> — round <k> — <date>**:
+  CLEAR / BLOCKED (bar item, if blocked: constraint #1 / constraint #6 /
+  do-not-build). Findings and resolution. Non-blocking notes, if any.
+
+A task's blocking-review round count is shared across both agents, capped
+at 2 total — a third round means stop and escalate to the user rather than
+reviewing again; that outcome gets logged here too if it happens.
