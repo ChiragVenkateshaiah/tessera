@@ -9,14 +9,17 @@ this command reads; if something here seems missing, check whether
 
 ## 1. Read status
 
-- `checkpoint.md` at repo root — the source of truth. It has five
+- `checkpoint.md` at repo root — the source of truth. It has six
   sections: `## Status`, `## Done`, `## Next task to pick up`,
-  `## Task sequence`, `## Notes / open flags`. Read `## Notes / open
-  flags` in full — that's where operational gotchas live (rate limits,
-  slow installs, flaky externals, deliberate design choices that look
-  like bugs at a glance). Also skim the most recent one or two entries
-  under `## Done` — some gotchas discovered mid-task ended up recorded
-  there historically before this section got normalized; if `/end-day`
+  `## Task sequence`, `## Notes / open flags`, `## Architecture & QA
+  notes`. Read `## Notes / open flags` in full — that's where operational
+  gotchas live (rate limits, slow installs, flaky externals, deliberate
+  design choices that look like bugs at a glance). Read
+  `## Architecture & QA notes` too if the next task is 6, 7, or 8, or if
+  the previous session ended with an unresolved BLOCKED/escalated finding
+  there. Also skim the most recent one or two entries under `## Done` —
+  some gotchas discovered mid-task ended up recorded there historically
+  before this section got normalized; if `/end-day`
   is doing its job going forward, new ones land in Notes.
 - `CLAUDE.md` at repo root — Phase 1 objective, the do-not-build list,
   design constraints, git workflow, tech decisions. CLAUDE.md carries no

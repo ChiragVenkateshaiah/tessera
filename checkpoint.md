@@ -165,3 +165,21 @@ check before continuing to the next.
   empty, and there's no `tessera ingest` CLI until Task 8. Any manual
   verification against a real index has to build one ad hoc (load corpus
   → chunk → embed → index, as Task 3's tests do) until then.
+
+## Architecture & QA notes
+
+Populated by the `genai-architect` and `quality-engineer` subagents
+(`.claude/agents/`) — independent structural review and acceptance-check
+verification, invoked by the main session (GenAI Engineer, by convention)
+only for Tasks 6, 7, and 8. Tasks 1-5 aren't reviewed here; they already
+had in-session test evidence and constraint checks at the time. Empty
+until Task 6 is reached.
+
+Entry format per review:
+- **Task N — <architect|quality-engineer> — round <k> — <date>**:
+  CLEAR / BLOCKED (bar item, if blocked: constraint #1 / constraint #6 /
+  do-not-build). Findings and resolution. Non-blocking notes, if any.
+
+A task's blocking-review round count is shared across both agents, capped
+at 2 total — a third round means stop and escalate to the user rather than
+reviewing again; that outcome gets logged here too if it happens.
