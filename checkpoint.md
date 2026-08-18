@@ -107,6 +107,30 @@ and `pipeline.py` still not implemented.
       pattern Task 3 used) directly confirming the acceptance check: same
       query returns 5 chunks/5 sources under A vs 10 chunks/7 sources
       under C.
+- [x] **Added `genai-architect` and `quality-engineer` persona subagents**
+      (PR #14, folded into the Task 5 checkpoint-done merge). Formalizes
+      the ad hoc "independent Opus review" practice already used for
+      Task 1's corpus and the `/start-day`+`/end-day` rebuild into two
+      standing `.claude/agents/` subagents — converged through two rounds
+      of independent Opus review of the *framework itself* before
+      anything was built. `genai-architect` (Opus, advisory-only, no
+      write access) gates only Tasks 6/7/8 against a binary bar:
+      CLAUDE.md constraint #1 (swappable ports) or #6
+      (transport-agnostic core) violation, the task's acceptance check
+      unmet, or a do-not-build item built — everything else is a note,
+      not a block. `quality-engineer` (Sonnet, read-only) verifies the
+      acceptance check and owns Gemini's 20-req/day quota budgeting.
+      GenAI Engineer stays the main session's default mode by convention
+      rather than a third subagent — no cold-start benefit to isolating
+      the one role that needs continuity of what it just built. Both
+      share a 2-round blocking-review cap per task (full re-review after
+      a fix, not just the flagged line), escalating to the user on a
+      third round; findings log to `## Architecture & QA notes` below
+      rather than separate files. First review round cut an initial
+      3-subagent, `docs/agents/`-log design to 2 subagents, narrowed
+      gating from every task to just 6/7/8, and flagged Gemini's daily
+      quota — the project's actual scarce resource — as missing from the
+      first draft entirely.
 
 ## Next task to pick up
 
@@ -189,6 +213,17 @@ check before continuing to the next.
   index still has to build one ad hoc (load corpus → chunk → embed →
   index, as Task 3's tests do and Task 5's verification did) — this
   worked cleanly for Task 5 and should for Task 6 too.
+- **Running two Claude Code sessions against the same local checkout can
+  interleave branch operations.** Hit this building the persona-agent
+  framework: one session created `chore/persona-agent-framework` and
+  committed to it, while a second session concurrently branched
+  `chore/checkpoint-task5-done` off it, added the Task 5 checkpoint
+  commit, and merged both into `main` via PR #14 — all mid-conversation
+  in the first session, whose own `git push` then landed as a harmless
+  no-op against whatever branch HEAD had moved to. Not destructive here,
+  but `git status`/`branch --show-current` can look surprising mid-session
+  as a result. `git reflog` is the fastest way to reconstruct what
+  actually happened across sessions when that happens.
 
 ## Architecture & QA notes
 
