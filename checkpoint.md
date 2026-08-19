@@ -1,12 +1,13 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 ## Status
 
-Task 5 complete and merged (PR #13). Archetype-aware retrieval works
-against the real corpus. `generation/prompts.py`'s grounded-answer half
-and `pipeline.py` still not implemented.
+Task 6 complete, not yet merged (this session). Grounded generation with
+citations works end-to-end against the real corpus and live Gemini —
+`pipeline.py` now ties routing, retrieval, and generation into one
+`answer_query()` entry point.
 
 ## Done
 
@@ -131,29 +132,61 @@ and `pipeline.py` still not implemented.
       gating from every task to just 6/7/8, and flagged Gemini's daily
       quota — the project's actual scarce resource — as missing from the
       first draft entirely.
+- [x] **Task 6 — Grounded generation with citations** (this session, PR
+      not yet opened). `generation/prompts.py` gained
+      `LOOKUP_ANSWER_SYSTEM_PROMPT` (A) and `SYNTHESIS_ANSWER_SYSTEM_PROMPT`
+      (C), both enforcing answer-only-from-sources + inline `[n]` citation
+      + explicit refusal language, plus `build_grounded_answer_user_prompt()`
+      which numbers retrieved chunks for citation. New
+      `generation/answer.py`: `generate_answer()` filters chunks below
+      `RELEVANCE_THRESHOLD = 0.35` (calibrated against real corpus/
+      `LocalEmbedder` scores — on-corpus queries score ≥0.39 on their
+      weakest top-3 result, "parental leave" tops out at 0.31, unrelated
+      queries score <0.15) and returns a fixed refusal message with **zero
+      LLM calls** when nothing clears it — deterministic, quota-free, and
+      immune to the model inventing an answer. `pipeline.py` (previously a
+      stub) now holds `answer_query()`, the single `route → (retrieve →
+      generate) or terminal` entry point returning one `AnswerResult` shape
+      regardless of archetype. 15 new tests (`test_answer.py`,
+      `test_pipeline.py`) — all deterministic, no live calls: fake-LLM unit
+      tests for both archetypes' prompt selection, citation construction,
+      threshold filtering, and B/D rejection, plus a real-corpus/
+      real-`LocalEmbedder` integration test running the literal
+      acceptance-check phrase ("What's our policy on parental leave?")
+      through `retrieve()` + `generate_answer()` against an
+      exploding-if-called fake LLM, proving the refusal is a guaranteed
+      code path, not LLM-dependent. Manually verified live against real
+      Gemini for all three reachable archetypes (A/C/B-and-D-via-router):
+      on-corpus A returned 5 correctly-numbered citations matching real
+      corpus docs, on-corpus C synthesized 10 sources into one briefing, off-
+      corpus A refused cleanly with zero citations — 4 live calls spent
+      (2 archetype-A, 2 archetype-C; see quota note below).
+      `genai-architect` and `quality-engineer` both reviewed round 1 and
+      returned CLEAR (see `## Architecture & QA notes`); one non-blocking
+      note (undocumented `score` direction/range on `SearchResult`) was
+      cheap enough to fix immediately rather than deferring — one-line
+      docstring addition to `store/base.py`, re-verified with a full test
+      run afterward (still 82 passed, 8 skipped).
 
 ## Next task to pick up
 
-**Task 6 — Grounded generation with citations** (build plan §5, Task 6).
-Not started — waiting on go-ahead.
+**Task 7 — Evaluation harness** (build plan §5, Task 7). Not started —
+waiting on go-ahead.
 
-Task 6 covers finishing `generation/prompts.py`'s grounded-answer half
-(the router-classification prompt already exists from Task 4) and wiring
-generation into `pipeline.py`. Prompt design must enforce: answer only
-from retrieved chunks; cite sources inline; explicitly state when the
-corpus has nothing relevant. Separate prompt shapes for A (found-
-documents summary) and C (multi-source synthesis) — `RetrievalResult`
-(Task 5) already carries the archetype alongside the results so
-generation doesn't have to re-derive it.
+Runner that loads cases from `evals/cases/*.yaml`, executes them through
+`pipeline.answer_query()`, and reports metrics: recall@k, precision@k,
+MRR (retrieval); groundedness and relevance (answer, LLM-as-judge with
+the case's ideal-answer description); routing accuracy; latency per
+archetype. Case schema and `evals/README.md` requirement per build plan
+§5. This task is Gemini-quota-heavy — see Notes below before running any
+sweep.
 
-**Acceptance check for Task 6:** every answer carries citations; an
-off-corpus question ("what's our policy on parental leave") produces a
-clean "we don't have anything on that" rather than invention.
+**Acceptance check for Task 7:** harness runs end-to-end on the 8
+placeholder cases and emits a metrics report. Numbers may be poor — the
+harness working is the deliverable, not the scores.
 
-This is the first task subject to the new `genai-architect` /
-`quality-engineer` subagent review process (see `## Architecture & QA
-notes` below) — invoke both after implementation, before reporting the
-task complete.
+Task 7 is also subject to the `genai-architect`/`quality-engineer`
+review process (see `## Architecture & QA notes` below).
 
 ## Task sequence (build plan §5, for reference)
 
@@ -162,8 +195,8 @@ task complete.
 3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
 4. ~~Archetype router~~ — done (PR #10)
 5. ~~Archetype-aware retrieval~~ — done (PR #13)
-6. Grounded generation with citations ← **next**
-7. Evaluation harness
+6. ~~Grounded generation with citations~~ — done (this session's PR)
+7. Evaluation harness ← **next**
 8. CLI and README
 
 Work one task at a time. Stop after each and report against its acceptance
@@ -175,11 +208,21 @@ check before continuing to the next.
   just 5/minute) — hit both limits repeatedly while testing Task 4. Live
   LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` (see `tests/test_router.py`),
   not just "a key is present," so a routine `pytest tests/` run never
-  silently spends that budget. **Real constraint for Task 7's eval
-  harness** — 20 requests/day cannot run a meaningful eval sweep in one
-  sitting. Options to revisit then: a paid Gemini tier, spreading eval
-  runs across days, or a different default model with a higher free
-  quota.
+  silently spends that budget. Task 6 followed the same discipline —
+  `test_answer.py`/`test_pipeline.py` have zero live-LLM tests, confirmed
+  by the quality-engineer review. **2026-08-19: 4/20 spent** on Task 6's
+  manual live verification (2 calls for an archetype-A on-corpus query, 2
+  for an archetype-C synthesis query — each query costs one `route()` call
+  + one `generate_answer()` call; the off-corpus refusal call was free,
+  since `generate_answer()` skips the LLM entirely when nothing clears
+  `RELEVANCE_THRESHOLD`). **Real constraint for Task 7's eval harness** —
+  20 requests/day cannot run a meaningful eval sweep in one sitting, and
+  each of the 8 placeholder cases will cost 2+ calls (route + generate,
+  more if an LLM-judge step is added for groundedness/relevance scoring).
+  Options to revisit then: a paid Gemini tier, spreading eval runs across
+  days, or a different default model with a higher free quota. Don't
+  stack further live spot-checks on top of a same-day eval sweep without
+  counting carefully.
 - **`gh pr create`/`gh pr merge` occasionally fail with a transient `503`
   from GitHub's GraphQL API** (hit repeatedly across Tasks 3-4). Retry
   once; if it persists, fall back to the REST API directly —
@@ -242,3 +285,40 @@ Entry format per review:
 A task's blocking-review round count is shared across both agents, capped
 at 2 total — a third round means stop and escalate to the user rather than
 reviewing again; that outcome gets logged here too if it happens.
+
+- **Task 6 — genai-architect — round 1 — 2026-08-19**: CLEAR. Constraint
+  #1 holds (zero concrete-implementation imports in `answer.py`/
+  `pipeline.py`; all three ports arrive as parameters). Constraint #6
+  holds (no I/O, no env reads, no print/log side effects; every branch
+  returns through a dataclass). No do-not-build item touched. Acceptance
+  check structurally satisfiable and directly proven by
+  `test_answer.py:202`'s real-corpus test. Non-blocking notes: (1)
+  `RELEVANCE_THRESHOLD=0.35` is calibrated to `all-MiniLM-L6-v2`
+  specifically — will silently be the wrong number after the Phase 4
+  embedder swap; consider a parameter or recorded calibration before
+  then. (2) `score`'s direction/range wasn't documented on the port —
+  **fixed same-session**, one-line addition to `SearchResult`'s
+  docstring in `store/base.py`. (3) `citations` lists sources *offered*
+  to the model, not sources it actually cited in the text — a conscious
+  Phase 1 read of the acceptance check; verifying inline-marker
+  groundedness is Task 7's job. (4) The deterministic refusal only fires
+  when *all* candidates are sub-threshold; a single marginal chunk (e.g.
+  0.36) still reaches the LLM, relying on the prompt's refusal
+  instruction rather than code — correct design, but worth an explicit
+  Task 7 eval case. (5) `GeneratedAnswer`/`AnswerResult` have identical
+  field sets (intentional per pipeline.py's docstring — B/D never
+  produce a `GeneratedAnswer`). (6) `answer_query()` doesn't expose
+  `retrieve()`'s `where` filter — known extension point for Task 7/8, not
+  an omission.
+- **Task 6 — quality-engineer — round 1 — 2026-08-19**: CLEAR.
+  `pytest tests/ -q` → 82 passed, 8 skipped (matches the pre-existing
+  live-LLM-test skip count; no new skips introduced). Off-corpus
+  acceptance check independently verified as a real, non-mocked
+  demonstration (real corpus + real `LocalEmbedder` + `ExplodingLLMClient`
+  fake that fails the test if the LLM is ever called). Citations verified
+  present for both archetype A and C paths at both the `generate_answer()`
+  unit level and the full `answer_query()` pipeline level. Confirmed zero
+  live-LLM calls in any Task 6 test file. Quota: 4/20 known-spent for
+  2026-08-19 (this session's manual verification, not the review itself —
+  the review spent 0). Flagged Task 7's eval sweep as the next thing that
+  will meaningfully draw down the daily budget.
