@@ -12,6 +12,7 @@ from tessera.generation.prompts import (
 )
 from tessera.retrieval.retriever import RetrievalResult
 from tessera.retrieval.router import Archetype
+from tessera.store.base import SearchResult
 
 # Below this cosine similarity, a chunk is treated as noise rather than a
 # real match. Measured against the real corpus/embedder (LocalEmbedder):
@@ -55,6 +56,19 @@ class GeneratedAnswer:
     citations: list[Citation]
 
 
+def filter_relevant(
+    results: list[SearchResult], threshold: float = RELEVANCE_THRESHOLD
+) -> list[SearchResult]:
+    """Chunks that clear RELEVANCE_THRESHOLD, in their original order.
+
+    Factored out of generate_answer() so callers that need to know
+    exactly which chunks the model was shown — e.g. the eval harness's
+    LLM-judge, which grades groundedness against those same chunks —
+    can reconstruct it without duplicating the filter.
+    """
+    return [r for r in results if r.score >= threshold]
+
+
 def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnswer:
     """Generate a grounded, cited answer from retrieved chunks.
 
@@ -77,7 +91,7 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
             f"{retrieval.archetype.value!r}"
         )
 
-    relevant = [r for r in retrieval.results if r.score >= RELEVANCE_THRESHOLD]
+    relevant = filter_relevant(retrieval.results)
     if not relevant:
         return GeneratedAnswer(
             query=retrieval.query,
