@@ -1,2 +1,90 @@
-# 8 workshop queries (Discovery Findings §7) — placeholder, non-representative.
-# Case schema and real content populated in Task 7.
+# 8 workshop queries (Discovery Findings §7) — placeholder, non-representative
+# of the real query log. Two per archetype (A/B/C/D). relevant_sources are
+# corpus-relative paths (relative to data/corpus/), verified against the
+# actual pilot corpus rather than guessed. B/D cases carry no
+# relevant_sources or judged answer — they never reach retrieval/generation,
+# so only routing accuracy applies to them.
+#
+# Replace this file's contents with real consultant-query/ideal-answer pairs
+# once the query log arrives — see evals/README.md.
+
+- id: q001
+  query: "Do we have a framework for market entry analysis?"
+  archetype: A
+  relevant_sources:
+    - "methodology/market-entry-overview.md"
+    - "methodology/market-entry-market-sizing.md"
+    - "methodology/market-entry-competitive-landscape.md"
+    - "methodology/market-entry-entry-mode-selection.md"
+    - "methodology/market-entry-go-no-go-quick-reference.md"
+  ideal_answer: >
+    Points to the Market Entry Analysis framework and its companion
+    methodologies (market sizing, competitive landscape mapping, entry
+    mode selection, go/no-go quick reference), summarizing what each
+    covers and citing the source documents.
+
+- id: q002
+  query: "Have we done work in financial services on GenAI before?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/genai-in-retail-banking-risk.md"
+  ideal_answer: >
+    Points to the retail banking risk GenAI thought-leadership piece,
+    summarizing its financial-services GenAI use case, citing the source.
+
+- id: q003
+  query: "Who at the firm knows about pharma pricing?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message — expertise-finding needs
+    staffing/HR data this system doesn't have access to in Phase 1.
+
+- id: q004
+  query: "Who's our expert on supply chain network optimization?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: q005
+  query: >
+    I'm staffed on a retail-bank cost transformation Monday — what should
+    I read first?
+  archetype: C
+  relevant_sources:
+    - "methodology/cost-transformation-overview.md"
+    - "methodology/cost-transformation-sga-benchmarking.md"
+    - "methodology/operating-model-overview.md"
+  ideal_answer: >
+    A briefing synthesizing cost-transformation methodology (overview and
+    SG&A benchmarking) and operating model design, weaving the sources
+    together rather than listing them, citing each inline.
+
+- id: q006
+  query: >
+    Client meeting in an hour, they asked about pricing elasticity — do
+    we have anything?
+  archetype: C
+  relevant_sources:
+    - "methodology/pricing-strategy-elasticity-calculation-reference.md"
+    - "methodology/pricing-strategy-price-elasticity.md"
+    - "methodology/pricing-strategy-overview.md"
+  ideal_answer: >
+    A briefing synthesizing the firm's pricing elasticity methodology and
+    analysis approach, citing sources.
+
+- id: q007
+  query: "How did we approach margin improvement for Client X vs. the standard playbook?"
+  archetype: D
+  relevant_sources: []
+  ideal_answer: >
+    Returns the confidentiality refusal — comparative-across-engagements
+    queries are out of pilot scope by design.
+
+- id: q008
+  query: "Compare our pricing engagement for Acme Corp against Beta Inc."
+  archetype: D
+  relevant_sources: []
+  ideal_answer: >
+    Returns the confidentiality refusal.
