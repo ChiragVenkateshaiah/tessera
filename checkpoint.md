@@ -4,10 +4,12 @@ Last updated: 2026-08-19
 
 ## Status
 
-Task 6 complete, not yet merged (this session). Grounded generation with
-citations works end-to-end against the real corpus and live Gemini —
-`pipeline.py` now ties routing, retrieval, and generation into one
-`answer_query()` entry point.
+Task 7 complete, not yet merged (this session). The eval harness runs
+end-to-end (routing accuracy, recall@k/precision@k/MRR, LLM-judge
+groundedness/relevance, latency per archetype) and survives a bad
+LLM response mid-sweep without losing already-completed cases. The full
+8-case live sweep is deliberately deferred to a fresh quota day — see
+Notes and the Phase 1 exit carry-forward below.
 
 ## Done
 
@@ -167,26 +169,83 @@ citations works end-to-end against the real corpus and live Gemini —
       cheap enough to fix immediately rather than deferring — one-line
       docstring addition to `store/base.py`, re-verified with a full test
       run afterward (still 82 passed, 8 skipped).
+- [x] **Task 7 — Evaluation harness** (this session, PR not yet opened).
+      `evals/metrics.py`: pure `recall_at_k`/`precision_at_k`/
+      `reciprocal_rank`/`mean` (operate on corpus-relative document
+      paths, collapsed from chunk-level results by rank) plus
+      `judge_answer()` — an LLM-as-judge scoring groundedness and
+      relevance 1-5, parsed the same way `router.py` parses routing JSON
+      (markdown-fence-tolerant). `evals/harness.py`: `load_cases()`
+      parses `evals/cases/*.yaml`; `run_case()`/`run_harness()` call
+      `route()`, `retrieve()`, and `generate_answer()` directly — the
+      same three functions `pipeline.answer_query()` composes — rather
+      than calling `answer_query()` itself, because the harness needs
+      the full ranked `RetrievalResult` for recall@k/precision@k/MRR and
+      the exact chunk text shown to the model for the judge, neither of
+      which survives `AnswerResult`'s collapsed shape; `format_report()`
+      emits a text summary. Everything except `main()` (the
+      `python -m evals.harness` entry point, which builds a real
+      temporary Chroma index and a real `GeminiClient`) is pure per
+      constraint #6, mirroring `loader.py`'s existing I/O exemption.
+      Small supporting refactor to the already-merged `generation/
+      answer.py`: extracted `filter_relevant()` out of `generate_answer()`
+      so the judge can reconstruct exactly which chunks the model saw
+      without duplicating the threshold filter (pure extraction, no
+      behavior change — all 15 Task 6 tests still pass unchanged).
+      `evals/cases/placeholder.yaml` populated with the 8 Discovery
+      Findings §7 workshop queries (2 per archetype); every
+      `relevant_sources` path verified against real on-disk corpus
+      filenames rather than guessed. `evals/README.md` documents running
+      the harness and populating it from the real query log later.
+      30 new tests (`test_metrics.py`, `test_harness.py`) — full suite
+      114 passed, 8 skipped. Live spot-check (1 archetype-A case + 1
+      archetype-B case, run through the actual `run_harness()`, not a
+      simulation) against real Gemini: routing correct for both,
+      recall/precision/MRR computed, judge scored 5/5 groundedness and
+      relevance, B case short-circuited with zero retrieval/judge calls
+      — 4 live calls spent (route+generate+judge for A, route only for
+      B). The full 8-case sweep (~16 calls) was deliberately **not** run
+      this session — combined with the day's other spend it would leave
+      zero quota margin; see Notes and the Phase 1 exit carry-forward
+      below. `genai-architect` and `quality-engineer` both reviewed
+      round 1 and returned CLEAR (see `## Architecture & QA notes`).
+      genai-architect's highest-value non-blocking note — one bad
+      LLM/judge response mid-sweep would raise and discard every
+      already-completed case's result, wasting that quota — was cheap
+      enough to fix immediately: `run_harness()` now catches per-case
+      failures, records them as a `CaseResult` with `error` set instead
+      of propagating, and excludes errored cases from every aggregate
+      (routing accuracy, recall/precision/MRR, groundedness/relevance,
+      latency) rather than silently corrupting them. Two new tests cover
+      it; re-verified with a full run afterward (114 passed, 8 skipped,
+      up from 112 before the fix's 2 new tests).
 
 ## Next task to pick up
 
-**Task 7 — Evaluation harness** (build plan §5, Task 7). Not started —
+**Task 8 — CLI and README** (build plan §5, Task 8). Not started —
 waiting on go-ahead.
 
-Runner that loads cases from `evals/cases/*.yaml`, executes them through
-`pipeline.answer_query()`, and reports metrics: recall@k, precision@k,
-MRR (retrieval); groundedness and relevance (answer, LLM-as-judge with
-the case's ideal-answer description); routing accuracy; latency per
-archetype. Case schema and `evals/README.md` requirement per build plan
-§5. This task is Gemini-quota-heavy — see Notes below before running any
-sweep.
+`tessera ingest` and `tessera query "..."` at minimum; `tessera eval`
+runs the harness (`evals.harness.run_harness()` directly — per
+genai-architect's Task 7 review, the CLI command should call it
+directly rather than shelling out to `python -m evals.harness`, so
+there's one composition root, not two). README covers setup, the phase
+boundary (what's built vs. designed), and how to run each command.
 
-**Acceptance check for Task 7:** harness runs end-to-end on the 8
-placeholder cases and emits a metrics report. Numbers may be poor — the
-harness working is the deliverable, not the scores.
+**Acceptance check for Task 8:** a fresh clone can be set up and queried
+following the README alone.
 
-Task 7 is also subject to the `genai-architect`/`quality-engineer`
+Task 8 is also subject to the `genai-architect`/`quality-engineer`
 review process (see `## Architecture & QA notes` below).
+
+**Before Task 8 is marked done**, per genai-architect's carry-forward:
+run the full 8-case live sweep (`python -m evals.harness`) on a day with
+enough Gemini quota headroom (~16 calls needed) and paste the emitted
+report into this file — that's what actually discharges Phase 1 exit
+criterion #3 ("the eval harness runs and reports all metric categories
+on placeholder cases"), which Task 7 itself only proved structurally
+(deterministic tests + a 2-case live spot-check), not with the literal
+full-sweep artifact.
 
 ## Task sequence (build plan §5, for reference)
 
@@ -195,9 +254,9 @@ review process (see `## Architecture & QA notes` below).
 3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
 4. ~~Archetype router~~ — done (PR #10)
 5. ~~Archetype-aware retrieval~~ — done (PR #13)
-6. ~~Grounded generation with citations~~ — done (this session's PR)
-7. Evaluation harness ← **next**
-8. CLI and README
+6. ~~Grounded generation with citations~~ — done (PR #16)
+7. ~~Evaluation harness~~ — done (this session's PR)
+8. CLI and README ← **next**
 
 Work one task at a time. Stop after each and report against its acceptance
 check before continuing to the next.
@@ -215,14 +274,21 @@ check before continuing to the next.
   for an archetype-C synthesis query — each query costs one `route()` call
   + one `generate_answer()` call; the off-corpus refusal call was free,
   since `generate_answer()` skips the LLM entirely when nothing clears
-  `RELEVANCE_THRESHOLD`). **Real constraint for Task 7's eval harness** —
-  20 requests/day cannot run a meaningful eval sweep in one sitting, and
-  each of the 8 placeholder cases will cost 2+ calls (route + generate,
-  more if an LLM-judge step is added for groundedness/relevance scoring).
-  Options to revisit then: a paid Gemini tier, spreading eval runs across
-  days, or a different default model with a higher free quota. Don't
-  stack further live spot-checks on top of a same-day eval sweep without
-  counting carefully.
+  `RELEVANCE_THRESHOLD`). **2026-08-19 continued: 8/20 spent** after
+  Task 7's live spot-check (1 archetype-A case via the real
+  `run_harness()` = route+generate+judge = 3 calls; 1 archetype-B case =
+  route only = 1 call). The full 8-case sweep is confirmed to cost ~16
+  calls (2 A-cases + 2 C-cases × 3 calls each = 12, plus 2 B-cases + 2
+  D-cases × 1 call each = 4; total 16), which combined with today's 8
+  already spent would exceed the daily cap with zero margin — both
+  `genai-architect` and `quality-engineer` independently confirmed this
+  arithmetic and agreed the deterministic suite + 2-case spot-check is
+  sufficient evidence for Task 7 itself. **The full sweep still needs to
+  happen once**, on a day with quota headroom, before Task 8 is marked
+  done — see the Task 8 entry under Next task to pick up. Options if
+  quota keeps being the binding constraint: a paid Gemini tier,
+  spreading the sweep across multiple days, or a different default model
+  with a higher free quota.
 - **`gh pr create`/`gh pr merge` occasionally fail with a transient `503`
   from GitHub's GraphQL API** (hit repeatedly across Tasks 3-4). Retry
   once; if it persists, fall back to the REST API directly —
@@ -322,3 +388,74 @@ reviewing again; that outcome gets logged here too if it happens.
   2026-08-19 (this session's manual verification, not the review itself —
   the review spent 0). Flagged Task 7's eval sweep as the next thing that
   will meaningfully draw down the daily budget.
+- **Task 7 — genai-architect — round 1 — 2026-08-19**: CLEAR. Constraint
+  #1 holds — every import in `evals/metrics.py`/`evals/harness.py` is an
+  interface; all three concrete implementations appear only inside
+  `main()`, the composition root, and `tests/test_harness.py` proves the
+  swap by running the whole harness against fakes. Constraint #6 holds —
+  `load_cases`/`run_case`/`run_harness`/`format_report`/
+  `unique_documents_by_rank` take injected ports, do no I/O, return
+  data; `main()`'s impurity exemption agreed as appropriate and cleaner
+  than `loader.py`'s (structural — a `__main__`-guarded composition root
+  nothing else imports — rather than load-bearing). The one core-code
+  touch, `filter_relevant()` extracted from `generation/answer.py`, is a
+  pure extraction confirmed by the unchanged Task 6 test results. No
+  do-not-build item touched. Acceptance check satisfied: all 7 metric
+  categories computed and emitted, `evals/cases/placeholder.yaml`'s 8
+  cases and all 12 `relevant_sources` paths independently confirmed
+  real. Agreed the quota-conscious 2-case-spot-check-plus-deterministic-
+  suite approach is not merely reasonable but forced by the arithmetic
+  (16-call full sweep vs. 12 remaining in the daily budget). Endorsed
+  calling `route()`/`retrieve()`/`generate_answer()` directly instead of
+  `pipeline.answer_query()` as correctly reasoned, not a pipeline
+  bypass — `AnswerResult` genuinely can't carry what the harness needs,
+  and building that capacity into the core return type would push eval
+  concerns into the transport-agnostic core, which is worse under
+  constraint #6 than the current 4-line duplication of call order.
+  Non-blocking notes: (1) **[highest-value, fixed same-session]** a
+  judge/routing failure on any one case would abort the entire sweep via
+  an uncaught exception, discarding every already-completed case's
+  result and its spent quota — `run_harness()` now catches per-case
+  failures, records `CaseResult.error`, and excludes errored cases from
+  every aggregate; two new tests cover it, full suite re-verified (114
+  passed, 8 skipped). (2) Refusals are structurally unjudgeable (the
+  judge is skipped whenever the answer is the fixed refusal message),
+  so correct-refusal behavior — CLAUDE.md constraint #2 — is currently
+  outside the eval's reach; worth an explicit off-corpus case when the
+  real query log lands, not a Task 7 blocker since the 8 placeholder
+  queries are all genuinely on/off-corpus by *routing* archetype, not
+  by relevance-threshold refusal. (3) Latency buckets by
+  `expected_archetype`, not actual — a misrouted case attributes its
+  latency to the wrong bucket; defensible, just noting the choice. (4)
+  MRR has no k cutoff while recall/precision do — intentional-looking,
+  worth noting in the report output if it causes confusion later. (5)
+  `TESSERA_CORPUS_DIR` defaults to relative `"data/corpus"`, requiring
+  cwd == repo root — overridable and documented, flagged only against
+  CLAUDE.md's "no hardcoded paths, ever" wording. (6) Forward to Task 8:
+  `tessera eval` should call `run_harness()` directly, not shell out to
+  `python -m evals.harness`, to avoid two composition roots — reflected
+  in the Task 8 entry above. **Carry-forward for Phase 1 exit**: the
+  full 8-case live sweep still needs to run once, on a fresh-quota day,
+  with its report pasted into this file — that's what actually
+  discharges Phase 1 exit criterion #3, not Task 7's structural proof.
+  Flagged as a Task 8 pre-completion item, not a Task 7 blocker.
+- **Task 7 — quality-engineer — round 1 — 2026-08-19**: CLEAR.
+  `pytest tests/ -q` → 112 passed, 8 skipped before the genai-architect
+  fix (114 passed after it — 2 new tests, same 8 skips). Confirmed the
+  `filter_relevant()` refactor is behavior-preserving via the unchanged
+  Task 6 test results. Independently spot-checked all 12
+  `relevant_sources` paths across the 6 A/C placeholder cases against
+  `data/corpus/` — all real, none guessed or stale. Read
+  `tests/test_harness.py` in full and confirmed real assertions (not
+  smoke tests) for routing-mismatch handling, judge-skip-on-empty-
+  ideal-answer, judge-skip-on-off-corpus-refusal, and B/D short-
+  circuiting with zero extra LLM calls. Confirmed zero live-LLM calls in
+  any Task 7 test file. On the live-sweep question specifically: judged
+  the 2-case spot-check plus deterministic suite sufficient for Task 7
+  itself, since the 6 unexercised placeholder cases all reduce to the
+  same two already-proven code paths (terminal short-circuit vs. full
+  route→retrieve→generate→judge) with different query text — no
+  unexercised code path remains. Recommended running the full sweep
+  before the `v0.1.0` Phase 1 tag rather than same-day; genai-architect's
+  independent review (above) sharpened this into an explicit Task 8
+  pre-completion item tied to Phase 1 exit criterion #3.
