@@ -17,6 +17,12 @@ class SearchResult:
     Carries everything a caller needs for citation and for archetype-aware
     filtering (doc_type, industry, topics) without a second lookup back to
     the source document.
+
+    score: higher is better (similarity, not distance) — Phase 1's Chroma
+    implementation returns cosine similarity in [-1, 1]. Task 6's
+    RELEVANCE_THRESHOLD filtering in generation/answer.py depends on this
+    direction; a future VectorStore implementation must preserve it rather
+    than returning a raw distance.
     """
 
     chunk_id: str

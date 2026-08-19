@@ -2,6 +2,10 @@
 (Task 4).
 """
 
+from __future__ import annotations
+
+from tessera.store.base import SearchResult
+
 ROUTER_SYSTEM_PROMPT = """You are a query router for Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. Classify each user query into exactly one of four archetypes.
 
 A — Prior-work / document lookup ("find the thing that exists"): the user is asking whether the firm has done something before, has a template or framework for a type of analysis, or has worked in a given industry or on a given topic before. The answer is a document or set of documents.
@@ -25,3 +29,33 @@ Respond with strict JSON only — no markdown fences, no other text — in exact
 
 def build_router_user_prompt(query: str) -> str:
     return f"Classify this query:\n\n{query}"
+
+
+# --- Grounded-answer prompts (Task 6) ---
+
+GROUNDED_ANSWER_BASE_RULES = """Answer using ONLY the numbered sources below — never use outside knowledge, even if you happen to know the answer. Every claim must be traceable to a specific source: cite it inline with its number in square brackets, e.g. [1], right after the claim it supports. If the sources don't actually answer the question, say plainly that Meridian's corpus doesn't have anything on that — do not guess or fill gaps from general knowledge."""
+
+LOOKUP_ANSWER_SYSTEM_PROMPT = f"""You are Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. The user is looking for prior work, a framework, or a template that may already exist at the firm.
+
+{GROUNDED_ANSWER_BASE_RULES}
+
+Identify which of the numbered sources are relevant documents, name them, and briefly summarize what each offers so the user can decide whether to open it. Keep it focused — this is a "here's what we have" pointer, not a full briefing."""
+
+SYNTHESIS_ANSWER_SYSTEM_PROMPT = f"""You are Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. The user wants to get up to speed on a topic ahead of a meeting or new staffing, drawing on multiple sources.
+
+{GROUNDED_ANSWER_BASE_RULES}
+
+Synthesize the numbered sources into a coherent briefing — weave the material together rather than listing sources one by one, and cite each source inline near the claim it supports."""
+
+
+def build_grounded_answer_user_prompt(query: str, sources: list[SearchResult]) -> str:
+    """Format retrieved chunks as numbered sources the model can cite by
+    number — the numbering here is what the [n] markers in the answer
+    refer back to.
+    """
+    formatted_sources = "\n\n".join(
+        f"[{i}] {source.document_title} — {' > '.join(source.heading_path)}\n"
+        f"{source.text}"
+        for i, source in enumerate(sources, start=1)
+    )
+    return f"Question: {query}\n\nSources:\n\n{formatted_sources}"
