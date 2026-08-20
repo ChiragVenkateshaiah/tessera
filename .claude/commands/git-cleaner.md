@@ -1,6 +1,6 @@
 Run the two-machine sync ritual before starting any work session. Check both
 repos for uncommitted changes, pull with rebase from origin, and report what's
-new. Repos: ~/projects/cerberus-platform and ~/projects/tessera.
+new. Repos: ~/projects/cerberus and ~/projects/tessera.
 
 For each repo in that order:
 
@@ -19,6 +19,6 @@ After both repos print a plain summary:
 - All clean and up to date → "Ready to work."
 - Any issues → list exactly what needs attention.
 
-Cerberus-platform only: if `terraform/envs/dev/.terraform/` or
+Cerberus only: if `terraform/envs/dev/.terraform/` or
 `terraform/bootstrap/.terraform/` is missing, append a reminder to run
 `terraform init` in that stack before any plan or apply.
