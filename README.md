@@ -194,3 +194,22 @@ uv run pytest
 Runs the deterministic suite (chunking, routing, metrics, config, CLI wiring
 — no LLM calls). Live-LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` and
 skipped otherwise, so a routine test run never spends Gemini quota.
+
+### Working across machines
+
+This project runs on two machines (workstation + WSL2 laptop) synced through
+GitHub. Both are configured with `pull.rebase = true` so `git pull` rebases
+cleanly instead of creating a merge commit.
+
+**First ritual on any machine — run `/git-cleaner` in Claude Code.** It checks
+both repos (`cerberus-platform` and `tessera`) for uncommitted changes, fetches
+and rebases from origin, and prunes stale remote-tracking branches.
+
+**Golden rule:** push before switching machines. A clean push means the other
+machine can always fast-forward without conflicts.
+
+On a fresh clone, set the rebase pull strategy once per repo:
+
+```sh
+git config pull.rebase true
+```
