@@ -15,8 +15,13 @@ exhaustion and were correctly reported as `ERROR` rows rather than
 crashing the run, which is Task 7's per-case error-isolation fix working
 under real conditions. All 5 Phase 1 exit criteria (build plan §7) look
 satisfied as of this session — see the assessment under Task 8 below.
-`v0.1.0` has **not** been tagged yet; flagged to the user rather than cut
-unprompted, since it's a shared, visible milestone marker.
+`v0.1.0` **is tagged and pushed** to origin (annotated tag on `d09ff36`,
+the Task 8 checkpoint merge commit, cut 2026-08-20 shortly after that
+merge) — confirmed this session via `git tag -l` / `git ls-remote --tags
+origin` after this file was found to still say otherwise. The tag itself
+was correctly cut in an earlier pass; only this file's status line had
+gone stale, most likely from the same interleaved-session pattern
+documented under Notes/open flags below.
 
 ## Done
 
@@ -335,7 +340,8 @@ unprompted, since it's a shared, visible milestone marker.
 
 ## Next task to pick up
 
-**None — Task 8 was the last task in the Phase 1 build sequence.**
+**None — Phase 1 is complete and tagged (`v0.1.0`).** Task 8 was the
+last task in the Phase 1 build sequence.
 Phase 1 exit criteria (build plan §7), assessed this session:
 
 1. Fresh clone can ingest + query with citations via CLI — **met**.
@@ -356,13 +362,17 @@ Phase 1 exit criteria (build plan §7), assessed this session:
    this session's fixes to the stale "cases empty" line and the
    inverted diagram arrow.
 
-**Not yet done: cutting the `v0.1.0` tag.** All 5 exit criteria read as
-satisfied, and CLAUDE.md's git workflow says to tag "once that phase's
-exit criteria are met" — but tagging is a visible, shared milestone
-(announces "Phase 1 done"), so it's being surfaced to the user rather
-than cut automatically in the same pass as finishing Task 8's own PR
-workflow. Also still open, non-blocking: `evals/README.md`'s "populating
-with the real query log" section belongs to Phase 2, not Phase 1 exit.
+All 5 exit criteria satisfied and `v0.1.0` tagged (see Status above).
+Also closed this session: `evals/README.md` step 4 ("Populating with the
+real query log") still named `python -m evals.harness` as the re-run
+command, inconsistent with the "Running it" section's Task 8 update
+preferring `tessera eval` — fixed via PR #22, merged. `.claude/commands/
+git-cleaner.md` also had a stale `cerberus-platform` repo name (should
+be `cerberus`) fixed in the same PR. Both were pre-existing, non-code
+drift, not new Phase 1 work.
+
+`evals/README.md`'s "populating with the real query log" section itself
+is Phase 2 scope, not something to build now.
 
 ## Task sequence (build plan §5, for reference)
 
@@ -375,12 +385,23 @@ with the real query log" section belongs to Phase 2, not Phase 1 exit.
 7. ~~Evaluation harness~~ — done (PR #18/#19)
 8. ~~CLI and README~~ — done (this session's PR)
 
-Phase 1 build sequence complete. Remaining: cut `v0.1.0` once the user
-confirms (see Next task to pick up above); Phase 2+ items are out of this
-sequence's scope (build plan §5 covers Phase 1 only).
+Phase 1 build sequence complete and tagged `v0.1.0`. Phase 2+ items are
+out of this sequence's scope (build plan §5 covers Phase 1 only).
 
 ## Notes / open flags
 
+- **This file went stale on the `v0.1.0` tag status.** A prior session
+  cut and pushed the tag (`d09ff36`, 2026-08-20) but this file's Status
+  and Next-task sections still said "not yet tagged" going into the next
+  session — caught and corrected 2026-08-20 by `/start-day` surfacing the
+  supposedly-open item to the user, who confirmed, at which point
+  `git tag -l` showed it already existed. Likely cause: the same
+  interleaved-session pattern noted below (two sessions against one
+  checkout), where one session's tag-and-push didn't make it back into
+  this file before the other session read it. Lesson for `/end-day`:
+  verify `git tag -l` / `git ls-remote --tags origin` directly rather
+  than trusting this file's own prior "not yet tagged" line when closing
+  out a session near a phase boundary.
 - **Gemini free tier caps `gemini-3.6-flash` at 20 requests/*day*** (not
   just 5/minute) — hit both limits repeatedly while testing Task 4. Live
   LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` (see `tests/test_router.py`),
