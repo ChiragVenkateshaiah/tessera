@@ -10,11 +10,17 @@ this becomes the CI quality gate in Phase 5.
 
 ```
 set -a; source .env; set +a   # GEMINI_API_KEY must be set
-python -m evals.harness       # from the repo root
+uv run tessera eval           # from the repo root
 ```
 
-This builds a temporary (non-persisted) index over `data/corpus/`, runs
-every case in `evals/cases/*.yaml`, and prints a metrics report. Each
+This is the same harness `tessera eval` wraps — it's the one CLI
+composition root (see `cli.py`), so prefer it. `python -m evals.harness`
+still works as a no-install fallback and builds its own temporary
+(non-persisted) index over `data/corpus/` rather than reading the
+persisted one at `data/vectorstore/`; `tessera eval` requires
+`tessera ingest` to have run first and reads that persisted index.
+Either way, every case in `evals/cases/*.yaml` runs and a metrics report
+prints. Each
 case that reaches generation costs up to 3 live LLM calls (route,
 generate, judge) — B/D cases that terminate at routing cost just 1.
 Gemini's free tier caps `gemini-3.6-flash` at **20 requests/day**, so
