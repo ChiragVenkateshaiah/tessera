@@ -4,24 +4,15 @@ Last updated: 2026-08-20
 
 ## Status
 
-Task 8 complete, not yet merged (this session) — the last task in the
-Phase 1 sequence. `tessera ingest`/`query`/`eval` all work end-to-end via
-the installed console script; the README's "Setup and usage" section is
-filled in and independently reproduced from a fresh-clone-equivalent
-scratch checkout by `quality-engineer`. The full 8-case live eval sweep
-also ran today (see the pasted report under Task 8 below) — 5/8 cases
-completed with full metrics, 3/8 hit genuine Gemini daily-quota
-exhaustion and were correctly reported as `ERROR` rows rather than
-crashing the run, which is Task 7's per-case error-isolation fix working
-under real conditions. All 5 Phase 1 exit criteria (build plan §7) look
-satisfied as of this session — see the assessment under Task 8 below.
-`v0.1.0` **is tagged and pushed** to origin (annotated tag on `d09ff36`,
-the Task 8 checkpoint merge commit, cut 2026-08-20 shortly after that
-merge) — confirmed this session via `git tag -l` / `git ls-remote --tags
-origin` after this file was found to still say otherwise. The tag itself
-was correctly cut in an earlier pass; only this file's status line had
-gone stale, most likely from the same interleaved-session pattern
-documented under Notes/open flags below.
+**Phase 1 complete.** All 8 tasks merged, all 5 exit criteria (build plan
+§7) met, `v0.1.0` tagged and pushed (annotated tag on `d09ff36`, the Task
+8 checkpoint merge commit). This session was ritual/housekeeping only —
+no new Phase 1 code: ran the `/git-cleaner` two-machine sync, fixed a
+stale `cerberus-platform` → `cerberus` repo name in
+`.claude/commands/git-cleaner.md`, fixed a command-drift inconsistency in
+`evals/README.md` (PR #22), and corrected this file's own stale "not yet
+tagged" status line after discovering `v0.1.0` already existed (PR #23).
+Nothing is queued next; Phase 2 hasn't started.
 
 ## Done
 
@@ -338,6 +329,28 @@ documented under Notes/open flags below.
       not a reason to consider the artifact incomplete. Re-running for
       an all-8-clean report is optional polish, not required for exit.
 
+- [x] **Post-Phase-1 housekeeping session** (2026-08-20, PRs #22, #23,
+      both merged). Ran the `/git-cleaner` two-machine sync ritual
+      (cerberus + tessera) at session start; found tessera's working
+      tree dirty with an uncommitted rename in
+      `.claude/commands/git-cleaner.md` (`cerberus-platform` →
+      `cerberus`, matching the real local directory name) — committed
+      that first so the rebase could proceed. `/start-day` then surfaced
+      one open item from this file: `evals/README.md`'s "Populating with
+      the real query log" step 4 still named `python -m evals.harness`
+      as the re-run command, inconsistent with the "Running it" section
+      above (updated in Task 8 to prefer `tessera eval`) — fixed
+      (PR #22, merged as `aaf11ee`, branch deleted). Also discovered
+      `/start-day`'s reading of this file's "Next task to pick up"
+      section was itself stale: it said `v0.1.0` hadn't been tagged, but
+      `git tag -l` / `git ls-remote --tags origin` showed the tag already
+      existed and was pushed (`d09ff36`, cut 2026-08-20 by an earlier
+      session) — corrected this file's Status/Next-task/Task-sequence
+      sections accordingly (PR #23, merged as `0e916b7`, branch deleted).
+      Full test suite re-verified clean throughout: 123 passed, 8
+      skipped, matching the pre-session baseline (no code changed this
+      session, doc/config-only).
+
 ## Next task to pick up
 
 **None — Phase 1 is complete and tagged (`v0.1.0`).** Task 8 was the
@@ -390,6 +403,15 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
 
 ## Notes / open flags
 
+- **`.venv` can exist but be missing dev-only deps** (hit this session:
+  `pytest` wasn't installed despite `.venv` being present — likely from
+  an earlier `uv sync` without `--extra dev`, possibly on the other
+  machine per the two-machine workflow). `source .venv/bin/activate`
+  succeeding is not sufficient evidence the environment is fully synced;
+  `uv sync --extra dev` fixed it in under a second (confirms it's a true
+  no-op when already synced, not something to skip as "probably fine").
+  `/start-day` step 2 already says to run this — this is a confirmed
+  real-world trigger for it, not just a hypothetical.
 - **This file went stale on the `v0.1.0` tag status.** A prior session
   cut and pushed the tag (`d09ff36`, 2026-08-20) but this file's Status
   and Next-task sections still said "not yet tagged" going into the next
