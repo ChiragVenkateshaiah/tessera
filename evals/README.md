@@ -75,10 +75,11 @@ pairs, actual consultant wording):
    numbers. If the real log includes expertise-finding or comparative
    queries, they're still worth adding as `B`/`D` cases to keep routing
    accuracy meaningful, just without `relevant_sources`/`ideal_answer`.
-4. Re-run `python -m evals.harness` and compare against the placeholder
-   baseline. Per the build plan: **numbers may be poor at this stage —
-   tuning happens in Phase 2, against this real log.** The harness
-   working end-to-end is Phase 1's deliverable, not the scores.
+4. Re-run `uv run tessera eval` (or `python -m evals.harness` as the
+   no-install fallback) and compare against the placeholder baseline.
+   Per the build plan: **numbers may be poor at this stage — tuning
+   happens in Phase 2, against this real log.** The harness working
+   end-to-end is Phase 1's deliverable, not the scores.
 
 ## What's in here
 
