@@ -104,20 +104,26 @@ def _router_response(archetype: str) -> str:
 # --- load_cases ---
 
 
-def test_load_cases_parses_real_placeholder_file() -> None:
+def test_load_cases_parses_real_case_files() -> None:
+    """Loads every *.yaml under the real evals/cases/ — currently
+    placeholder.yaml (8 Discovery Findings workshop queries) plus
+    query_log.yaml (25 synthesized query-log stand-in cases, see its
+    header comment). Counts below must be updated if either file's case
+    count changes.
+    """
     cases = load_cases(CASES_DIR)
 
-    assert len(cases) == 8
+    assert len(cases) == 33
     by_archetype = {a: 0 for a in Archetype}
     for case in cases:
         by_archetype[case.archetype] += 1
     assert by_archetype == {
-        Archetype.LOOKUP: 2,
-        Archetype.EXPERTISE: 2,
-        Archetype.SYNTHESIS: 2,
-        Archetype.COMPARATIVE: 2,
+        Archetype.LOOKUP: 12,
+        Archetype.EXPERTISE: 7,
+        Archetype.SYNTHESIS: 9,
+        Archetype.COMPARATIVE: 5,
     }
-    assert cases[0].id == "q001"
+    assert cases[0].id == "q001"  # placeholder.yaml sorts before query_log.yaml
     assert cases[0].relevant_sources  # A-archetype case has real sources
 
 

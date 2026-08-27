@@ -58,10 +58,23 @@ consultant query patterns.
 
 ## Populating with the real query log
 
-When the real query log arrives (target: 20–30 query/ideal-answer
-pairs, actual consultant wording):
+`evals/cases/query_log.yaml` (25 cases) is populated — but read this
+before trusting it as real data. Meridian Advisory and its stakeholders
+(including "Priya," who Discovery Findings §10 names as the owner of
+this deliverable) are fictional; this is a portfolio project, not an
+engagement with an actual client, so a genuine consultant-authored query
+log will never arrive. These 25 cases are Claude-synthesized to match
+the real-world usage patterns Discovery Findings §7 describes
+(archetype distribution, situational/time-pressured wording), grounded
+against the actual pilot corpus rather than guessed — every
+`relevant_sources` path was verified against a real file under
+`data/corpus/` by reading the document, not assumed. See the file's own
+header comment and checkpoint.md's 2026-08-27 entry for the full
+context. If this project ever becomes a template for a real engagement,
+replace `query_log.yaml`'s contents with the actual log using the same
+process that built it:
 
-1. Add a new file under `evals/cases/` (e.g. `evals/cases/query_log.yaml`)
+1. Add a new file under `evals/cases/` (or replace `query_log.yaml`)
    rather than overwriting `placeholder.yaml` — keeping the placeholder
    set around preserves a known-good smoke-test case set independent of
    the real data.
@@ -80,6 +93,17 @@ pairs, actual consultant wording):
    Per the build plan: **numbers may be poor at this stage — tuning
    happens in Phase 2, against this real log.** The harness working
    end-to-end is Phase 1's deliverable, not the scores.
+
+**First full sweep (33 cases: 8 placeholder + 25 query_log, 2026-08-27,
+against live NVIDIA NIM):** routing accuracy 93.9%, mean recall 0.74,
+mean precision 0.49, mean MRR 0.80, mean groundedness 4.86, mean
+relevance 4.76 (all 1-5 scale except recall/precision/MRR). Two
+genuinely misrouted cases (both archetype-C queries phrased as short
+direct requests — "what do we have," "what's our standard approach" —
+routed to archetype A instead) and a couple of retrieval misses on
+single-document A cases are real findings, not noise: this is exactly
+what Phase 2 tuning is for. Full per-case report in checkpoint.md's
+2026-08-27 entry.
 
 ## What's in here
 
