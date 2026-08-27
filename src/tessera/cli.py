@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from tessera.config import Settings
 from tessera.embedding.local import LocalEmbedder
-from tessera.generation.gemini import GeminiClient
+from tessera.generation.nvidia import NvidiaClient
 from tessera.ingestion.chunker import chunk_corpus
 from tessera.ingestion.loader import load_corpus
 from tessera.pipeline import answer_query
@@ -37,9 +37,10 @@ def _load_settings() -> Settings:
     except ValidationError as exc:
         typer.echo(
             "Missing or invalid configuration — copy .env.example to .env "
-            "and fill in GEMINI_API_KEY (get one at "
-            "https://aistudio.google.com/apikey), then `set -a; source "
-            ".env; set +a` before running this command.\n",
+            "and fill in NVIDIA_API_KEY (get one at "
+            "https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), "
+            "then `set -a; source .env; set +a` before running this "
+            "command.\n",
             err=True,
         )
         typer.echo(str(exc), err=True)
@@ -79,7 +80,7 @@ def query(text: str) -> None:
     _require_index(store)
 
     embedder = LocalEmbedder()
-    llm = GeminiClient(api_key=settings.gemini_api_key, model=settings.gemini_model)
+    llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
 
     result = answer_query(text, llm, embedder, store)
 
@@ -116,7 +117,7 @@ def eval_command() -> None:
     _require_index(store)
 
     embedder = LocalEmbedder()
-    llm = GeminiClient(api_key=settings.gemini_api_key, model=settings.gemini_model)
+    llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
 
     cases = load_cases(EVAL_CASES_DIR)
     report = run_harness(cases, llm, embedder, store, settings.corpus_dir)

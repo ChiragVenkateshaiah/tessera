@@ -70,7 +70,8 @@ def route(query: str, llm: LLMClient) -> RoutingDecision:
 
     Pure with respect to infrastructure per CLAUDE.md constraint #6: the
     LLMClient is injected, not constructed here — this function doesn't
-    know or care whether it's talking to Gemini, Bedrock, or a test fake.
+    know or care whether it's talking to NVIDIA NIM, Bedrock, or a test
+    fake.
     """
     raw = llm.complete(
         system=ROUTER_SYSTEM_PROMPT, user=build_router_user_prompt(query)

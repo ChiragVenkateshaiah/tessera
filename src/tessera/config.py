@@ -21,8 +21,8 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    gemini_api_key: str
-    gemini_model: str = "gemini-3.6-flash"
+    nvidia_api_key: str
+    nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
     corpus_dir: Path = Field(
         default=Path("data/corpus"), validation_alias="TESSERA_CORPUS_DIR"
     )

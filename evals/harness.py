@@ -346,12 +346,12 @@ def format_report(report: EvalReport) -> str:
 
 def main() -> None:
     """Build a real (temporary, non-persisted) index over the pilot
-    corpus and run every case in evals/cases/ against live Gemini.
+    corpus and run every case in evals/cases/ against live NVIDIA NIM.
 
     Run as `python -m evals.harness` from the repo root (not
     `python evals/harness.py` directly — that would put evals/ itself on
     sys.path instead of the repo root, breaking this module's absolute
-    `from evals.metrics import ...` import). Reads GEMINI_API_KEY from
+    `from evals.metrics import ...` import). Reads NVIDIA_API_KEY from
     the environment first (`set -a; source .env; set +a`, same as every
     other live check in this repo — see checkpoint.md).
 
@@ -365,15 +365,15 @@ def main() -> None:
     import tempfile
 
     from tessera.embedding.local import LocalEmbedder
-    from tessera.generation.gemini import GeminiClient
+    from tessera.generation.nvidia import NvidiaClient
     from tessera.ingestion.chunker import chunk_corpus
     from tessera.ingestion.loader import load_corpus
     from tessera.store.chroma import ChromaVectorStore
 
     corpus_dir = Path(os.environ.get("TESSERA_CORPUS_DIR", "data/corpus"))
     cases_dir = Path(__file__).parent / "cases"
-    api_key = os.environ["GEMINI_API_KEY"]
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+    api_key = os.environ["NVIDIA_API_KEY"]
+    model = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 
     docs = load_corpus(corpus_dir)
     chunks = chunk_corpus(docs)
@@ -383,7 +383,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as persist_dir:
         store = ChromaVectorStore(persist_dir=Path(persist_dir))
         store.add(chunks, embeddings)
-        llm = GeminiClient(api_key=api_key, model=model)
+        llm = NvidiaClient(api_key=api_key, model=model)
 
         cases = load_cases(cases_dir)
         report = run_harness(cases, llm, embedder, store, corpus_dir)

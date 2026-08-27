@@ -1,5 +1,5 @@
-"""LLMClient interface — the swappable port between Gemini (Phase 1) and
-Claude via Bedrock (Phase 4).
+"""LLMClient interface — the swappable port between NVIDIA NIM (Phase 1)
+and Claude via Bedrock (Phase 4).
 """
 
 from __future__ import annotations

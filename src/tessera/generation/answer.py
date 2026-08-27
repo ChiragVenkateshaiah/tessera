@@ -81,7 +81,7 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
     Chunks below RELEVANCE_THRESHOLD are dropped before the LLM ever sees
     them. If nothing clears the bar, this returns the fixed "nothing on
     that" message without spending an LLM call: a query with no on-corpus
-    signal shouldn't cost anything against Gemini's daily quota, and the
+    signal shouldn't cost anything against the LLM's daily quota, and the
     refusal is guaranteed rather than left to the model choosing to say
     so (CLAUDE.md constraint #2 — grounded generation only).
     """

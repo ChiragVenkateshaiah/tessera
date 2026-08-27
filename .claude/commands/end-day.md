@@ -15,12 +15,11 @@ directly.
 
 - `git status` and `git diff` — see everything changed this session.
 - Run `pytest tests/ -q` — **without** `RUN_LIVE_LLM_TESTS=1` unless you
-  have quota headroom today and specifically need to verify a live-LLM
-  change (check checkpoint.md's Notes first: `gemini-3.6-flash` is capped
-  at 20 requests/*day* on the free tier — a careless full live run can
-  burn the whole day's budget in one go). Don't check in on a broken
-  suite; fix it or clearly flag the failure in checkpoint.md's Notes
-  before committing.
+  specifically need to verify a live-LLM change (check checkpoint.md's
+  Notes first for what NVIDIA NIM quota has already been spent today —
+  the free tier's 40 rpm / 10,000 requests/day ceiling is generous, but
+  still worth tracking). Don't check in on a broken suite; fix it or
+  clearly flag the failure in checkpoint.md's Notes before committing.
 
 ## 2. Architecture & QA gate — Tasks 6, 7, 8 only
 
@@ -33,9 +32,9 @@ before doing anything else below. Each reports CLEAR or BLOCKED against
 the shared binary bar (constraint #1 swappable-ports violation, constraint
 #6 transport-agnostic-core violation, or a do-not-build item got built) —
 see the agent files for the full charter. Quality Engineer also verifies
-the task's acceptance check and owns Gemini quota budgeting (20
-requests/day free tier — check `checkpoint.md` Notes for what's already
-spent before it runs anything live).
+the task's acceptance check and owns NVIDIA NIM quota budgeting (40 rpm /
+10,000 requests/day free tier — check `checkpoint.md` Notes for what's
+already spent before it runs anything live).
 
 If either is BLOCKED: fix it (as GenAI Engineer — this session, not the
 subagent), then ask the same subagent for a full re-review of the task's

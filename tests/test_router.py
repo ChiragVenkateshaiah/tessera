@@ -2,10 +2,10 @@
 live integration test against the 8 Discovery Findings §7 placeholder
 queries.
 
-The live test is opt-in via RUN_LIVE_LLM_TESTS=1, not just "GEMINI_API_KEY
-is set" — Gemini's free tier caps gemini-3.6-flash at 20 requests/*day*
-(not just per-minute), so a routine `pytest tests/` run must never spend
-that budget by default. Run explicitly with:
+The live test is opt-in via RUN_LIVE_LLM_TESTS=1, not just "NVIDIA_API_KEY
+is set" — a routine `pytest tests/` run must never spend live LLM quota
+by default, regardless of how generous a given provider's limit is. Run
+explicitly with:
     RUN_LIVE_LLM_TESTS=1 pytest tests/test_router.py -k live
 """
 
@@ -142,23 +142,23 @@ PLACEHOLDER_QUERIES: list[tuple[str, Archetype]] = [
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE_LLM_TESTS") != "1",
     reason=(
-        "live LLM test opt-in only (RUN_LIVE_LLM_TESTS=1) — Gemini free "
-        "tier caps gemini-3.6-flash at 20 requests/day, not just per-minute"
+        "live LLM test opt-in only (RUN_LIVE_LLM_TESTS=1) — avoid "
+        "spending NVIDIA NIM quota on a routine test run"
     ),
 )
 @pytest.mark.skipif(
-    not os.environ.get("GEMINI_API_KEY"),
-    reason="GEMINI_API_KEY not set — live routing check skipped",
+    not os.environ.get("NVIDIA_API_KEY"),
+    reason="NVIDIA_API_KEY not set — live routing check skipped",
 )
 @pytest.mark.parametrize("query,expected_archetype", PLACEHOLDER_QUERIES)
 def test_placeholder_queries_route_correctly_live(
     query: str, expected_archetype: Archetype
 ) -> None:
-    from tessera.generation.gemini import GeminiClient
+    from tessera.generation.nvidia import NvidiaClient
 
-    llm = GeminiClient(
-        api_key=os.environ["GEMINI_API_KEY"],
-        model=os.environ.get("GEMINI_MODEL", "gemini-3.6-flash"),
+    llm = NvidiaClient(
+        api_key=os.environ["NVIDIA_API_KEY"],
+        model=os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
     )
 
     decision = route(query, llm)

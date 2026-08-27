@@ -9,7 +9,7 @@ this becomes the CI quality gate in Phase 5.
 ## Running it
 
 ```
-set -a; source .env; set +a   # GEMINI_API_KEY must be set
+set -a; source .env; set +a   # NVIDIA_API_KEY must be set
 uv run tessera eval           # from the repo root
 ```
 
@@ -23,9 +23,9 @@ Either way, every case in `evals/cases/*.yaml` runs and a metrics report
 prints. Each
 case that reaches generation costs up to 3 live LLM calls (route,
 generate, judge) — B/D cases that terminate at routing cost just 1.
-Gemini's free tier caps `gemini-3.6-flash` at **20 requests/day**, so
-budget accordingly before running the full case set, especially
-alongside any other live-LLM work the same day.
+NVIDIA NIM's free tier allows up to 40 requests/minute and 10,000
+requests/day, so a full sweep — even against a real query log of a few
+dozen cases — fits comfortably without special pacing.
 
 ## Case schema
 

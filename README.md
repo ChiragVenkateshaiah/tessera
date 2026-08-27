@@ -68,7 +68,7 @@ flowchart TB
         router["router.py<br/>archetype classifier: A / B / C / D"]
         retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow+filtered, C: broad multi-source)"]
         genIface["LLMClient interface"]
-        genImpl["gemini.py<br/>Gemini API"]
+        genImpl["nvidia.py<br/>NVIDIA NIM API"]
         prompts["prompts.py<br/>grounded-answer prompts,<br/>per-archetype shapes"]
         cli --> router --> retriever
         retriever -->|reads| storeImpl
@@ -126,8 +126,9 @@ exists).
 cp .env.example .env
 ```
 
-Fill in `GEMINI_API_KEY` in `.env` — get a free key at
-[aistudio.google.com/apikey](https://aistudio.google.com/apikey). The
+Fill in `NVIDIA_API_KEY` in `.env` — get a free key at
+[build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b)
+("Generate API Key"). The
 other two variables (`TESSERA_CORPUS_DIR`, `TESSERA_VECTORSTORE_DIR`) already
 default to `data/corpus` and `data/vectorstore`, which match this repo's
 layout, so they only need overriding if you relocate either directory.
@@ -167,9 +168,10 @@ message with **no LLM call spent**. Archetype B (expertise-finding) and D
 (comparative) queries are recognized and return a fixed non-answer instead
 of attempting retrieval — see "Archetype handling at query time" above.
 
-Each archetype-A/C query costs 2 Gemini calls (route + generate); B/D cost
-1 (route only, no generation). The free tier caps `gemini-3.6-flash` at 20
-requests/day — mind this if scripting multiple queries.
+Each archetype-A/C query costs 2 NVIDIA NIM calls (route + generate); B/D
+cost 1 (route only, no generation). The free tier allows up to 40
+requests/minute and 10,000 requests/day — comfortably enough for scripted
+or looped queries.
 
 ```sh
 uv run tessera eval
@@ -181,8 +183,9 @@ routing accuracy, mean recall/precision/MRR@5, mean groundedness/relevance
 (1-5), and per-archetype latency. `evals/cases/placeholder.yaml` ships with
 8 illustrative cases against the synthetic corpus — swap in the real
 consultant query log when it arrives (Phase 2) without touching the harness
-itself. A full sweep costs roughly 2-3 Gemini calls per case; budget quota
-accordingly. A case that errors (e.g. a rate limit) is reported as an
+itself. A full sweep costs roughly 2-3 NVIDIA NIM calls per case — well
+within the 10,000/day free-tier limit even for a large query log. A case
+that errors (e.g. a rate limit) is reported as an
 `ERROR` row and excluded from the aggregates rather than aborting the run.
 
 ### Tests
@@ -193,7 +196,7 @@ uv run pytest
 
 Runs the deterministic suite (chunking, routing, metrics, config, CLI wiring
 — no LLM calls). Live-LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` and
-skipped otherwise, so a routine test run never spends Gemini quota.
+skipped otherwise, so a routine test run never spends live LLM quota.
 
 ### Working across machines
 
