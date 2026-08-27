@@ -17,6 +17,8 @@ Examples: "Who at the firm knows about pharma pricing?", "Who's our expert on su
 C — Topic synthesis ("get me up to speed"): the user wants to be briefed or wants a synthesis across multiple sources on a broad topic, often ahead of a meeting or a new staffing — not a single document, a "catch me up" answer built from several sources.
 Examples: "I'm staffed on a retail-bank cost transformation Monday — what should I read first?", "Client meeting in an hour, they asked about pricing elasticity — do we have anything?"
 
+Note on A vs. C: weigh the situation the query is embedded in over the trailing question's wording. A query framed around getting ready for something — a new staffing, a client deadline, an upcoming meeting — is C even when it ends with lookup-sounding phrasing like "what do we have" or "what's our standard approach," because the actual need is a briefing, not one document. Reserve A for a query that just asks whether a specific artifact exists, with no onboarding or time-pressure framing around it. Examples that are C, not A, despite lookup-shaped endings: "Client needs a digital transformation roadmap by Friday — what do we have?", "Just got staffed on an operating model redesign — what's our standard approach?"
+
 D — Comparative across engagements ("compare across engagements"): the user is asking to compare how the firm approached something for one specific client versus another client, or a specific client versus the standard playbook, in a way that would require pulling from named client engagements.
 Examples: "How did we approach margin improvement for Client X vs. the standard playbook?", "Compare our pricing engagement for Acme Corp against Beta Inc."
 

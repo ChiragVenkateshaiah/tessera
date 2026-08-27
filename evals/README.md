@@ -94,15 +94,42 @@ process that built it:
    happens in Phase 2, against this real log.** The harness working
    end-to-end is Phase 1's deliverable, not the scores.
 
-**First full sweep (33 cases: 8 placeholder + 25 query_log, 2026-08-27,
-against live NVIDIA NIM):** routing accuracy 93.9%, mean recall 0.74,
-mean precision 0.49, mean MRR 0.80, mean groundedness 4.86, mean
-relevance 4.76 (all 1-5 scale except recall/precision/MRR). Two
-genuinely misrouted cases (both archetype-C queries phrased as short
-direct requests — "what do we have," "what's our standard approach" —
-routed to archetype A instead) and a couple of retrieval misses on
-single-document A cases are real findings, not noise: this is exactly
-what Phase 2 tuning is for. Full per-case report in checkpoint.md's
+**First full sweep (33 cases, 2026-08-27, against live NVIDIA NIM):**
+routing accuracy 93.9%, mean recall 0.74, mean precision 0.49, mean MRR
+0.80, mean groundedness 4.86, mean relevance 4.76. Two genuinely
+misrouted cases (both archetype-C queries phrased as short direct
+requests — "what do we have," "what's our standard approach" — routed
+to archetype A instead) and two recall=0.00 retrieval misses on
+single-document A cases were real findings, not noise — exactly what
+Phase 2 tuning is for, and both were fixed same-session:
+
+- **Retrieval fix**: chunk embeddings were computed from body text
+  alone — `chunker.py`'s new `chunk_embedding_text()` prepends the
+  document title and heading path, so a query echoing a document's title
+  (a common lookup pattern, e.g. "do we have a checklist for X") can
+  match even when the body prose doesn't repeat those words. Both misses
+  were confirmed root-caused this way (the target doc's exact query
+  terms appeared only in its title) and confirmed fixed after
+  re-`tessera ingest`-ing with the new embedding text.
+  `generation/answer.py`'s `RELEVANCE_THRESHOLD = 0.35` was re-checked
+  against the new embedding scores and still holds — the on-corpus/
+  off-corpus separation margin actually widened.
+- **Routing fix**: `ROUTER_SYSTEM_PROMPT` (`generation/prompts.py`)
+  gained an explicit A-vs-C disambiguation note — the decisive signal
+  for C is the situation (a deadline, a new staffing, an upcoming
+  meeting), not the trailing question's wording, since both misroutes
+  had lookup-shaped endings ("what do we have") on top of a genuine
+  onboarding/deadline situation. Verified fixed live, and a 7-query
+  regression check across all four archetypes confirmed no
+  overcorrection of genuine A/B/D queries into C.
+
+**Post-tuning sweep (same 33 cases): 100% routing accuracy, mean recall
+0.87, mean precision 0.71, mean MRR 0.95, mean groundedness 4.95, mean
+relevance 4.81** (recall/precision/MRR figures on the 21 archetype-A/C
+cases with `relevant_sources`; the other 12 are B/D routing-only cases).
+Full per-case detail and the debugging story (including several
+transient `503`s from NVIDIA's API, unrelated to this tuning, handled
+correctly by Task 7's per-case error isolation) in checkpoint.md's
 2026-08-27 entry.
 
 ## What's in here
