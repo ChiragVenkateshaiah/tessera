@@ -1,0 +1,280 @@
+# Synthesized stand-in for the real consultant query log (Discovery
+# Findings §7/§10: 20-30 real query/ideal-answer pairs, in consultants'
+# actual wording). Meridian Advisory and its stakeholders (including
+# "Priya," who was to deliver this log) are fictional — this is a
+# portfolio project, not an engagement with a real client, so that log
+# will never literally arrive. These 25 cases are Claude-synthesized to
+# match the real-world usage patterns Discovery Findings describes
+# (archetype distribution, situational/time-pressured wording), grounded
+# against the actual pilot corpus rather than guessed — every
+# relevant_sources path below was verified against real files under
+# data/corpus/ by reading each cited document, the same discipline
+# placeholder.yaml's cases followed. NOT a real client artifact; treat
+# accordingly if this project is ever used as a template for a real
+# engagement. See checkpoint.md's 2026-08-27 entry for the full context.
+#
+# Archetype distribution (A=10, C=7, B=5, D=3) approximates real-world
+# frequency per Discovery Findings §7: lookup is the most common query
+# type, synthesis is high-value but rarer, expertise-finding and
+# comparative queries occur but the system can't (B) or won't (D) answer
+# them — both still worth measuring for routing accuracy.
+
+- id: ql001
+  query: "Do we have a playbook for cost transformation programs?"
+  archetype: A
+  relevant_sources:
+    - "methodology/cost-transformation-overview.md"
+    - "methodology/cost-transformation-procurement.md"
+    - "methodology/cost-transformation-zero-based-budgeting.md"
+  ideal_answer: >
+    Points to the cost transformation overview and its lever pages
+    (procurement cost reduction, zero-based budgeting), summarizing the
+    baseline-benchmark / lever-mix / size-and-sequence / governance
+    framework and the specific levers, citing sources.
+
+- id: ql002
+  query: "Do we have a financial due diligence checklist we can reuse for the next deal?"
+  archetype: A
+  relevant_sources:
+    - "methodology/due-diligence-financial-checklist.md"
+  ideal_answer: >
+    Points to the financial due diligence checklist page, summarizing
+    quality-of-earnings analysis, working capital normalization, net-debt
+    items, and the standard review checklist, citing the source.
+
+- id: ql003
+  query: "Have we built anything on M&A Day 1 readiness planning?"
+  archetype: A
+  relevant_sources:
+    - "methodology/ma-integration-day-1-readiness.md"
+    - "methodology/ma-integration-day-1-runbook.md"
+  ideal_answer: >
+    Points to the Day 1 readiness planning page and its companion Day 1
+    runbook (T-30 to T+7), summarizing the critical-path/interim-leadership/
+    communications framework and the detailed execution timeline, citing
+    sources.
+
+- id: ql004
+  query: "Do we have a RACI template for operating model work?"
+  archetype: A
+  relevant_sources:
+    - "methodology/operating-model-raci-governance.md"
+    - "methodology/operating-model-decision-rights-matrix.md"
+  ideal_answer: >
+    Points to the RACI and governance methodology page and its companion
+    worked decision-rights matrix template, summarizing the
+    single-accountable-owner rule and the example matrix, citing sources.
+
+- id: ql005
+  query: "Do we have a framework for sequencing a digital transformation roadmap?"
+  archetype: A
+  relevant_sources:
+    - "methodology/digital-transformation-roadmap-sequencing.md"
+    - "methodology/digital-transformation-capability-assessment.md"
+  ideal_answer: >
+    Points to the roadmap sequencing methodology and its prerequisite
+    technology capability assessment, summarizing the
+    foundational-vs-customer-facing sequencing logic and the binding-
+    constraint concept, citing sources.
+
+- id: ql006
+  query: "Have we done a supply chain network optimization model before?"
+  archetype: A
+  relevant_sources:
+    - "methodology/supply-chain-network-optimization.md"
+    - "methodology/supply-chain-network-optimization-model-specification.md"
+  ideal_answer: >
+    Points to the network optimization methodology and its detailed model
+    specification (decision variables, objective function, scenario
+    design), citing sources.
+
+- id: ql007
+  query: "Do we have a workforce planning framework?"
+  archetype: A
+  relevant_sources:
+    - "methodology/talent-strategy-workforce-planning.md"
+  ideal_answer: >
+    Points to the workforce planning model page, summarizing the
+    demand-side (strategy-driven) and supply-side (attrition-adjusted
+    baseline) gap analysis approach, citing the source.
+
+- id: ql008
+  query: "Do we have a stakeholder mapping template for change programs?"
+  archetype: A
+  relevant_sources:
+    - "methodology/change-management-stakeholder-mapping.md"
+    - "methodology/change-management-communication-planning.md"
+  ideal_answer: >
+    Points to the stakeholder mapping methodology and its companion
+    communication planning page, summarizing the influence/support grid
+    and the sequencing-by-readiness communication approach, citing
+    sources.
+
+- id: ql009
+  query: "Have we published anything on GenAI adoption maturity?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/genai-adoption-maturity-model.md"
+  ideal_answer: >
+    Points to the GenAI adoption maturity model thought-leadership piece,
+    summarizing the five stages and the finding that most enterprises
+    overstate their current stage, citing the source.
+
+- id: ql010
+  query: "Do we have a point of view on decarbonization economics for heavy manufacturers?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/decarbonization-heavy-manufacturing.md"
+    - "thought_leadership/decarbonization-lever-economics-faq.md"
+  ideal_answer: >
+    Points to the heavy manufacturing decarbonization sequencing piece and
+    its companion lever-economics FAQ, summarizing the
+    sequencing-over-selection argument and the board-level capital
+    allocation questions, citing sources.
+
+- id: ql011
+  query: >
+    I'm staffed on a due-diligence engagement starting Monday — what
+    should I read first?
+  archetype: C
+  relevant_sources:
+    - "methodology/due-diligence-commercial-overview.md"
+    - "methodology/due-diligence-financial-checklist.md"
+    - "methodology/due-diligence-red-flag-reporting.md"
+  ideal_answer: >
+    A briefing synthesizing commercial DD (market/competitive-position
+    validation), financial DD (QoE, working capital, net-debt checklist),
+    and red flag reporting (continuous escalation discipline) into one
+    onboarding briefing, weaving the sources together rather than listing
+    them, citing each inline.
+
+- id: ql012
+  query: "Client wants a digital transformation roadmap by Friday — what do we have?"
+  archetype: C
+  relevant_sources:
+    - "methodology/digital-transformation-capability-assessment.md"
+    - "methodology/digital-transformation-roadmap-sequencing.md"
+  ideal_answer: >
+    A briefing synthesizing the capability assessment (baseline maturity,
+    binding constraint) feeding into roadmap sequencing (foundational vs.
+    customer-facing initiatives, built-in decision points), citing
+    sources.
+
+- id: ql013
+  query: "Getting staffed on an M&A integration next week — need to get up to speed fast."
+  archetype: C
+  relevant_sources:
+    - "methodology/ma-integration-imo-setup.md"
+    - "methodology/ma-integration-day-1-readiness.md"
+    - "methodology/ma-integration-day-1-runbook.md"
+  ideal_answer: >
+    A briefing synthesizing IMO setup (dedicated governance structure),
+    Day 1 readiness (critical path, interim leadership), and the Day 1
+    runbook (T-30 to T+7 execution detail) into one onboarding briefing,
+    citing sources.
+
+- id: ql014
+  query: >
+    Client meeting in an hour, they asked about open banking — do we
+    have anything?
+  archetype: C
+  relevant_sources:
+    - "thought_leadership/open-banking-2030-scenarios.md"
+    - "thought_leadership/open-banking-future-of-payments.md"
+  ideal_answer: >
+    A briefing synthesizing the four 2030 payments scenarios and the
+    current account-to-account/interchange-economics thesis into one
+    talking-points summary, citing sources.
+
+- id: ql015
+  query: "I'm prepping for a retail client on inventory and store network questions — what should I read?"
+  archetype: C
+  relevant_sources:
+    - "thought_leadership/omnichannel-inventory-optimization.md"
+    - "thought_leadership/future-of-physical-retail-real-estate.md"
+  ideal_answer: >
+    A briefing synthesizing the omnichannel inventory reset (allocation
+    logic, fulfillment role) and the store-as-fulfillment-infrastructure
+    real estate reframe, citing sources.
+
+- id: ql016
+  query: "Staffed on an operating model redesign — what's our standard approach?"
+  archetype: C
+  relevant_sources:
+    - "methodology/operating-model-overview.md"
+    - "methodology/operating-model-org-design-principles.md"
+    - "methodology/operating-model-shared-services.md"
+  ideal_answer: >
+    A briefing synthesizing the four-layer operating model framework
+    (structure/decision rights/process/governance), structural design
+    principles (spans, layers, matrix structures), and shared services as
+    a structural cost/service lever, citing sources.
+
+- id: ql017
+  query: "Client is asking about private label strategy given inflation — what's our thinking?"
+  archetype: C
+  relevant_sources:
+    - "thought_leadership/private-label-strategy-inflation.md"
+  ideal_answer: >
+    A briefing synthesizing the shift in trade-down customer behavior this
+    cycle and the three recommended strategic shifts (tiered architecture,
+    category-level investment, deliberate relative pricing), citing the
+    source.
+
+- id: ql018
+  query: "Who at the firm knows about decarbonization economics for industrials?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message — expertise-finding needs
+    staffing/HR data this system doesn't have access to in Phase 1.
+
+- id: ql019
+  query: "Who's led our M&A integration engagements recently?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: ql020
+  query: "Who's our expert on open banking and payments?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: ql021
+  query: "Who should I loop in on a zero-based budgeting engagement?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: ql022
+  query: "Who's done clinical trial site selection work before?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: ql023
+  query: "How did we approach digital transformation for Client Y compared to our standard roadmap?"
+  archetype: D
+  relevant_sources: []
+  ideal_answer: >
+    Returns the confidentiality refusal — comparative-across-engagements
+    queries are out of pilot scope by design.
+
+- id: ql024
+  query: "Compare our due diligence findings on two different acquisition targets we looked at."
+  archetype: D
+  relevant_sources: []
+  ideal_answer: >
+    Returns the confidentiality refusal.
+
+- id: ql025
+  query: "What was different about our M&A integration approach for Client A vs. Client B?"
+  archetype: D
+  relevant_sources: []
+  ideal_answer: >
+    Returns the confidentiality refusal.

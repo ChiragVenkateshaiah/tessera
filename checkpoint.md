@@ -5,13 +5,16 @@ Last updated: 2026-08-27
 ## Status
 
 **Phase 1 complete** (`v0.1.0` tagged, all 8 tasks merged, all 5 exit
-criteria met — see prior entries below). **This session (2026-08-27)
-swapped the Phase 1 LLM provider from Gemini to NVIDIA NIM** (PR #25,
-merged), resolving the quota constraint flagged as the main open
-decision blocking Phase 2's eval-sweep work. Phase 2 itself (populating
-`evals/cases/` with the real consultant query log) still hasn't started
-— this session was infrastructure to unblock it, not Phase 2 work
-itself. Nothing is queued next; see "Next task to pick up" below.
+criteria met — see prior entries below). **2026-08-27: swapped the LLM
+provider from Gemini to NVIDIA NIM** (PR #25, merged), resolving the
+quota constraint blocking Phase 2's eval-sweep work, **then kicked off
+Phase 2 itself** in the same session (PR pending at time of writing):
+populated `evals/cases/query_log.yaml` with 25 synthesized cases
+standing in for the real consultant query log (which will never
+literally arrive — Meridian Advisory and its stakeholders are fictional,
+confirmed directly by the user) and ran the full 33-case harness sweep
+against live NVIDIA NIM, producing Phase 2's first real baseline. See
+Done below for the full report and findings.
 
 ## Done
 
@@ -402,20 +405,134 @@ itself. Nothing is queued next; see "Next task to pick up" below.
       "full workflow through merge" (asked via clarifying question
       before pushing) rather than pausing for PR review.
 
+- [x] **Phase 2 kickoff: synthesized query log + first live sweep**
+      (2026-08-27, same session as the NVIDIA swap above). User asked to
+      "pick up the infrastructure to unblock Phase 2"; clarified via
+      `AskUserQuestion` that this meant starting Phase 2 itself (not
+      further LLM infrastructure). Checked the build plan and Discovery
+      Findings §7/§10 first: Phase 2 is explicitly gated on a real
+      20-30-pair consultant query log ("Priya to log 20-30 real queries
+      ... Owner: Priya. Target: ~1 week"). Asked the user directly
+      whether that log existed — **user confirmed Meridian Advisory and
+      its stakeholders, including Priya, are fictional** (played by the
+      user in an earlier Claude Chat discovery session), so a real log
+      will never arrive, and asked that the query set be synthesized
+      against real-world usage patterns instead. Read all 20 corpus
+      documents to be cited before writing anything — same discipline
+      Task 1/7's `relevant_sources` verification used — then wrote
+      `evals/cases/query_log.yaml`: 25 cases (A=10, C=7, B=5, D=3,
+      approximating real-world archetype frequency per Discovery
+      Findings §7), every `relevant_sources` path mechanically verified
+      against real files (`34/34` real, `0` missing), no id collisions
+      against `placeholder.yaml`'s existing `q001-q008`. File header and
+      `evals/README.md` both make explicit this is a Claude-synthesized
+      stand-in, not real client data — same honesty convention as the
+      synthetic pilot corpus itself (CLAUDE.md exit criterion #5).
+      `tests/test_harness.py::test_load_cases_parses_real_placeholder_file`
+      hardcoded an 8-case/2-per-archetype expectation against the real
+      `evals/cases/` directory — renamed to
+      `test_load_cases_parses_real_case_files` and updated to the new
+      33-case/12-7-9-5 combined total; full suite re-verified (123
+      passed, 8 skipped, count unchanged since this was a rename not an
+      addition).
+
+      **Ran the full 33-case sweep live against NVIDIA NIM three times**
+      while landing on a clean baseline. First full run: 27/33 succeeded,
+      6 hit transient `503 Service Unavailable` from NVIDIA's API (server
+      overload, not a quota limit) — correctly isolated as `ERROR` rows
+      and excluded from every aggregate by Task 7's per-case
+      exception-handling fix, proving that resilience again under a new
+      failure mode (503s, not the 429s it was built against). Retried the
+      6 errored cases via an ad hoc scratchpad script calling
+      `run_harness()` directly against the persisted index (same pattern
+      `main()` uses) — hit a genuine bug in that script, not the repo: it
+      derived `REPO_ROOT` by climbing `.parent` from its own path
+      looking for `pyproject.toml`, but the script lived in
+      `/tmp/.../scratchpad/`, entirely outside the repo tree, so the
+      climb reached filesystem root and looped forever there
+      (`Path("/").parent == Path("/")` never terminates) — **99.9% CPU
+      for 4 hours 20 minutes before being caught and killed**, zero
+      output the whole time. Fixed by hardcoding the known repo path
+      instead of auto-discovering it; the retry then completed normally
+      in about 4 minutes. Purely a scratchpad-script bug — nothing in
+      `evals/harness.py` or the retry logic itself was at fault, and
+      nothing in the repo needed a fix. 5 of the 6 retried cases
+      succeeded (one misrouted, see below); the 6th (`ql001`) hit a
+      second `503`, then succeeded on a third standalone attempt,
+      confirming the errors were genuinely transient rather than
+      query-specific. Rather than hand-merge three partial reports, ran
+      one final clean full sweep — **0 errors, 33/33 completed**:
+
+      ```
+      === Tessera Eval Report ===
+      Cases: 33
+
+      Routing accuracy: 93.9%
+
+      Retrieval (archetypes A/C with relevant_sources):
+        Mean recall:    0.74
+        Mean precision: 0.49
+        Mean MRR:       0.80
+
+      Generation quality (LLM-judge, 1-5):
+        Mean groundedness: 4.86
+        Mean relevance:    4.76
+
+      Latency by archetype (mean seconds):
+        A: 36.25
+        B: 28.97
+        C: 39.76
+        D: 10.55
+      ```
+
+      **Findings worth carrying into future tuning** (per build plan:
+      "numbers may be poor at this stage — tuning happens in Phase 2,
+      against this real log" — these are Phase 2's actual job, not a
+      Phase-2-kickoff defect): (1) **Two reproducible misroutes**, both
+      archetype-C queries phrased as short direct requests rather than
+      explicit synthesis language — `ql012` ("Client wants a digital
+      transformation roadmap by Friday — what do we have?") and `ql016`
+      ("Staffed on an operating model redesign — what's our standard
+      approach?") — both routed to archetype A instead of C, and both
+      misrouted identically on the retry *and* the final clean run, so
+      this is a real router prompt weakness (short "what do we
+      have"/"what's our approach" phrasing reads as lookup-shaped to the
+      classifier even when the underlying need is synthesis), not
+      noise — worth revisiting `router.py`'s classification prompt
+      in `generation/prompts.py` when Phase 2 tuning starts. (2) **Two
+      recall=0.00 lookup misses**: `ql002` (financial due diligence
+      checklist — the corpus has several similarly-named due-diligence
+      docs the retriever may be confusing it with) and `ql009` (GenAI
+      adoption maturity — single-source thought-leadership piece never
+      surfaced in top-k). (3) When retrieval succeeds, generation quality
+      is genuinely strong — most A/C cases with recall ≥ 0.67 scored 5/5
+      on both groundedness and relevance, consistent with Task 6/7's
+      findings that the grounded-generation prompt itself works well;
+      the gap is in retrieval, not generation. Live-call spend: roughly
+      33 (main sweep) + 6 (first retry batch) + 1 (ql001 standalone) ≈ 40
+      calls for the main sweeps, comfortably inside NVIDIA's 10,000/day
+      ceiling with no pacing needed — a direct, lived demonstration of
+      why the swap earlier this session mattered.
+
 ## Next task to pick up
 
-**None formally defined yet.** Phase 1 is complete and tagged (`v0.1.0`;
-Task 8 was the last task in the build sequence — exit-criteria detail
-below is historical, from the 2026-08-20 session that closed Phase 1).
-2026-08-27 added the NVIDIA NIM LLM swap (see Done above) as
-infrastructure to unblock Phase 2, not Phase 2 itself. **Phase 2's
-actual scope — populating `evals/cases/` with the real consultant query
-log and running the harness against it (build plan §7 / Solution Design
-§ "Phases 1-2") — still needs to be kicked off**; no real query log has
-arrived yet as of this writing, so there's nothing to pick up
-mechanically without it. Flag to the user at the next `/start-day` if
-this is still true, since a real query log arriving is an external event
-this repo can't detect on its own.
+**Phase 2 has started.** Phase 1 is complete and tagged (`v0.1.0`; Task 8
+was the last task in the build sequence — exit-criteria detail below is
+historical, from the 2026-08-20 session that closed Phase 1). 2026-08-27
+added the NVIDIA NIM LLM swap (infrastructure) and then, same session,
+populated `evals/cases/query_log.yaml` and ran the first live 33-case
+harness sweep — Phase 2's actual work per build plan §7/Solution Design
+"Phases 1-2." **Confirmed permanently: no real consultant query log will
+ever arrive** — Meridian Advisory and its stakeholders are fictional
+(user confirmed this directly), so `query_log.yaml`'s 25 synthesized
+cases are the permanent stand-in, not a placeholder for something still
+coming. Next task is genuinely open-ended tuning work, not a fixed build-
+plan item: the two reproducible misroutes and two recall=0.00 retrieval
+misses logged in the Done entry above are concrete, specific starting
+points if the user wants to continue Phase 2 tuning (router prompt
+adjustment in `generation/prompts.py`, or chunking/retrieval
+investigation for the two missed lookups) — otherwise ask the user what's
+next rather than assuming.
 
 Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
 (2026-08-20):
