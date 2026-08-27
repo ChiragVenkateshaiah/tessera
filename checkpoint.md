@@ -1,18 +1,17 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-08-20
+Last updated: 2026-08-27
 
 ## Status
 
-**Phase 1 complete.** All 8 tasks merged, all 5 exit criteria (build plan
-§7) met, `v0.1.0` tagged and pushed (annotated tag on `d09ff36`, the Task
-8 checkpoint merge commit). This session was ritual/housekeeping only —
-no new Phase 1 code: ran the `/git-cleaner` two-machine sync, fixed a
-stale `cerberus-platform` → `cerberus` repo name in
-`.claude/commands/git-cleaner.md`, fixed a command-drift inconsistency in
-`evals/README.md` (PR #22), and corrected this file's own stale "not yet
-tagged" status line after discovering `v0.1.0` already existed (PR #23).
-Nothing is queued next; Phase 2 hasn't started.
+**Phase 1 complete** (`v0.1.0` tagged, all 8 tasks merged, all 5 exit
+criteria met — see prior entries below). **This session (2026-08-27)
+swapped the Phase 1 LLM provider from Gemini to NVIDIA NIM** (PR #25,
+merged), resolving the quota constraint flagged as the main open
+decision blocking Phase 2's eval-sweep work. Phase 2 itself (populating
+`evals/cases/` with the real consultant query log) still hasn't started
+— this session was infrastructure to unblock it, not Phase 2 work
+itself. Nothing is queued next; see "Next task to pick up" below.
 
 ## Done
 
@@ -351,11 +350,75 @@ Nothing is queued next; Phase 2 hasn't started.
       skipped, matching the pre-session baseline (no code changed this
       session, doc/config-only).
 
+- [x] **LLM provider swap: Gemini → NVIDIA NIM** (2026-08-27, PR #25,
+      merged). User-initiated: Gemini's 20-requests/day free tier was
+      the open decision flagged in the prior session's Notes as the
+      binding constraint on Phase 2 (a real ~20-30-case query log needs
+      ~40-90 calls for a full eval sweep). User supplied a link to
+      NVIDIA's hosted model catalog page
+      (`build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b`) rather than
+      just a model name — fetched the actual page (via `curl`, since
+      `WebFetch` timed out twice against its client-rendered content)
+      to confirm the model is real (Nemotron-3-Ultra-550B-A55B, a
+      genuine 550B-total/55B-active-parameter MoE) and extract the exact
+      integration details rather than guessing: model ID
+      `nvidia/nemotron-3-ultra-550b-a55b`, endpoint
+      `https://integrate.api.nvidia.com/v1/chat/completions`
+      (OpenAI-compatible, reachable via the `openai` Python SDK pointed
+      at that `base_url`), `Authorization: Bearer` auth, and — the
+      actual resolution to the quota problem — documented rate limits
+      of **40 requests/minute and 10,000 requests/day**, far above
+      Gemini's 20/day. New `generation/nvidia.py`'s `NvidiaClient`
+      implements `LLMClient` against this; `chat_template_kwargs:
+      {enable_thinking: false}` is passed to disable the model's
+      optional reasoning pass, since nothing in this codebase's
+      single-shot completion contract needs multi-step reasoning and
+      leaving it off keeps latency/quota spend comparable to the prior
+      Gemini calls. `generation/gemini.py` and the `google-genai`
+      dependency are removed (nothing else referenced them once `cli.py`
+      and `evals/harness.py`'s composition root were repointed) —
+      `openai>=1.50` added in its place. `config.py`
+      (`nvidia_api_key`/`nvidia_model`), `.env.example`, `README.md`,
+      `evals/README.md`, `CLAUDE.md`'s tech-decisions table, and the
+      `start-day`/`end-day`/`quality-engineer` operational docs (quota
+      numbers, env var names, the stale "config.py is still a stub"
+      claim in `start-day.md` — no longer true since Task 8 — caught and
+      fixed while in the area) all updated to match. 4 tests updated
+      (`test_config.py`, `test_cli.py`, `test_router.py`'s opt-in live
+      test) — no test file needed new live-LLM coverage since the swap
+      is behind the existing `LLMClient` port and every unit test already
+      used a fake. Full suite: 123 passed, 8 skipped, unchanged from the
+      pre-swap baseline. `grep -c 'nvidia-' uv.lock` still `0` — the new
+      `openai` dependency pulls no CUDA wheels (a natural point of
+      confusion given the vendor-name collision with the unrelated
+      NVIDIA-GPU-wheel check; noted explicitly in `start-day.md` now).
+      Live-verified against the real NVIDIA API once the user added
+      `NVIDIA_API_KEY` to their own `.env` (never pasted into the
+      conversation): archetype A (on-corpus market-entry-framework
+      query) returned a correctly-numbered 3-source grounded answer,
+      archetype B and D returned their unchanged short-circuit messages
+      — 4 live calls spent, behavior identical to the Gemini
+      implementation. Session followed the user's explicit choice of
+      "full workflow through merge" (asked via clarifying question
+      before pushing) rather than pausing for PR review.
+
 ## Next task to pick up
 
-**None — Phase 1 is complete and tagged (`v0.1.0`).** Task 8 was the
-last task in the Phase 1 build sequence.
-Phase 1 exit criteria (build plan §7), assessed this session:
+**None formally defined yet.** Phase 1 is complete and tagged (`v0.1.0`;
+Task 8 was the last task in the build sequence — exit-criteria detail
+below is historical, from the 2026-08-20 session that closed Phase 1).
+2026-08-27 added the NVIDIA NIM LLM swap (see Done above) as
+infrastructure to unblock Phase 2, not Phase 2 itself. **Phase 2's
+actual scope — populating `evals/cases/` with the real consultant query
+log and running the harness against it (build plan §7 / Solution Design
+§ "Phases 1-2") — still needs to be kicked off**; no real query log has
+arrived yet as of this writing, so there's nothing to pick up
+mechanically without it. Flag to the user at the next `/start-day` if
+this is still true, since a real query log arriving is an external event
+this repo can't detect on its own.
+
+Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
+(2026-08-20):
 
 1. Fresh clone can ingest + query with citations via CLI — **met**.
    Verified live (this session, via the installed console script) and
@@ -424,6 +487,24 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
   verify `git tag -l` / `git ls-remote --tags origin` directly rather
   than trusting this file's own prior "not yet tagged" line when closing
   out a session near a phase boundary.
+- **RESOLVED 2026-08-27 — superseded by the NVIDIA NIM swap (PR #25).**
+  The Gemini-era quota history below (20/day) is kept as a historical
+  record of Phase 1's Task 6-8 verification constraints, not current
+  guidance — the LLM provider is now NVIDIA NIM
+  (`nvidia/nemotron-3-ultra-550b-a55b`), whose free tier allows **40
+  requests/minute and 10,000 requests/day**, confirmed directly from
+  NVIDIA's own model-catalog page
+  (`build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b`). This removes
+  quota as the binding constraint on Phase 2's eval sweep (~40-90 calls
+  for a real 20-30-case query log is now a small fraction of one day's
+  budget, not several days' worth). 4 calls spent 2026-08-27 verifying
+  the swap live (1 archetype-A query = 2 calls, 1 archetype-B = 1,
+  1 archetype-D = 1) — trivial against the new ceiling, not worth
+  tracking day-to-day the way the old 20/day cap required. Still worth
+  a quick sanity check before a very large batch (e.g. the full Phase 2
+  sweep) in case NVIDIA's actual enforcement differs from the documented
+  limit, but the granular per-session spend tracking below is no longer
+  necessary practice going forward.
 - **Gemini free tier caps `gemini-3.6-flash` at 20 requests/*day*** (not
   just 5/minute) — hit both limits repeatedly while testing Task 4. Live
   LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` (see `tests/test_router.py`),
@@ -470,11 +551,13 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
   for remote, plus `git branch -d <branch>` locally after `git checkout main && git pull`)
   has to be done explicitly, and was missed a few times this session —
   cleaned up 6 stale local branches as part of this note being written.
-- Nothing auto-loads `.env` yet — `config.py` is still a stub. Live runs
-  need the vars exported manually: `set -a; source .env; set +a`.
-  `GeminiClient` takes `api_key` as a constructor parameter (never reads
-  the environment itself, per constraint #6), so a populated `.env` file
-  alone does nothing until something exports or loads it.
+- Nothing auto-loads `.env` into the process environment — `config.py`
+  (via `pydantic-settings`) reads `.env` itself, but only `cli.py` calls
+  it; live runs outside `cli.py` (tests, ad hoc scripts) need the vars
+  exported manually: `set -a; source .env; set +a`. `NvidiaClient` takes
+  `api_key` as a constructor parameter (never reads the environment
+  itself, per constraint #6), so a populated `.env` file alone does
+  nothing until something exports or loads it.
 - The corpus's `## Related Frameworks` sections (all 30 original methodology
   docs) are deliberately kept as near-duplicate, low-signal chunks — a
   conscious choice to serve as hard negatives for retrieval precision@k,
