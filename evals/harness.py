@@ -366,7 +366,7 @@ def main() -> None:
 
     from tessera.embedding.local import LocalEmbedder
     from tessera.generation.nvidia import NvidiaClient
-    from tessera.ingestion.chunker import chunk_corpus
+    from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
     from tessera.ingestion.loader import load_corpus
     from tessera.store.chroma import ChromaVectorStore
 
@@ -378,7 +378,7 @@ def main() -> None:
     docs = load_corpus(corpus_dir)
     chunks = chunk_corpus(docs)
     embedder = LocalEmbedder()
-    embeddings = embedder.embed_documents([c.text for c in chunks])
+    embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])
 
     with tempfile.TemporaryDirectory() as persist_dir:
         store = ChromaVectorStore(persist_dir=Path(persist_dir))

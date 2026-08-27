@@ -21,7 +21,7 @@ from tessera.generation.prompts import (
     LOOKUP_ANSWER_SYSTEM_PROMPT,
     SYNTHESIS_ANSWER_SYSTEM_PROMPT,
 )
-from tessera.ingestion.chunker import chunk_corpus
+from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.loader import load_corpus
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.retriever import RetrievalResult
@@ -192,7 +192,7 @@ def embedder() -> LocalEmbedder:
 def indexed_store(tmp_path_factory: pytest.TempPathFactory, embedder: LocalEmbedder):
     docs = load_corpus(CORPUS_DIR)
     chunks = chunk_corpus(docs)
-    embeddings = embedder.embed_documents([c.text for c in chunks])
+    embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])
     persist_dir = tmp_path_factory.mktemp("vectorstore")
     store = ChromaVectorStore(persist_dir=persist_dir)
     store.add(chunks, embeddings)

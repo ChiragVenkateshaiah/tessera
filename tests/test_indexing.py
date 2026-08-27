@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from tessera.embedding.local import LocalEmbedder
-from tessera.ingestion.chunker import chunk_corpus
+from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.loader import load_corpus
 from tessera.store.chroma import ChromaVectorStore
 
@@ -26,7 +26,7 @@ def embedder() -> LocalEmbedder:
 def indexed_store(tmp_path_factory: pytest.TempPathFactory, embedder: LocalEmbedder):
     docs = load_corpus(CORPUS_DIR)
     chunks = chunk_corpus(docs)
-    embeddings = embedder.embed_documents([c.text for c in chunks])
+    embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])
     persist_dir = tmp_path_factory.mktemp("vectorstore")
     store = ChromaVectorStore(persist_dir=persist_dir)
     store.add(chunks, embeddings)

@@ -202,3 +202,24 @@ def chunk_corpus(
     for doc in documents:
         chunks.extend(chunk_document(doc, max_words=max_words))
     return chunks
+
+
+def chunk_embedding_text(chunk: Chunk) -> str:
+    """The text actually embedded for a chunk — not chunk.text alone.
+
+    Prepending the document title and heading path lets a query that
+    echoes a document's title or framework name (a common real-world
+    archetype-A pattern, e.g. "do we have a checklist for X") match even
+    when the chunk's own body prose doesn't repeat those words. Found via
+    two real Phase 2 recall=0.00 misses (2026-08-27,
+    evals/cases/query_log.yaml ql002/ql009): both target documents' exact
+    query terms appeared only in the title, not the body text, so
+    embedding body text alone ranked them below several less-relevant
+    same-topic documents. Callers building an index (cli.py's `ingest`,
+    evals/harness.py's `main()`) must use this for every chunk they embed
+    — a caller embedding chunk.text directly builds an index inconsistent
+    with what retrieval was tuned against.
+    """
+    heading = " > ".join(chunk.heading_path)
+    prefix = f"{chunk.document_title}\n{heading}" if heading else chunk.document_title
+    return f"{prefix}\n\n{chunk.text}"

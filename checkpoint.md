@@ -5,16 +5,21 @@ Last updated: 2026-08-27
 ## Status
 
 **Phase 1 complete** (`v0.1.0` tagged, all 8 tasks merged, all 5 exit
-criteria met — see prior entries below). **2026-08-27: swapped the LLM
-provider from Gemini to NVIDIA NIM** (PR #25, merged), resolving the
-quota constraint blocking Phase 2's eval-sweep work, **then kicked off
-Phase 2 itself** in the same session (PR pending at time of writing):
-populated `evals/cases/query_log.yaml` with 25 synthesized cases
-standing in for the real consultant query log (which will never
-literally arrive — Meridian Advisory and its stakeholders are fictional,
-confirmed directly by the user) and ran the full 33-case harness sweep
-against live NVIDIA NIM, producing Phase 2's first real baseline. See
-Done below for the full report and findings.
+criteria met — see prior entries below). **2026-08-27, one continuous
+session: swapped the LLM provider from Gemini to NVIDIA NIM** (PR #25,
+merged) to resolve the quota constraint blocking Phase 2's eval-sweep
+work, **kicked off Phase 2 itself** (PR #27, merged) — populated
+`evals/cases/query_log.yaml` with 25 synthesized cases standing in for
+the real consultant query log (which will never literally arrive;
+Meridian Advisory and its stakeholders are fictional, confirmed directly
+by the user) and ran the first live 33-case sweep, **then tuned against
+both findings that sweep surfaced** (PR pending at time of writing):
+title-aware chunk embeddings fixed two retrieval misses, an A-vs-C
+router prompt disambiguation fixed two reproducible misroutes. Final
+post-tuning baseline: 100% routing accuracy (was 93.9%), mean recall
+0.87 (was 0.74), mean precision 0.71 (was 0.49), mean MRR 0.95 (was
+0.80), mean groundedness 4.95 (was 4.86), mean relevance 4.81 (was
+4.76). See Done below for the full report and findings.
 
 ## Done
 
@@ -514,25 +519,121 @@ Done below for the full report and findings.
       ceiling with no pacing needed — a direct, lived demonstration of
       why the swap earlier this session mattered.
 
+- [x] **Phase 2 tuning pass: both baseline findings fixed** (2026-08-27,
+      same session, PR pending). User asked to continue straight into
+      tuning against the two findings above. Diagnosed each with a
+      retrieval-only (zero-LLM-call) scratchpad script before writing
+      any fix, rather than guessing.
+
+      **Retrieval fix — title-aware chunk embeddings.** Diagnostic
+      confirmed both `ql002` and `ql009` shared a root cause: chunk
+      embeddings were computed from `chunk.text` alone
+      (`cli.py`/`evals/harness.py` both did
+      `embedder.embed_documents([c.text for c in chunks])`), so a
+      document's title never contributed to its embedding. Both target
+      documents' exact query terms ("financial due diligence checklist,"
+      "GenAI adoption maturity") appeared only in the title, not the
+      body prose — e.g. `due-diligence-financial-checklist.md`'s
+      Overview section never uses the word "checklist" at all, since
+      that word only appears in the doc's title and a bolded sub-list
+      header deeper in the Framework section. Added
+      `chunk_embedding_text()` to `chunker.py` (prepends
+      `document_title` + `heading_path` to what gets embedded, chunk
+      text unchanged); updated both call sites plus the two test
+      fixtures (`test_indexing.py`, `test_answer.py`) that build real
+      indices, so tests exercise the same embedding path as production —
+      `test_cli.py`'s fake chunk objects needed `document_title`/
+      `heading_path` attributes added too. Rebuilt the real persisted
+      index (`tessera ingest`; `ChromaVectorStore.add()` uses `upsert`,
+      confirmed safe to re-run in place). Confirmed fixed:
+      `due-diligence-financial-checklist.md` went from absent-from-top-5
+      to rank 1 (score 0.64→0.70); `genai-adoption-maturity-model.md`
+      went from absent-from-top-5 to occupying all of top-5. Re-checked
+      `RELEVANCE_THRESHOLD = 0.35` (generation/answer.py) against the new
+      score distribution since every chunk's scores shifted — margin
+      actually **widened**: on-corpus weakest-top-3 now ≥0.55 (was
+      ≥0.39), the "parental leave" borderline probe now 0.24 (was 0.31),
+      off-corpus queries 0.10-0.24 — no threshold change needed. Full
+      suite re-verified after each step (123 passed, 8 skipped throughout
+      — one test fixture change, `test_ingest_wires_...`'s fake chunk
+      shape, not a new test).
+
+      **Routing fix — A-vs-C disambiguation.** `ROUTER_SYSTEM_PROMPT`
+      (`generation/prompts.py`) gained a note after the C examples:
+      weigh the situational framing (a deadline, a new staffing, an
+      upcoming meeting) over the trailing question's wording, since both
+      real misroutes ("what do we have," "what's our standard approach")
+      had lookup-shaped endings riding on top of a genuine onboarding
+      situation — the router had been over-weighting the ending. Two
+      calibrating examples added directly to the prompt (paraphrased
+      from, not identical to, the real misrouted queries). No test
+      asserts on the prompt's literal content, so no test changes
+      needed. Verified live: both original misroutes (`ql012`, `ql016`)
+      now route correctly with reasoning that explicitly cites the
+      onboarding/deadline signal; a 7-query regression spot-check across
+      all four archetypes (3×A, 2×C, 1×B, 1×D) confirmed **7/7 correct
+      — no overcorrection** of genuine A/B/D queries into C.
+
+      **Final verification: full 33-case sweep, hand-merged across
+      three runs** (the harness itself doesn't merge separate runs;
+      NVIDIA hit transient `503`s on a different 1-3 cases each of three
+      attempts — never the same case twice, confirming this is a stable
+      background error rate under this sweep's request pattern, not a
+      flaky case or a code bug; every one was correctly isolated and
+      excluded from aggregates by Task 7's per-case handling, then
+      individually retried to build one complete 33/33 dataset):
+
+      ```
+      Cases: 33
+      Routing accuracy: 100.0%
+
+      Retrieval (21 archetype-A/C cases with relevant_sources):
+        Mean recall:    0.87  (was 0.74)
+        Mean precision: 0.71  (was 0.49)
+        Mean MRR:       0.95  (was 0.80)
+
+      Generation quality (LLM-judge, 1-5):
+        Mean groundedness: 4.95  (was 4.86)
+        Mean relevance:    4.81  (was 4.76)
+      ```
+
+      Every metric improved from the pre-tuning baseline; routing went
+      from 31/33 to 33/33 correct. Total live-call spend this tuning
+      pass: roughly 2 (router fix verification) + 7 (regression
+      check) + ~99 across three full-sweep attempts + ~12 across the
+      retry batches ≈ 120 calls — still a small fraction of NVIDIA's
+      10,000/day ceiling. genai-architect/quality-engineer review was
+      **not** invoked for this pass — it's gated to build-plan Tasks
+      6/7/8 by convention (`.claude/agents/quality-engineer.md`), and
+      this is post-Phase-1 tuning work, not one of those tasks.
+
 ## Next task to pick up
 
-**Phase 2 has started.** Phase 1 is complete and tagged (`v0.1.0`; Task 8
-was the last task in the build sequence — exit-criteria detail below is
-historical, from the 2026-08-20 session that closed Phase 1). 2026-08-27
-added the NVIDIA NIM LLM swap (infrastructure) and then, same session,
-populated `evals/cases/query_log.yaml` and ran the first live 33-case
-harness sweep — Phase 2's actual work per build plan §7/Solution Design
-"Phases 1-2." **Confirmed permanently: no real consultant query log will
-ever arrive** — Meridian Advisory and its stakeholders are fictional
-(user confirmed this directly), so `query_log.yaml`'s 25 synthesized
-cases are the permanent stand-in, not a placeholder for something still
-coming. Next task is genuinely open-ended tuning work, not a fixed build-
-plan item: the two reproducible misroutes and two recall=0.00 retrieval
-misses logged in the Done entry above are concrete, specific starting
-points if the user wants to continue Phase 2 tuning (router prompt
-adjustment in `generation/prompts.py`, or chunking/retrieval
-investigation for the two missed lookups) — otherwise ask the user what's
-next rather than assuming.
+**None formally queued.** Phase 1 is complete and tagged (`v0.1.0`; Task
+8 was the last build-sequence task — exit-criteria detail below is
+historical, from the 2026-08-20 session that closed Phase 1). Phase 2
+started and had its first tuning pass 2026-08-27, all in one session:
+NVIDIA NIM LLM swap → `query_log.yaml` populated (25 synthesized cases,
+**permanent** stand-in for a real query log that will never arrive,
+confirmed with the user) → first live 33-case sweep → both findings that
+sweep surfaced (2 reproducible misroutes, 2 recall=0.00 retrieval
+misses) diagnosed and fixed same-session, verified with a clean 33/33
+post-tuning sweep (100% routing, recall 0.87, precision 0.71, MRR 0.95,
+groundedness 4.95, relevance 4.81 — see Done above for the full story).
+
+Phase 2 work is genuinely open-ended, not a fixed build-plan task
+sequence — there's no single "next task" the way Phase 1 had one.
+Options for whoever picks this up next, roughly in order of likely
+value: (1) look for further tuning opportunities by reading the
+per-case detail in the Done entries above for patterns not yet chased
+(e.g. `q001`'s recall=0.40, `ql003`/`ql004`'s precision=1.00-but-
+recall=0.50 pattern — both multi-source A cases where only one of two
+expected docs surfaced); (2) widen `query_log.yaml` past 25 cases for
+more statistical signal; (3) revisit `SYNTHESIS_CANDIDATE_K`/
+`LOOKUP_TOP_K` (`retriever.py`) now that title-aware embeddings shifted
+the score distribution — the constants were tuned against the old
+scheme; (4) something the user has in mind that isn't visible from this
+file. Ask rather than assume which.
 
 Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
 (2026-08-20):

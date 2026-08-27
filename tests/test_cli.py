@@ -46,7 +46,11 @@ def test_ingest_wires_loader_chunker_embedder_and_store(
     calls: list[str] = []
 
     fake_docs = ["doc1", "doc2"]
-    fake_chunks = [type("C", (), {"text": "a"})(), type("C", (), {"text": "b"})()]
+    fake_chunk_attrs = {"text": "a", "document_title": "Doc", "heading_path": ("H",)}
+    fake_chunks = [
+        type("C", (), fake_chunk_attrs)(),
+        type("C", (), {**fake_chunk_attrs, "text": "b"})(),
+    ]
 
     monkeypatch.setattr(
         cli,
