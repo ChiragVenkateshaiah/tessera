@@ -97,7 +97,7 @@ These are reasons, not preferences:
 | Env / deps | `uv` (or venv + pip) | same | Lockfile committed |
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
-| LLM | Gemini API | Claude via Bedrock | Behind `LLMClient` interface; free (Gemini Pro subscription) for Phase 1, swapped for Claude/Bedrock in Phase 4 |
+| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day for Phase 1-2 (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps), swapped for Claude/Bedrock in Phase 4 |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |

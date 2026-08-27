@@ -36,13 +36,18 @@ this command reads; if something here seems missing, check whether
   continuing — `uv sync --extra dev` rebuilds it. This should be fast:
   torch is pinned to the CPU-only wheel index in `pyproject.toml`. If a
   sync is slow or pulls a lot, that pin may have regressed — check with
-  `grep -c 'nvidia-' uv.lock` (should be `0`).
-- `.env` exists with `GEMINI_API_KEY` filled in? (Gitignored, never in
-  git — check locally only.) Nothing auto-loads it yet — `config.py` is
-  still a stub, and `GeminiClient` takes `api_key` as a constructor
-  parameter rather than reading the environment itself (CLAUDE.md
-  constraint #6). A populated `.env` alone does nothing; live LLM calls
-  need the vars exported first: `set -a; source .env; set +a`.
+  `grep -c 'nvidia-' uv.lock` (should be `0`; this checks for accidental
+  CUDA GPU wheel packages, unrelated to the `openai` package used to talk
+  to the NVIDIA NIM API — that dependency has no `nvidia-*`-named
+  transitive packages).
+- `.env` exists with `NVIDIA_API_KEY` filled in? (Gitignored, never in
+  git — check locally only.) Nothing auto-loads it into the environment —
+  `NvidiaClient` takes `api_key` as a constructor parameter rather than
+  reading the environment itself (CLAUDE.md constraint #6); `config.py`
+  (via `pydantic-settings`) is what reads `.env`, but only `cli.py` calls
+  it. A populated `.env` alone does nothing until something exports or
+  loads it — live LLM calls need the vars exported first:
+  `set -a; source .env; set +a`.
 - Run `pytest tests/ -q` — **without** `RUN_LIVE_LLM_TESTS=1` (see the
   quota note in checkpoint.md's Notes for why). Confirms the repo is in a
   known-good state before touching anything. Expect something in the
@@ -77,9 +82,10 @@ this command reads; if something here seems missing, check whether
   check (checkpoint.md should already carry it verbatim; if it doesn't,
   that's a gap `/end-day` should have filled last time).
 - Check `## Notes / open flags` for anything that changes *how* the next
-  task should run — e.g. Gemini's free-tier daily quota means any task
-  calling the live LLM repeatedly (the eval harness, especially) needs
-  deliberate pacing, not a blind loop.
+  task should run — e.g. NVIDIA NIM's free-tier quota (generous, but not
+  unlimited) means any task calling the live LLM repeatedly (the eval
+  harness, especially) still benefits from tracked spend rather than a
+  blind loop.
 
 ## 5. Report and wait
 

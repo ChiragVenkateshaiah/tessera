@@ -1,5 +1,5 @@
 """Unit tests for the CLI wiring (typer commands) — every external
-constructor (LocalEmbedder, ChromaVectorStore, GeminiClient) and I/O call
+constructor (LocalEmbedder, ChromaVectorStore, NvidiaClient) and I/O call
 (load_corpus, answer_query) is monkeypatched with a fake, so these tests
 run with no model download, no disk index, and no network/LLM call.
 """
@@ -21,18 +21,18 @@ runner = CliRunner()
 
 @pytest.fixture(autouse=True)
 def _isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """No .env in the sandbox and a valid GEMINI_API_KEY by default, so
+    """No .env in the sandbox and a valid NVIDIA_API_KEY by default, so
     every test starts from a working config unless it deliberately
     unsets it.
     """
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
 
 
 def test_missing_config_reports_actionable_error_and_exits_nonzero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
 
     result = runner.invoke(cli.app, ["ingest"])
 
@@ -122,7 +122,7 @@ def test_query_prints_answer_and_citations(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "GeminiClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
 
     from tessera.generation.answer import Citation
 
@@ -184,7 +184,7 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
 
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "GeminiClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
 
     fake_harness = type(sys)("evals.harness")
     fake_harness.load_cases = lambda cases_dir: (calls.append("load_cases"), [])[1]
