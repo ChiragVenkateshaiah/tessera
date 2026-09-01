@@ -12,6 +12,21 @@ deliberately scopes to low-sensitivity content (methodology wiki + published
 thought leadership) to prove the system works before going near client
 material.
 
+**Meridian Advisory, its stakeholders (including "Priya," the discovery
+findings' named owner of the query-log deliverable), and the engagement
+itself are fictional** — this is a solo-maintained portfolio project
+simulating a real consulting engagement, not an actual client relationship
+(confirmed directly by the user, 2026-08-27). The scenario is realistic by
+design and worth maintaining in character for the corpus, discovery
+findings, and build-plan documents — but it means anything gated on real
+external input (the query log Discovery Findings §7/§10 describes, for
+one) will never literally arrive. Where the build plan or checkpoint.md
+frames something as "waiting on the client," read that as "this input
+needs to be synthesized, deliberately and transparently, rather than
+waited for" — see `evals/cases/query_log.yaml`'s header comment and
+checkpoint.md's 2026-08-27 entry for how that was handled the one time it
+came up.
+
 Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Discovery_Findings.md` — problem context, the four query
   archetypes, the confidentiality model.

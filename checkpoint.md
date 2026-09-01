@@ -723,6 +723,47 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
   sweep) in case NVIDIA's actual enforcement differs from the documented
   limit, but the granular per-session spend tracking below is no longer
   necessary practice going forward.
+- **NVIDIA NIM returns transient `503 Service Unavailable` ("Service
+  temporarily overloaded") under sweep load** — hit repeatedly across
+  three full 33-case sweep attempts on 2026-08-27 (Phase 2's first
+  sweep and the post-tuning verification sweep), 1-3 different cases
+  each time, never the same case twice. This is a genuine background
+  error rate on NVIDIA's side, not a code bug, a quota limit, or a
+  flaky specific case — confirmed by the fact that every case that
+  503'd succeeded cleanly on a simple retry. Task 7's per-case error
+  handling (`run_harness()`) already isolates these correctly (reported
+  as `ERROR` rows, excluded from aggregates, rest of the sweep
+  unaffected) — no code change needed, just expect a handful of 503s on
+  any large sweep and retry the specific failed case IDs rather than
+  re-running the whole thing. See the ad hoc retry pattern in the
+  2026-08-27 tuning entry above (`run_harness()` called directly against
+  the persisted index, filtered to just the failed case IDs).
+- **A scratchpad script that auto-discovers `REPO_ROOT` by climbing
+  `.parent` from its own path is a trap if the script doesn't live
+  inside the repo.** Hit this 2026-08-27: a retry script written to
+  `/tmp/.../scratchpad/` (correctly, per the scratchpad-directory
+  convention) climbed `.parent` looking for `pyproject.toml`, never
+  found it since the scratchpad tree is entirely outside the repo, and
+  looped forever at filesystem root (`Path("/").parent == Path("/")`
+  never terminates) — 99.9% CPU for 4 hours 20 minutes before being
+  caught and killed, zero output the whole time since even the first
+  `print()` sat in an unflushed buffer. Lesson: any one-off script
+  written outside the repo tree (scratchpad, `/tmp`) must hardcode the
+  repo path rather than auto-discover it, and use `python3 -u`
+  (unbuffered) so output is actually visible while it runs — an empty
+  output file plus high sustained CPU for more than a minute or two is
+  the signal to check `ps -o etime,pcpu` immediately rather than assume
+  it's just slow.
+- **Any change to what gets embedded (`chunk_embedding_text()` in
+  `chunker.py`, or anything else feeding `embedder.embed_documents()`)
+  requires re-running `tessera ingest` before it takes effect** — the
+  persisted index at `data/vectorstore/` holds whatever was embedded at
+  ingest time, and `ChromaVectorStore.add()`'s `upsert` makes re-running
+  ingest in place safe (confirmed 2026-08-27), but nothing re-ingests
+  automatically. A future session touching `chunker.py`,
+  `embedding/local.py`, or either composition root's embedding call
+  should re-ingest before trusting live retrieval results against
+  either fresh or existing test evidence.
 - **Gemini free tier caps `gemini-3.6-flash` at 20 requests/*day*** (not
   just 5/minute) — hit both limits repeatedly while testing Task 4. Live
   LLM tests are opt-in via `RUN_LIVE_LLM_TESTS=1` (see `tests/test_router.py`),
