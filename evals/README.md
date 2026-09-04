@@ -135,6 +135,15 @@ transient `503`s from NVIDIA's API, unrelated to this tuning, handled
 correctly by Task 7's per-case error isolation) in checkpoint.md's
 2026-08-27 entry.
 
+**P2-2 baseline sweep (50 cases, 2026-09-04): routing accuracy 96.0%,
+mean recall 0.88, mean precision 0.79, mean MRR 0.97, mean groundedness
+5.00, mean relevance 4.91** — `tessera eval --check` → `=> PASS (gated
+thresholds)`. The eval set grew 33 → 50 and a label-completeness audit
+tightened four under-labeled A/C cases (see checkpoint.md's 2026-09-04
+entry). Two of the 17 new archetype-C cases (`ql035`, `ql038`) misroute
+to A — lookup-shaped phrasing over synthesis intent — a P2-4 router
+prompt target; routing still clears the 95% gate.
+
 ## What's in here
 
 - `harness.py` — loads cases, runs each through `route()` → `retrieve()`
