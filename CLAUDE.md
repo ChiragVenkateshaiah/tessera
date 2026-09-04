@@ -33,7 +33,11 @@ Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Solution_Design.md` — full architecture, including the
   AWS/production target this phase is deliberately not building yet.
 - `docs/Tessera_Phase1_Build_Plan.md` — the authoritative instruction set for
-  this phase. Re-read it before making structural decisions.
+  Phase 1 (complete, tagged `v0.1.0`). Re-read it before making structural
+  decisions about the retrieval core.
+- `docs/Tessera_Phase2_Plan.md` — the authoritative brief for Phase 2 (the
+  current phase): eval set populated + tuned, a documented internal quality
+  bar. `evals/QUALITY_BAR.md` carries the bar itself.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
   (e.g. the hybrid Go/Python production split). Documentation only; none
   of it is built in Phase 1.
@@ -129,10 +133,18 @@ These are reasons, not preferences:
   Do not over-test LLM outputs; that is what the eval harness is for.
 - When a decision is ambiguous, prefer the option that keeps the AWS
   migration cheap.
-- Work task by task per `docs/Tessera_Phase1_Build_Plan.md` §5. Stop after
+- Work task by task per the current phase's plan — `docs/Tessera_Phase1_Build_Plan.md`
+  §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2. Stop after
   each task and report against its acceptance check before continuing.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
+- **Quality-bar regression check (Phase 2+).** Any PR that touches
+  `retriever.py`, `router.py`, `chunker.py`, `generation/` (including any
+  prompt string), or the eval set (`evals/cases/`) must run a fresh
+  `tessera eval --check` and paste the report — including its final
+  `=> PASS/FAIL` line — into the PR body. A gated-threshold failure blocks
+  the merge. The bar lives in `evals/QUALITY_BAR.md` /
+  `evals.harness.QualityBar`.
 
 ## Git workflow
 
@@ -152,8 +164,10 @@ Every change ships through a PR:
 criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
 exits. Not cut per-task; tasks are checkpoints, phases are releases.
 
-**CI/CD:** intentionally not set up in Phase 1 (build plan §1 do-not-build
+**CI/CD:** intentionally not set up in Phase 1–2 (build plan §1 do-not-build
 list). It earns its place at Phase 5, gated by the eval harness built in
 Task 7 — no change ships if retrieval/answer quality regresses (Solution
-Design §5). Until then, quality gating is manual: run `pytest` and the eval
-harness locally before opening a PR.
+Design §5). Until then, quality gating is manual: run `pytest` and
+`tessera eval --check` locally before opening a PR, and paste the
+bar-check result into the PR body for any retrieval/prompt change (see
+"Working conventions" above and `evals/QUALITY_BAR.md`).

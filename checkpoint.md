@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-08-27
+Last updated: 2026-09-04
 
 ## Status
 
@@ -607,9 +607,100 @@ post-tuning baseline: 100% routing accuracy (was 93.9%), mean recall
       6/7/8 by convention (`.claude/agents/quality-engineer.md`), and
       this is post-Phase-1 tuning work, not one of those tasks.
 
+- [x] **Phase 2 plan adopted + P2-1 (formalize the quality bar)**
+      (2026-09-04, PR pending). Start-of-day: re-verified Phase 1
+      (`pytest` 123 passed / 8 skipped, `uv.lock` still `0` nvidia-,
+      `.env` present) then merged the Phase 2 plan doc (PR #30,
+      `docs/Tessera_Phase2_Plan.md`) that had been sitting open for user
+      review — user approved it this session. Plan §4 defines a 5-task
+      Phase 2 sequence (P2-1…P2-5); Phase 2 is now driven by that doc,
+      not build-plan §5.
+
+      **P2-1 delivered:**
+      - `evals/QUALITY_BAR.md` — the agreed bar (routing ≥ 95%, mean
+        recall@k ≥ 0.80, mean MRR ≥ 0.90, groundedness/relevance ≥ 4.5,
+        per-case recall > 0.00, all gated; precision@k reported but NOT
+        gated — labeling-completeness confound, revisit after the P2-2
+        label audit).
+      - `evals/harness.py`: `QualityBar` (frozen dataclass of gated
+        thresholds), `evaluate_bar(report) -> BarResult`, and a
+        "Quality bar" PASS/FAIL block in `format_report()`. All pure —
+        constraint #6 held (no I/O, injected ports, returns data). A
+        gated metric with no value counts as FAIL, not skip.
+      - `tessera eval --check` — prints the report always, exits 1 on
+        any gated-threshold failure (0 otherwise).
+      - `CLAUDE.md` — docs list now points at the Phase 2 plan +
+        `QUALITY_BAR.md`; new Working-conventions bullet: any PR
+        touching `retriever.py`/`router.py`/`chunker.py`/`generation/`/
+        `evals/cases/` must paste a fresh `tessera eval --check` report
+        (incl. the `=> PASS/FAIL` line) in the PR body; CI/CD paragraph
+        updated.
+      - 10 new tests (`test_harness.py` +7: bar pass/fail, precision
+        not gated, missing-metric-fails, per-case total-miss, report
+        rendering; `test_cli.py` +3: `--check` exit codes). Full suite
+        **133 passed, 8 skipped**.
+
+      **Acceptance check — met.** Live `tessera eval --check` sweep,
+      2026-09-04 (NVIDIA API was unusually slow — ~50-190s/call, ~65 min
+      wall; 31/33 scored, `q004` + `ql012` hit the known transient 503s
+      and were isolated as ERROR rows):
+
+      ```
+      Routing accuracy: 100.0%
+      Retrieval (A/C):  recall 0.86  precision 0.72  MRR 0.95
+      Generation:       groundedness 4.90  relevance 4.75
+
+      Quality bar:
+        [PASS] Routing accuracy: 100.0%   (>= 95%)
+        [PASS] Mean recall@k (A/C): 0.86  (>= 0.80)
+        [PASS] Mean MRR (A/C): 0.95       (>= 0.90)
+        [PASS] Mean groundedness: 4.90    (>= 4.50)
+        [PASS] Mean relevance: 4.75       (>= 4.50)
+        [PASS] Per-case recall > 0.00 (A/C): no total misses
+        [----] Mean precision@k (A/C): 0.72  (reported, not gated)
+        => PASS (gated thresholds)
+      ```
+      `--check` exits 0 (bar passed). Note: the live run started before
+      a late cosmetic tweak to two label strings ("none" → "no total
+      misses", "tracked, not gated" → "reported, not gated") — numbers
+      and the `=> PASS` verdict are identical under the committed code
+      (`evaluate_bar` unit-tested; verdict re-confirmed against these
+      exact aggregates).
+
+      **Slightly below the 2026-08-27 post-tuning baseline** (recall
+      0.87→0.86, MRR 0.95=, groundedness 4.95→4.90, relevance
+      4.81→4.75) — within run-to-run judge/retrieval noise and still
+      clears every gated threshold comfortably; not a regression to
+      chase, but the numbers to beat in P2-3. Known weak spots
+      unchanged from the plan §3: `q001` recall 0.40, `ql003`/`ql004`
+      recall 0.50 (multi-source A), `ql015`/`ql017` C precision 0.20.
+
+      **Flagged, not fixed:** `NvidiaClient` sets no request timeout
+      (relies on the openai SDK's 600s default) — a genuinely stuck
+      call can stall a sweep ~10 min before erroring. Worth a small
+      defensive `timeout=` as its own fix; out of P2-1 scope (and would
+      itself trip the new bar-check convention by touching
+      `generation/`).
+
 ## Next task to pick up
 
-**None formally queued.** Phase 1 is complete and tagged (`v0.1.0`; Task
+**P2-2 — Expand eval set to ~50 + label-completeness audit**
+(`docs/Tessera_Phase2_Plan.md` §4). Audit all 21 current A/C cases'
+`relevant_sources` against the corpus (read every doc the system
+retrieved + cited, decide if it belongs, record the decision in the
+case file comments); write ~17 new cases toward A=20 / B=10 / C=15 /
+D=5 (~50 total), every path mechanically verified, no id collisions
+with `q001`–`q008` / `ql001`–`ql025`; hold `placeholder.yaml` as an
+overfitting check-set; update `test_harness.py` case-count assertions.
+**Acceptance:** `load_cases()` parses ~50 cases; a full baseline sweep
+recorded here; every `relevant_sources` path verified to exist on disk.
+
+Then P2-3 (retrieval-constant grid-search re-tune), P2-4 (close any
+remaining bar gaps — conditional), P2-5 (Phase 2 exit + tag `v0.2.0`).
+
+---
+
+Phase 1 is complete and tagged (`v0.1.0`; Task
 8 was the last build-sequence task — exit-criteria detail below is
 historical, from the 2026-08-20 session that closed Phase 1). Phase 2
 started and had its first tuning pass 2026-08-27, all in one session:
@@ -621,19 +712,11 @@ misses) diagnosed and fixed same-session, verified with a clean 33/33
 post-tuning sweep (100% routing, recall 0.87, precision 0.71, MRR 0.95,
 groundedness 4.95, relevance 4.81 — see Done above for the full story).
 
-Phase 2 work is genuinely open-ended, not a fixed build-plan task
-sequence — there's no single "next task" the way Phase 1 had one.
-Options for whoever picks this up next, roughly in order of likely
-value: (1) look for further tuning opportunities by reading the
-per-case detail in the Done entries above for patterns not yet chased
-(e.g. `q001`'s recall=0.40, `ql003`/`ql004`'s precision=1.00-but-
-recall=0.50 pattern — both multi-source A cases where only one of two
-expected docs surfaced); (2) widen `query_log.yaml` past 25 cases for
-more statistical signal; (3) revisit `SYNTHESIS_CANDIDATE_K`/
-`LOOKUP_TOP_K` (`retriever.py`) now that title-aware embeddings shifted
-the score distribution — the constants were tuned against the old
-scheme; (4) something the user has in mind that isn't visible from this
-file. Ask rather than assume which.
+As of 2026-09-04 Phase 2 has a fixed task sequence — see
+`docs/Tessera_Phase2_Plan.md` §4 and "Next task to pick up" above. The
+open-ended framing that used to be here (chase per-case tuning
+patterns / widen the query log / revisit `LOOKUP_TOP_K` etc.) is now
+folded into P2-2/P2-3/P2-4 of that plan.
 
 Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
 (2026-08-20):

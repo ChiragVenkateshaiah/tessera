@@ -96,7 +96,14 @@ def query(text: str) -> None:
 
 
 @app.command(name="eval")
-def eval_command() -> None:
+def eval_command(
+    check: bool = typer.Option(
+        False,
+        "--check",
+        help="Exit non-zero if any gated quality-bar threshold fails "
+        "(evals/QUALITY_BAR.md). The report is printed either way.",
+    ),
+) -> None:
     """Run the eval harness against the persisted index and print a report."""
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -123,3 +130,12 @@ def eval_command() -> None:
     report = run_harness(cases, llm, embedder, store, settings.corpus_dir)
 
     typer.echo(format_report(report))
+
+    if check:
+        from evals.harness import evaluate_bar
+
+        result = evaluate_bar(report)
+        if not result.passed:
+            failed = ", ".join(t.name for t in result.gated_failures)
+            typer.echo(f"\nQuality bar FAILED: {failed}", err=True)
+            raise typer.Exit(code=1)
