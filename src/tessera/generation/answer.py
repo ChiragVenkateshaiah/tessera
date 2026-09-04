@@ -15,11 +15,17 @@ from tessera.retrieval.router import Archetype
 from tessera.store.base import SearchResult
 
 # Below this cosine similarity, a chunk is treated as noise rather than a
-# real match. Measured against the real corpus/embedder (LocalEmbedder):
-# genuinely on-corpus queries score >=0.39 on their weakest top-3 result;
-# a topic that's semantically adjacent but genuinely absent ("parental
-# leave" near HR/org-design content) tops out around 0.31; unrelated
-# queries score <0.15. 0.35 sits in that gap.
+# real match. Measured against the real corpus/embedder (LocalEmbedder).
+# Recalibrated 2026-09-04 (P2-3, docs/Tessera_Phase2_Plan.md §4) against
+# the current title-aware chunk embeddings (chunker.chunk_embedding_text,
+# added 2026-08-27 — see that entry in checkpoint.md for the prior,
+# now-stale numbers this replaces): on-corpus queries score >=0.58 on
+# their weakest top-3 result; a topic that's semantically adjacent but
+# genuinely absent ("parental leave"/"vacation policy" near HR/org-design
+# content) tops out around 0.31; unrelated queries score <0.12. 0.35
+# still sits cleanly in that gap (0.04 above the highest adjacent-but-
+# absent probe, 0.22 below the weakest on-corpus one) — no change from
+# the value Task 6 originally calibrated.
 RELEVANCE_THRESHOLD = 0.35
 
 NO_RESULTS_MESSAGE = (
