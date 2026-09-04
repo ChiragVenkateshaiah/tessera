@@ -208,3 +208,68 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
     assert result.exit_code == 0
     assert calls == ["load_cases", "run_harness", "format_report"]
     assert "REPORT TEXT" in result.output
+
+
+def _stub_harness_for_check(
+    monkeypatch: pytest.MonkeyPatch, bar_passed: bool
+) -> None:
+    class NonEmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+
+    bar_result = type(
+        "BarResult",
+        (),
+        {"passed": bar_passed, "gated_failures": [type("T", (), {"name": "Mean recall@k (A/C)"})()]},
+    )()
+
+    fake_harness = type(sys)("evals.harness")
+    fake_harness.load_cases = lambda cases_dir: []
+    fake_harness.run_harness = lambda *a, **k: "report-object"
+    fake_harness.format_report = lambda report: "REPORT TEXT"
+    fake_harness.evaluate_bar = lambda report: bar_result
+
+    fake_evals_pkg = type(sys)("evals")
+    fake_evals_pkg.harness = fake_harness
+    monkeypatch.setitem(sys.modules, "evals", fake_evals_pkg)
+    monkeypatch.setitem(sys.modules, "evals.harness", fake_harness)
+
+
+def test_eval_check_flag_exits_zero_when_bar_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+
+    result = runner.invoke(cli.app, ["eval", "--check"])
+
+    assert result.exit_code == 0
+    assert "REPORT TEXT" in result.output
+
+
+def test_eval_check_flag_exits_nonzero_when_bar_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=False)
+
+    result = runner.invoke(cli.app, ["eval", "--check"])
+
+    assert result.exit_code == 1
+    assert "REPORT TEXT" in result.output
+    assert "Quality bar FAILED" in result.output
+
+
+def test_eval_without_check_flag_ignores_bar_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=False)
+
+    result = runner.invoke(cli.app, ["eval"])
+
+    assert result.exit_code == 0

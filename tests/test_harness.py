@@ -11,6 +11,8 @@ from evals.harness import (
     DEFAULT_K,
     CaseResult,
     EvalCase,
+    EvalReport,
+    evaluate_bar,
     format_report,
     load_cases,
     run_case,
@@ -492,3 +494,103 @@ def test_format_report_includes_key_sections() -> None:
     assert "Mean groundedness: 4.00" in text
     assert "[q1]" in text
     assert "routing=OK" in text
+
+
+# --- evaluate_bar ---
+
+
+def _passing_report(**overrides: object) -> EvalReport:
+    """An EvalReport that clears every gated threshold, minus any field
+    overridden by a test.
+    """
+    defaults: dict[str, object] = dict(
+        case_results=[],
+        routing_accuracy=1.0,
+        mean_recall=0.88,
+        mean_precision=0.72,
+        mean_reciprocal_rank=0.97,
+        mean_groundedness=5.0,
+        mean_relevance=4.9,
+        mean_latency_by_archetype={},
+    )
+    defaults.update(overrides)
+    return EvalReport(**defaults)  # type: ignore[arg-type]
+
+
+def _ac_case(case_id: str, recall: float) -> CaseResult:
+    return CaseResult(
+        case_id=case_id,
+        query="q",
+        expected_archetype=Archetype.LOOKUP,
+        actual_archetype=Archetype.LOOKUP,
+        routing_correct=True,
+        retrieved_documents=["a.md"],
+        recall=recall,
+        precision=0.5,
+        reciprocal_rank_score=1.0,
+        answer="an answer [1].",
+        judge=JudgeScore(groundedness=5, relevance=5, reasoning="ok"),
+        latency_seconds=1.0,
+    )
+
+
+def test_evaluate_bar_passes_when_every_gated_threshold_is_met() -> None:
+    result = evaluate_bar(_passing_report())
+
+    assert result.passed is True
+    assert result.gated_failures == []
+
+
+def test_evaluate_bar_fails_on_low_mean_recall() -> None:
+    result = evaluate_bar(_passing_report(mean_recall=0.62))
+
+    assert result.passed is False
+    assert [t.name for t in result.gated_failures] == ["Mean recall@k (A/C)"]
+
+
+def test_evaluate_bar_does_not_fail_on_low_precision() -> None:
+    result = evaluate_bar(_passing_report(mean_precision=0.20))
+
+    assert result.passed is True
+    precision_row = next(
+        t for t in result.thresholds if t.name == "Mean precision@k (A/C)"
+    )
+    assert precision_row.gated is False
+
+
+def test_evaluate_bar_fails_when_a_gated_metric_has_no_value() -> None:
+    result = evaluate_bar(_passing_report(mean_reciprocal_rank=None))
+
+    assert result.passed is False
+    assert [t.name for t in result.gated_failures] == ["Mean MRR (A/C)"]
+
+
+def test_evaluate_bar_fails_on_a_per_case_total_miss() -> None:
+    report = _passing_report(
+        case_results=[_ac_case("q001", 1.0), _ac_case("ql009", 0.0)]
+    )
+
+    result = evaluate_bar(report)
+
+    assert result.passed is False
+    miss_row = next(
+        t for t in result.thresholds if t.name.startswith("Per-case recall")
+    )
+    assert miss_row.passed is False
+    assert "ql009" in miss_row.actual
+
+
+def test_format_report_renders_the_quality_bar_block() -> None:
+    text = format_report(_passing_report())
+
+    assert "Quality bar (evals/QUALITY_BAR.md):" in text
+    assert "[PASS] Routing accuracy" in text
+    assert "[----] Mean precision@k (A/C)" in text
+    assert "=> PASS (gated thresholds)" in text
+
+
+def test_format_report_quality_bar_block_shows_failure() -> None:
+    text = format_report(_passing_report(mean_relevance=3.1))
+
+    assert "[FAIL] Mean relevance" in text
+    assert "=> FAIL (gated thresholds)" in text

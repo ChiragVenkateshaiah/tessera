@@ -285,9 +285,124 @@ def run_harness(
     )
 
 
+# --- Quality bar (Phase 2) ---
+#
+# The agreed internal bar from docs/Tessera_Phase2_Plan.md §2 / evals/
+# QUALITY_BAR.md. Gated thresholds block a release and fail
+# `tessera eval --check`; precision@k is reported but not gated (a
+# labeling-completeness confound makes a low score ambiguous — see
+# evals/QUALITY_BAR.md). Kept here, next to the metrics they check, and
+# pure like the rest of this module.
+
+
+@dataclass(frozen=True)
+class QualityBar:
+    min_routing_accuracy: float = 0.95
+    min_mean_recall: float = 0.80
+    min_mean_reciprocal_rank: float = 0.90
+    min_mean_groundedness: float = 4.5
+    min_mean_relevance: float = 4.5
+
+
+DEFAULT_QUALITY_BAR = QualityBar()
+
+
+@dataclass(frozen=True)
+class ThresholdResult:
+    """One row of the bar check. `passed` is always meaningful; the
+    formatter only renders PASS/FAIL for gated rows.
+    """
+
+    name: str
+    gated: bool
+    requirement: str
+    actual: str
+    passed: bool
+
+
+@dataclass(frozen=True)
+class BarResult:
+    thresholds: list[ThresholdResult]
+    passed: bool  # every *gated* threshold passed
+
+    @property
+    def gated_failures(self) -> list[ThresholdResult]:
+        return [t for t in self.thresholds if t.gated and not t.passed]
+
+
+def evaluate_bar(
+    report: EvalReport, bar: QualityBar = DEFAULT_QUALITY_BAR
+) -> BarResult:
+    """Check an EvalReport against the quality bar. Pure — no I/O.
+
+    A gated metric with no value (e.g. mean_recall is None because the
+    eval set had no A/C cases with relevant_sources) fails rather than
+    being skipped: a sweep that can't measure a gated dimension has not
+    cleared the bar.
+    """
+    thresholds: list[ThresholdResult] = []
+
+    ra = report.routing_accuracy
+    thresholds.append(
+        ThresholdResult(
+            "Routing accuracy",
+            True,
+            f">= {bar.min_routing_accuracy:.0%}",
+            f"{ra:.1%}",
+            ra >= bar.min_routing_accuracy,
+        )
+    )
+
+    for name, value, floor in (
+        ("Mean recall@k (A/C)", report.mean_recall, bar.min_mean_recall),
+        ("Mean MRR (A/C)", report.mean_reciprocal_rank, bar.min_mean_reciprocal_rank),
+        ("Mean groundedness", report.mean_groundedness, bar.min_mean_groundedness),
+        ("Mean relevance", report.mean_relevance, bar.min_mean_relevance),
+    ):
+        thresholds.append(
+            ThresholdResult(
+                name,
+                True,
+                f">= {floor:.2f}",
+                "n/a" if value is None else f"{value:.2f}",
+                value is not None and value >= floor,
+            )
+        )
+
+    zero_recall = sorted(
+        r.case_id for r in report.case_results if r.recall == 0.0
+    )
+    thresholds.append(
+        ThresholdResult(
+            "Per-case recall > 0.00 (A/C)",
+            True,
+            "no A/C case at recall 0.00",
+            "no total misses" if not zero_recall else "missed: " + ", ".join(zero_recall),
+            not zero_recall,
+        )
+    )
+
+    prec = report.mean_precision
+    thresholds.append(
+        ThresholdResult(
+            "Mean precision@k (A/C)",
+            False,
+            "reported, not gated (labeling confound)",
+            "n/a" if prec is None else f"{prec:.2f}",
+            True,
+        )
+    )
+
+    return BarResult(
+        thresholds=thresholds,
+        passed=all(t.passed for t in thresholds if t.gated),
+    )
+
+
 def format_report(report: EvalReport) -> str:
-    """Human-readable text summary — aggregate metrics, then per-case
-    detail so a specific miss can be traced back to its case.
+    """Human-readable text summary — aggregate metrics, the quality-bar
+    check, then per-case detail so a specific miss can be traced back to
+    its case.
     """
     lines = [
         "=== Tessera Eval Report ===",
@@ -313,6 +428,19 @@ def format_report(report: EvalReport) -> str:
             f"  Mean relevance:    {report.mean_relevance:.2f}",
             "",
         ]
+
+    bar = evaluate_bar(report)
+    lines.append("Quality bar (evals/QUALITY_BAR.md):")
+    for t in bar.thresholds:
+        if t.gated:
+            lines.append(
+                f"  [{'PASS' if t.passed else 'FAIL'}] {t.name}: {t.actual} "
+                f"(needs {t.requirement})"
+            )
+        else:
+            lines.append(f"  [----] {t.name}: {t.actual} ({t.requirement})")
+    lines.append(f"  => {'PASS' if bar.passed else 'FAIL'} (gated thresholds)")
+    lines.append("")
 
     lines.append("Latency by archetype (mean seconds):")
     for archetype in Archetype:
