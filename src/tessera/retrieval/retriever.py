@@ -65,19 +65,30 @@ def retrieve(
     return RetrievalResult(query=query, archetype=archetype, results=results)
 
 
-def _diversify_by_source(candidates: list[SearchResult]) -> list[SearchResult]:
-    """Trim a best-match-first candidate list to SYNTHESIS_MAX_RESULTS,
-    capping how many chunks come from any one document so synthesis pulls
-    from multiple sources instead of one dominant document.
+def _diversify_by_source(
+    candidates: list[SearchResult],
+    max_results: int = SYNTHESIS_MAX_RESULTS,
+    max_per_document: int = SYNTHESIS_MAX_PER_DOCUMENT,
+) -> list[SearchResult]:
+    """Trim a best-match-first candidate list to max_results, capping how
+    many chunks come from any one document so synthesis pulls from
+    multiple sources instead of one dominant document.
+
+    max_results/max_per_document default to the module constants for
+    retrieve()'s real use; evals/tune_retrieval.py's grid search calls
+    this directly with candidate constant values so it re-diversifies an
+    already-fetched candidate pool instead of re-querying the store per
+    grid point — this function is the single source of truth for the
+    diversification logic either way.
     """
     per_document_count: dict[str, int] = {}
     diversified: list[SearchResult] = []
     for result in candidates:
         count = per_document_count.get(result.document_path, 0)
-        if count >= SYNTHESIS_MAX_PER_DOCUMENT:
+        if count >= max_per_document:
             continue
         per_document_count[result.document_path] = count + 1
         diversified.append(result)
-        if len(diversified) >= SYNTHESIS_MAX_RESULTS:
+        if len(diversified) >= max_results:
             break
     return diversified

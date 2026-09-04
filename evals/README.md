@@ -144,6 +144,19 @@ entry). Two of the 17 new archetype-C cases (`ql035`, `ql038`) misroute
 to A — lookup-shaped phrasing over synthesis intent — a P2-4 router
 prompt target; routing still clears the 95% gate.
 
+**P2-3 (retrieval-constant grid search, `evals/tune_retrieval.py`):**
+the 72-point grid over `LOOKUP_TOP_K`/`SYNTHESIS_CANDIDATE_K`/
+`SYNTHESIS_MAX_RESULTS`/`SYNTHESIS_MAX_PER_DOCUMENT` found no config
+that beats the current constants by more than the plan's 0.02
+keep-current tiebreak — **the constants are unchanged**.
+`RELEVANCE_THRESHOLD` was re-probed against the live index (on-corpus
+min 0.576, adjacent-but-absent 0.243–0.306, off-corpus max 0.113) and
+also holds unchanged at 0.35. Confirmation sweep: same 96.0%/0.88/0.79/
+0.97, groundedness 4.94, relevance 4.91 — `=> PASS`, no regression from
+P2-2. Run `python -m evals.tune_retrieval` (or `uv run` equivalent) to
+reproduce the grid search — it's retrieval-only, no LLM calls, seconds
+to run.
+
 ## What's in here
 
 - `harness.py` — loads cases, runs each through `route()` → `retrieve()`
