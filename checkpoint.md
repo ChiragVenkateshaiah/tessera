@@ -5,21 +5,25 @@ Last updated: 2026-09-04
 ## Status
 
 **Phase 1 complete** (`v0.1.0` tagged, all 8 tasks merged, all 5 exit
-criteria met — see prior entries below). **2026-08-27, one continuous
-session: swapped the LLM provider from Gemini to NVIDIA NIM** (PR #25,
-merged) to resolve the quota constraint blocking Phase 2's eval-sweep
-work, **kicked off Phase 2 itself** (PR #27, merged) — populated
-`evals/cases/query_log.yaml` with 25 synthesized cases standing in for
-the real consultant query log (which will never literally arrive;
-Meridian Advisory and its stakeholders are fictional, confirmed directly
-by the user) and ran the first live 33-case sweep, **then tuned against
-both findings that sweep surfaced** (PR pending at time of writing):
-title-aware chunk embeddings fixed two retrieval misses, an A-vs-C
-router prompt disambiguation fixed two reproducible misroutes. Final
-post-tuning baseline: 100% routing accuracy (was 93.9%), mean recall
-0.87 (was 0.74), mean precision 0.71 (was 0.49), mean MRR 0.95 (was
-0.80), mean groundedness 4.95 (was 4.86), mean relevance 4.81 (was
-4.76). See Done below for the full report and findings.
+criteria met). **2026-08-27: LLM provider swapped Gemini → NVIDIA NIM**
+(PR #25) to unblock Phase 2's eval-sweep quota, then **Phase 2 kicked
+off** (PR #27) with a 25-case synthesized query log and a same-session
+tuning pass (PR #28) — title-aware chunk embeddings + router A/C
+disambiguation, reaching 100% routing / 0.87 recall / 0.95 MRR on the
+33-case set at the time.
+
+**2026-09-04: Phase 2 plan formally adopted** (`docs/Tessera_Phase2_Plan.md`,
+PR #30) and three of its five tasks completed in one session — **P2-1**
+quality bar (PR #31: `evals/QUALITY_BAR.md`, `tessera eval --check`),
+**P2-2** eval set 33→50 cases + label-completeness audit (PR #32),
+**P2-3** retrieval-constant grid search (PR #33: confirmed current
+constants and `RELEVANCE_THRESHOLD` both still hold, no change).
+Current baseline on the full 50-case set: **96.0% routing, 0.88 recall,
+0.79 precision, 0.97 MRR, 4.94 groundedness, 4.91 relevance — bar
+`=> PASS`**. Two known, named gaps remain, both explicitly P2-4's job
+(not yet fixed): a multi-source archetype-A recall floor (`q001` 0.40,
+`ql003`/`ql004` 0.50) and two archetype-C queries (`ql035`, `ql038`)
+that misroute to A. See Done below for full detail on every task.
 
 ## Done
 
@@ -910,6 +914,21 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
 
 ## Notes / open flags
 
+- **NVIDIA NIM latency is genuinely variable, not just occasionally
+  503-flaky** — hit repeatedly across the 2026-09-04 P2-1/P2-2/P2-3
+  sweeps: single-call latency ranged from ~10s to ~200s within the
+  *same* sweep, and one probe call took 53s for a trivial "Say OK"
+  completion. A 50-case sweep (~110 calls) took anywhere from ~20
+  minutes to over an hour depending on when it ran — always let a
+  backgrounded sweep run to completion rather than assuming a long
+  elapsed time means it's stuck; check `ps -p <pid> -o pcpu` first (low
+  CPU + still alive = waiting on the network, not hung) before
+  considering it a problem. Unrelated to the already-documented
+  transient-503 behavior below — this is latency variance, not errors.
+  The local machine itself was also generally slower than usual this
+  session (`pytest tests/` ran 60-90s most times but hit 204s once,
+  292s isn't unusual for background contention) — not something to
+  chase, just don't be surprised by it.
 - **`.venv` can exist but be missing dev-only deps** (hit this session:
   `pytest` wasn't installed despite `.venv` being present — likely from
   an earlier `uv sync` without `--extra dev`, possibly on the other
