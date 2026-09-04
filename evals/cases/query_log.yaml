@@ -3,7 +3,7 @@
 # actual wording). Meridian Advisory and its stakeholders (including
 # "Priya," who was to deliver this log) are fictional — this is a
 # portfolio project, not an engagement with a real client, so that log
-# will never literally arrive. These 25 cases are Claude-synthesized to
+# will never literally arrive. These cases are Claude-synthesized to
 # match the real-world usage patterns Discovery Findings describes
 # (archetype distribution, situational/time-pressured wording), grounded
 # against the actual pilot corpus rather than guessed — every
@@ -11,19 +11,36 @@
 # data/corpus/ by reading each cited document, the same discipline
 # placeholder.yaml's cases followed. NOT a real client artifact; treat
 # accordingly if this project is ever used as a template for a real
-# engagement. See checkpoint.md's 2026-08-27 entry for the full context.
+# engagement. See checkpoint.md's 2026-08-27 and 2026-09-04 entries for
+# the full context.
 #
-# Archetype distribution (A=10, C=7, B=5, D=3) approximates real-world
-# frequency per Discovery Findings §7: lookup is the most common query
-# type, synthesis is high-value but rarer, expertise-finding and
-# comparative queries occur but the system can't (B) or won't (D) answer
-# them — both still worth measuring for routing accuracy.
+# Archetype distribution approximates real-world frequency per Discovery
+# Findings §7: lookup is the most common query type, synthesis is
+# high-value but rarer, expertise-finding and comparative queries occur
+# but the system can't (B) or won't (D) answer them — both still worth
+# measuring for routing accuracy.
+#
+# 2026-09-04 (P2-2): expanded 25 -> 42 cases (ql026-ql042) toward a
+# combined ~50-case eval set (with placeholder.yaml: A=20, B=10, C=15,
+# D=5). New cases bring every one of the 52 corpus documents into at
+# least one case's relevant_sources or query. Also ran a
+# label-completeness audit (retrieval-only, zero LLM) over the original
+# 17 A/C cases here: ql001, ql011, ql016 were under-labeled and are
+# fixed below with an inline note; the rest were confirmed correct.
+# placeholder.yaml is held out as an overfitting check-set — P2-3 tunes
+# retrieval constants against THIS file only.
 
 - id: ql001
   query: "Do we have a playbook for cost transformation programs?"
   archetype: A
+  # Label audit 2026-09-04 (P2-2): added sga-benchmarking — it is the
+  # diagnostic step that precedes target-setting in any cost
+  # transformation, retrieves at ~0.57, and belongs alongside the other
+  # lever pages. procurement is labeled but doesn't reach top-5 (a
+  # multi-source-A retrieval gap, not a labeling error).
   relevant_sources:
     - "methodology/cost-transformation-overview.md"
+    - "methodology/cost-transformation-sga-benchmarking.md"
     - "methodology/cost-transformation-procurement.md"
     - "methodology/cost-transformation-zero-based-budgeting.md"
   ideal_answer: >
@@ -137,16 +154,25 @@
     I'm staffed on a due-diligence engagement starting Monday — what
     should I read first?
   archetype: C
+  # Label audit 2026-09-04 (P2-2): added the red-flag severity rubric and
+  # the financial-DD information request list — both are standard DD
+  # onboarding reading, companions to the already-labeled reporting and
+  # checklist pages, and both retrieve in the top 7. ma-integration-day-1
+  # also retrieves (~0.43) but is post-close work, not diligence — left
+  # unlabeled.
   relevant_sources:
     - "methodology/due-diligence-commercial-overview.md"
     - "methodology/due-diligence-financial-checklist.md"
+    - "methodology/due-diligence-financial-dd-information-request-list.md"
     - "methodology/due-diligence-red-flag-reporting.md"
+    - "methodology/due-diligence-red-flag-severity-rubric.md"
   ideal_answer: >
     A briefing synthesizing commercial DD (market/competitive-position
-    validation), financial DD (QoE, working capital, net-debt checklist),
-    and red flag reporting (continuous escalation discipline) into one
-    onboarding briefing, weaving the sources together rather than listing
-    them, citing each inline.
+    validation), financial DD (QoE, working capital, net-debt checklist,
+    phased information request list), and red flag reporting (continuous
+    escalation discipline, severity grading) into one onboarding briefing,
+    weaving the sources together rather than listing them, citing each
+    inline.
 
 - id: ql012
   query: "Client wants a digital transformation roadmap by Friday — what do we have?"
@@ -200,15 +226,23 @@
 - id: ql016
   query: "Staffed on an operating model redesign — what's our standard approach?"
   archetype: C
+  # Label audit 2026-09-04 (P2-2): added decision-rights-matrix and
+  # raci-governance — the ideal answer already names "decision rights"
+  # and "governance" as layers of the framework, both docs are part of
+  # the operating-model methodology family, and both retrieve in the top
+  # 5. This is the full "standard approach" set.
   relevant_sources:
     - "methodology/operating-model-overview.md"
     - "methodology/operating-model-org-design-principles.md"
+    - "methodology/operating-model-decision-rights-matrix.md"
+    - "methodology/operating-model-raci-governance.md"
     - "methodology/operating-model-shared-services.md"
   ideal_answer: >
     A briefing synthesizing the four-layer operating model framework
     (structure/decision rights/process/governance), structural design
-    principles (spans, layers, matrix structures), and shared services as
-    a structural cost/service lever, citing sources.
+    principles (spans, layers, matrix structures), decision-rights /
+    RACI mapping, and shared services as a structural cost/service lever,
+    citing sources.
 
 - id: ql017
   query: "Client is asking about private label strategy given inflation — what's our thinking?"
@@ -278,3 +312,203 @@
   relevant_sources: []
   ideal_answer: >
     Returns the confidentiality refusal.
+
+# --- ql026-ql042: added 2026-09-04 (P2-2) ---
+# Every relevant_sources path below was verified against real files under
+# data/corpus/ and probed with a retrieval-only check. Same synthesis
+# discipline as ql001-ql025 — Claude-authored stand-ins, not a real
+# client artifact.
+
+- id: ql026
+  query: "Do we have a methodology for quantifying deal synergies?"
+  archetype: A
+  relevant_sources:
+    - "methodology/due-diligence-synergy-quantification.md"
+  ideal_answer: >
+    Points to the synergy quantification methodology, summarizing the
+    categorize-by-type / build-bottom-up / net-out-cost-to-achieve /
+    confidence-weighted-tiers approach, citing the source.
+
+- id: ql027
+  query: "Do we have a framework for value-based pricing?"
+  archetype: A
+  relevant_sources:
+    - "methodology/pricing-strategy-value-based-pricing.md"
+  ideal_answer: >
+    Points to the value-based pricing methodology, summarizing the
+    build-the-value-model / determine-value-share / validate-with-customer
+    / build-the-access-case steps, citing the source.
+
+- id: ql028
+  query: "Do we have guidance on how to respond when a competitor cuts prices?"
+  archetype: A
+  relevant_sources:
+    - "methodology/pricing-strategy-competitive-response.md"
+  ideal_answer: >
+    Points to the competitive pricing response methodology, summarizing
+    classify-the-move / assess-exposure / choose-a-response-type /
+    war-game-the-second-order-response, citing the source.
+
+- id: ql029
+  query: "Do we have a scenario planning methodology?"
+  archetype: A
+  relevant_sources:
+    - "methodology/strategic-planning-scenario-planning.md"
+  ideal_answer: >
+    Points to the scenario planning methodology, summarizing the
+    identify-critical-uncertainties / build-distinct-scenarios /
+    stress-test-the-strategy / define-early-warning-indicators approach,
+    citing the source.
+
+- id: ql030
+  query: "Do we have anything on the three-horizons framework for growth portfolios?"
+  archetype: A
+  relevant_sources:
+    - "methodology/strategic-planning-three-horizons.md"
+  ideal_answer: >
+    Points to the three-horizons framework page, summarizing the H1/H2/H3
+    categorization, the tendency to over-invest in H1, and horizon-specific
+    governance, citing the source.
+
+- id: ql031
+  query: "Have we published a view on build vs. buy for core banking platforms?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/core-banking-modernization-build-vs-buy.md"
+  ideal_answer: >
+    Points to the core banking modernization piece, summarizing its
+    argument that "replace, wrap, or selectively modernize" is the real
+    first question and full replacement is right for a minority of banks,
+    citing the source.
+
+- id: ql032
+  query: "Do we have a point of view on reshoring and supply chain resilience?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/reshoring-supply-chain-resilience.md"
+  ideal_answer: >
+    Points to the reshoring piece, summarizing its argument that
+    "resilience" must be quantified via explicit disruption scenarios and
+    weighed against reshoring's real cost premium, citing the source.
+
+- id: ql033
+  query: "Do we have a perspective on value-based contracting in pharma?"
+  archetype: A
+  relevant_sources:
+    - "thought_leadership/pharma-value-based-contracting.md"
+  ideal_answer: >
+    Points to the pharma value-based contracting piece, summarizing why
+    adoption has lagged the rhetoric (outcomes measurement, rebate
+    dynamics, payer risk appetite) and where it actually works, citing
+    the source.
+
+- id: ql034
+  query: >
+    Prepping a pricing strategy workshop for a client next week — what
+    should I pull together?
+  archetype: C
+  # Probe 2026-09-04: recall@5 0.75 — price-elasticity lands ~rank 6,
+  # crowded out by cost-transformation bleed. Kept (elasticity is core to
+  # pricing strategy); the near-miss is a P2-3 retrieval target.
+  relevant_sources:
+    - "methodology/pricing-strategy-overview.md"
+    - "methodology/pricing-strategy-value-based-pricing.md"
+    - "methodology/pricing-strategy-competitive-response.md"
+    - "methodology/pricing-strategy-price-elasticity.md"
+  ideal_answer: >
+    A briefing synthesizing the firm's pricing approach — the three
+    pricing logics (cost/competitor/value), price elasticity analysis,
+    value-based pricing, and competitive response — into one workshop
+    prep, weaving the sources together rather than listing them, citing
+    each inline.
+
+- id: ql035
+  query: "Client wants help refreshing their long-range strategic plan — what's our approach?"
+  archetype: C
+  relevant_sources:
+    - "methodology/strategic-planning-three-horizons.md"
+    - "methodology/strategic-planning-scenario-planning.md"
+  ideal_answer: >
+    A briefing synthesizing the three-horizons portfolio framework
+    (balancing near-term performance against future-proofing bets) and
+    scenario planning (stress-testing choices against distinct future
+    states) into one account of how the firm approaches long-range
+    planning, citing sources.
+
+- id: ql036
+  query: "Getting staffed on a market entry study — get me up to speed on our approach."
+  archetype: C
+  relevant_sources:
+    - "methodology/market-entry-overview.md"
+    - "methodology/market-entry-market-sizing.md"
+    - "methodology/market-entry-competitive-landscape.md"
+    - "methodology/market-entry-entry-mode-selection.md"
+  ideal_answer: >
+    A briefing synthesizing the market entry framework — market sizing,
+    competitive landscape mapping, entry mode selection — into one
+    onboarding briefing, weaving the sources together rather than listing
+    them, citing each inline.
+
+- id: ql037
+  query: "Staffed on a large-scale change program next week — what's our change management methodology?"
+  archetype: C
+  relevant_sources:
+    - "methodology/change-management-stakeholder-mapping.md"
+    - "methodology/change-management-communication-planning.md"
+  ideal_answer: >
+    A briefing synthesizing stakeholder mapping (influence/support grid,
+    targeting effort) and communication planning (sequencing by audience
+    readiness) into one account of the firm's change management approach,
+    citing sources.
+
+- id: ql038
+  query: "Client is asking whether their AI investments are actually delivering value — what do we have to frame that?"
+  archetype: C
+  relevant_sources:
+    - "thought_leadership/economics-of-enterprise-ai-adoption.md"
+    - "thought_leadership/genai-adoption-maturity-model.md"
+  ideal_answer: >
+    A briefing synthesizing the argument that traditional discrete-task
+    ROI frames misread distributed AI productivity gains (measure capacity
+    reallocation, not just time saved) alongside the adoption maturity
+    model's finding that most enterprises overstate their current stage,
+    citing sources.
+
+- id: ql039
+  query: "Prepping for a pharma client on market access and pricing — what should I read?"
+  archetype: C
+  # Probe 2026-09-04: recall@5 0.67 — the clinical-trial site-selection
+  # piece lands outside top-5. Kept: it ties trial population
+  # representativeness directly to real-world evidence and market access,
+  # which is on-topic for this prep. Weaker-fit source by design.
+  relevant_sources:
+    - "thought_leadership/pharma-value-based-contracting.md"
+    - "methodology/pricing-strategy-value-based-pricing.md"
+    - "thought_leadership/clinical-trial-site-selection-diversity.md"
+  ideal_answer: >
+    A briefing synthesizing value-based pricing methodology, the slow
+    real-world arrival of value-based contracting in pharma, and how trial
+    population representativeness feeds downstream real-world evidence and
+    market access, citing sources.
+
+- id: ql040
+  query: "Who's our go-to expert on pricing strategy?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message — expertise-finding needs
+    staffing/HR data this system doesn't have access to in Phase 1.
+
+- id: ql041
+  query: "Who has deep scenario planning experience with industrials clients?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.
+
+- id: ql042
+  query: "Who's worked on reshoring and supply chain network moves for us?"
+  archetype: B
+  relevant_sources: []
+  ideal_answer: >
+    Returns the not-yet-supported message.

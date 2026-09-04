@@ -608,7 +608,7 @@ post-tuning baseline: 100% routing accuracy (was 93.9%), mean recall
       this is post-Phase-1 tuning work, not one of those tasks.
 
 - [x] **Phase 2 plan adopted + P2-1 (formalize the quality bar)**
-      (2026-09-04, PR pending). Start-of-day: re-verified Phase 1
+      (2026-09-04, PR #31 merged). Start-of-day: re-verified Phase 1
       (`pytest` 123 passed / 8 skipped, `uv.lock` still `0` nvidia-,
       `.env` present) then merged the Phase 2 plan doc (PR #30,
       `docs/Tessera_Phase2_Plan.md`) that had been sitting open for user
@@ -675,28 +675,97 @@ post-tuning baseline: 100% routing accuracy (was 93.9%), mean recall
       unchanged from the plan §3: `q001` recall 0.40, `ql003`/`ql004`
       recall 0.50 (multi-source A), `ql015`/`ql017` C precision 0.20.
 
-      **Flagged, not fixed:** `NvidiaClient` sets no request timeout
-      (relies on the openai SDK's 600s default) — a genuinely stuck
-      call can stall a sweep ~10 min before erroring. Worth a small
-      defensive `timeout=` as its own fix; out of P2-1 scope (and would
-      itself trip the new bar-check convention by touching
-      `generation/`).
+      **`NvidiaClient` request timeout:** flagged (no timeout, openai SDK
+      600s default). **User decided 2026-09-04 to leave it as-is — not a
+      concern for now.** Don't re-raise unprompted.
+
+- [x] **P2-2 — expand eval set to 50 + label-completeness audit**
+      (2026-09-04, PR pending). `docs/Tessera_Phase2_Plan.md` §4.
+
+      - **Label audit** (retrieval-only, zero LLM — scratchpad script
+        against the persisted index) over all 21 existing A/C cases.
+        Four were under-labeled and are fixed with an inline decision
+        note on each: `q005` (+`cost-transformation-zero-based-budgeting`,
+        +`cost-transformation-sga-cost-ratio-benchmarks`), `ql001`
+        (+`cost-transformation-sga-benchmarking`), `ql011` (+`due-diligence-
+        red-flag-severity-rubric`, +`due-diligence-financial-dd-information-
+        request-list`), `ql016` (+`operating-model-decision-rights-matrix`,
+        +`operating-model-raci-governance`) — all companion docs that
+        retrieve in the top 7 and genuinely belong. `q001`/`q002`/`q006`
+        reviewed and kept as-is (notes record why — `q001` is a
+        multi-source retrieval gap, not a labeling error; `q006` is the
+        precision confound).
+      - **+17 new cases** `ql026`–`ql042` in `query_log.yaml` (25 → 42).
+        Combined with `placeholder.yaml`: **A=20, B=10, C=15, D=5 = 50**.
+        Every one of the 52 corpus docs is now referenced by at least
+        one case's `relevant_sources` or query (10 were previously
+        uncited). New A cases all retrieve their target at recall@5 =
+        1.00; new C cases 0.67–1.00 (`ql034`/`ql039` are deliberate
+        weaker-fit multi-source cases, noted inline).
+      - `placeholder.yaml` is now the **held-out overfitting check-set** —
+        P2-3 tunes retrieval constants against `query_log.yaml` only.
+        Noted in both file headers + `evals/README.md`.
+      - `test_harness.py` case-count assertions 33 → 50. No re-ingest
+        (corpus/chunker/embeddings unchanged). Full suite **133 passed,
+        8 skipped**.
+
+      **Acceptance check — met.** Full `tessera eval --check` sweep,
+      2026-09-04, **50/50 cases, zero errors** (NVIDIA back to ~30–40s/
+      call):
+
+      ```
+      Routing accuracy: 96.0%              PASS (>= 95%)   [2 misroutes]
+      Retrieval (A/C):  recall 0.88  precision 0.79  MRR 0.97
+      Generation:       groundedness 5.00  relevance 4.91
+      Per-case recall > 0.00: PASS (min 0.40 @ q001)
+      => PASS (gated thresholds)   --check exit 0
+      ```
+
+      **The expanded set surfaced a routing weak spot** (this is P2-2
+      doing its job): `ql035` ("...refreshing their long-range strategic
+      plan — what's our approach?") and `ql038` ("...whether their AI
+      investments are actually delivering value — what do we have to
+      frame that?") both routed A, labeled C — lookup-shaped phrasing
+      over genuine synthesis intent, the same A/C boundary the
+      2026-08-27 tuning targeted. `ql038`'s misroute cost recall (0.50,
+      narrow A retrieval got 1 of 2 docs). Routing 96% clears the gate
+      with one-case margin → **P2-4 prompt-tuning target** (plan lists
+      "routing < 95% or a prompt gap" explicitly).
+
+      **P2-3 grid-search preview** (retrieval-only, scratchpad, ran
+      2026-09-04): full 72-point grid over `LOOKUP_TOP_K` ×
+      `SYNTHESIS_CANDIDATE_K` × `SYNTHESIS_MAX_RESULTS` ×
+      `SYNTHESIS_MAX_PER_DOCUMENT` on `query_log.yaml`. Best feasible
+      objective (mean recall×precision, subject to per-case recall > 0 +
+      MRR ≥ 0.90) beats current constants by only **+0.012 — below the
+      plan's 0.02 keep-current tiebreak**. No constant combination lifts
+      the worst-case recall above 0.50 — the multi-source A floor
+      (`q001` 0.40, `ql003`/`ql004` 0.50) is a retrieval-*strategy* gap,
+      not a *parameter* gap. So the likely path: **P2-3 = confirm +
+      document current constants + recalibrate `RELEVANCE_THRESHOLD`
+      (fast); P2-4 = wire metadata filtering through
+      `pipeline.answer_query()` (the load-bearing task)** for both the
+      multi-source recall floor and the routing prompt gap.
 
 ## Next task to pick up
 
-**P2-2 — Expand eval set to ~50 + label-completeness audit**
-(`docs/Tessera_Phase2_Plan.md` §4). Audit all 21 current A/C cases'
-`relevant_sources` against the corpus (read every doc the system
-retrieved + cited, decide if it belongs, record the decision in the
-case file comments); write ~17 new cases toward A=20 / B=10 / C=15 /
-D=5 (~50 total), every path mechanically verified, no id collisions
-with `q001`–`q008` / `ql001`–`ql025`; hold `placeholder.yaml` as an
-overfitting check-set; update `test_harness.py` case-count assertions.
-**Acceptance:** `load_cases()` parses ~50 cases; a full baseline sweep
-recorded here; every `relevant_sources` path verified to exist on disk.
+**P2-3 — retrieval-constant grid-search re-tune**
+(`docs/Tessera_Phase2_Plan.md` §4). Write the committed
+`evals/tune_retrieval.py` (retrieval-only, zero LLM; reads current
+constants from `retriever.py` rather than hardcoding); run the grid
+(seed logic from `scratchpad/grid_preview.py`); document the chosen
+config with its grid scores; recalibrate `RELEVANCE_THRESHOLD`
+(`generation/answer.py`) against the on-/off-corpus probe queries in
+that file's docstring; update constants + any asserting tests; one full
+LLM sweep confirming groundedness/relevance didn't regress.
+**Acceptance:** chosen config documented with grid scores; full sweep +
+bar-check pasted in the PR; groundedness/relevance ≥ prior baseline.
+The preview strongly suggests the answer is "keep current constants" —
+so expect this task to be mostly the script + `RELEVANCE_THRESHOLD`
+work + documentation, with the real retrieval gains deferred to P2-4.
 
-Then P2-3 (retrieval-constant grid-search re-tune), P2-4 (close any
-remaining bar gaps — conditional), P2-5 (Phase 2 exit + tag `v0.2.0`).
+Then P2-4 (metadata filtering + routing prompt gap — now looks
+load-bearing, not conditional), P2-5 (Phase 2 exit + tag `v0.2.0`).
 
 ---
 
