@@ -51,26 +51,29 @@ Cases live in `evals/cases/*.yaml`, one list of entries per file:
   empty to skip judging (e.g. for `B`/`D` cases, or any case where you
   only want the routing/retrieval metrics).
 
-`evals/cases/placeholder.yaml` currently holds the 8 workshop queries
-from Discovery Findings §7 (two per archetype) — useful for proving the
-harness runs end-to-end, but explicitly **not representative** of real
-consultant query patterns.
+`evals/cases/placeholder.yaml` holds the 8 workshop queries from
+Discovery Findings §7 (two per archetype). Since P2-2 it is **held out
+as an overfitting check-set** — retrieval tuning (P2-3) works against
+`query_log.yaml` only, and `placeholder.yaml` is the independent check
+that a tuned config didn't just fit the tuning set. It is explicitly
+**not representative** of real consultant query patterns.
 
 ## Populating with the real query log
 
-`evals/cases/query_log.yaml` (25 cases) is populated — but read this
-before trusting it as real data. Meridian Advisory and its stakeholders
-(including "Priya," who Discovery Findings §10 names as the owner of
-this deliverable) are fictional; this is a portfolio project, not an
-engagement with an actual client, so a genuine consultant-authored query
-log will never arrive. These 25 cases are Claude-synthesized to match
+`evals/cases/query_log.yaml` (42 cases as of P2-2) is populated — but
+read this before trusting it as real data. Meridian Advisory and its
+stakeholders (including "Priya," who Discovery Findings §10 names as the
+owner of this deliverable) are fictional; this is a portfolio project,
+not an engagement with an actual client, so a genuine consultant-authored
+query log will never arrive. These cases are Claude-synthesized to match
 the real-world usage patterns Discovery Findings §7 describes
 (archetype distribution, situational/time-pressured wording), grounded
 against the actual pilot corpus rather than guessed — every
 `relevant_sources` path was verified against a real file under
 `data/corpus/` by reading the document, not assumed. See the file's own
-header comment and checkpoint.md's 2026-08-27 entry for the full
-context. If this project ever becomes a template for a real engagement,
+header comment and checkpoint.md's 2026-08-27 / 2026-09-04 entries for
+the full context. If this project ever becomes a template for a real
+engagement,
 replace `query_log.yaml`'s contents with the actual log using the same
 process that built it:
 

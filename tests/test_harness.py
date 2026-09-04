@@ -107,22 +107,22 @@ def _router_response(archetype: str) -> str:
 
 
 def test_load_cases_parses_real_case_files() -> None:
-    """Loads every *.yaml under the real evals/cases/ — currently
-    placeholder.yaml (8 Discovery Findings workshop queries) plus
-    query_log.yaml (25 synthesized query-log stand-in cases, see its
-    header comment). Counts below must be updated if either file's case
-    count changes.
+    """Loads every *.yaml under the real evals/cases/ — placeholder.yaml
+    (8 Discovery Findings workshop queries, held out as a P2-3
+    overfitting check-set) plus query_log.yaml (42 synthesized
+    query-log stand-in cases, see its header comment). Counts below must
+    be updated if either file's case count changes.
     """
     cases = load_cases(CASES_DIR)
 
-    assert len(cases) == 33
+    assert len(cases) == 50
     by_archetype = {a: 0 for a in Archetype}
     for case in cases:
         by_archetype[case.archetype] += 1
     assert by_archetype == {
-        Archetype.LOOKUP: 12,
-        Archetype.EXPERTISE: 7,
-        Archetype.SYNTHESIS: 9,
+        Archetype.LOOKUP: 20,
+        Archetype.EXPERTISE: 10,
+        Archetype.SYNTHESIS: 15,
         Archetype.COMPARATIVE: 5,
     }
     assert cases[0].id == "q001"  # placeholder.yaml sorts before query_log.yaml

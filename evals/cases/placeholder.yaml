@@ -11,6 +11,11 @@
 - id: q001
   query: "Do we have a framework for market entry analysis?"
   archetype: A
+  # Label audit 2026-09-04 (P2-2): all 5 market-entry docs are genuinely
+  # the market-entry framework family — labels kept. Only overview +
+  # competitive-landscape reach top-5; the other 3 are a known
+  # multi-source-A retrieval gap (recall ~0.40), a P2-3/P2-4 target, not
+  # a labeling error.
   relevant_sources:
     - "methodology/market-entry-overview.md"
     - "methodology/market-entry-market-sizing.md"
@@ -26,6 +31,10 @@
 - id: q002
   query: "Have we done work in financial services on GenAI before?"
   archetype: A
+  # Label audit 2026-09-04 (P2-2): genai-adoption-maturity-model also
+  # retrieves (~0.42, slightly above the labeled doc) but is a
+  # cross-industry maturity piece, not financial-services GenAI work —
+  # left unlabeled. Label kept as the single on-point doc.
   relevant_sources:
     - "thought_leadership/genai-in-retail-banking-risk.md"
   ideal_answer: >
@@ -52,9 +61,15 @@
     I'm staffed on a retail-bank cost transformation Monday — what should
     I read first?
   archetype: C
+  # Label audit 2026-09-04 (P2-2): added zero-based-budgeting and the
+  # SG&A cost-ratio benchmark reference — both are core cost-transformation
+  # onboarding reading and both retrieve in the top 7. open-banking-2030-
+  # scenarios also retrieves (~0.51) but is off-topic; left unlabeled.
   relevant_sources:
     - "methodology/cost-transformation-overview.md"
     - "methodology/cost-transformation-sga-benchmarking.md"
+    - "methodology/cost-transformation-sga-cost-ratio-benchmarks.md"
+    - "methodology/cost-transformation-zero-based-budgeting.md"
     - "methodology/operating-model-overview.md"
   ideal_answer: >
     A briefing synthesizing cost-transformation methodology (overview and
@@ -66,6 +81,10 @@
     Client meeting in an hour, they asked about pricing elasticity — do
     we have anything?
   archetype: C
+  # Label audit 2026-09-04 (P2-2): value-based-pricing and
+  # competitive-response also retrieve (~0.48) but the query is narrowly
+  # about elasticity — left unlabeled. This is the precision confound the
+  # bar accounts for (precision not gated), not a labeling gap.
   relevant_sources:
     - "methodology/pricing-strategy-elasticity-calculation-reference.md"
     - "methodology/pricing-strategy-price-elasticity.md"
