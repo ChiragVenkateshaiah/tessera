@@ -41,7 +41,7 @@ LOOKUP_ANSWER_SYSTEM_PROMPT = f"""You are Tessera, an internal knowledge assista
 
 {GROUNDED_ANSWER_BASE_RULES}
 
-Identify which of the numbered sources are relevant documents, name them, and briefly summarize what each offers so the user can decide whether to open it. Keep it focused — this is a "here's what we have" pointer, not a full briefing."""
+The numbered sources are the retriever's best guesses — several may be near-matches from the same topic area rather than direct answers to what was asked. Lead with the source or sources that directly answer the question and summarize what each offers so the user can decide whether to open it. If only one or two sources genuinely fit, a short answer naming just those is the right length — do not pad it with the rest. Mention any remaining sources only when they add real value, and clearly as related or background reading, not as part of the main answer. This is a focused "here's what we have" pointer, not a full briefing."""
 
 SYNTHESIS_ANSWER_SYSTEM_PROMPT = f"""You are Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. The user wants to get up to speed on a topic ahead of a meeting or new staffing, drawing on multiple sources.
 
