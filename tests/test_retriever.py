@@ -7,6 +7,8 @@ import pytest
 
 from tessera.embedding.base import Embedder
 from tessera.retrieval.retriever import (
+    LOOKUP_CANDIDATE_K,
+    LOOKUP_MAX_PER_DOCUMENT,
     LOOKUP_TOP_K,
     SYNTHESIS_CANDIDATE_K,
     SYNTHESIS_MAX_PER_DOCUMENT,
@@ -85,12 +87,38 @@ def _spread_candidates(n: int, docs: int) -> list[SearchResult]:
     ]
 
 
-def test_lookup_uses_narrow_k() -> None:
-    store = FakeVectorStore(_spread_candidates(30, docs=10))
+def test_lookup_fetches_a_candidate_pool_then_narrows_to_top_k() -> None:
+    store = FakeVectorStore(_spread_candidates(40, docs=20))
 
-    retrieve("do we have a market entry template?", Archetype.LOOKUP, FakeEmbedder(), store)
+    result = retrieve(
+        "do we have a market entry template?", Archetype.LOOKUP, FakeEmbedder(), store
+    )
 
-    assert store.last_k == LOOKUP_TOP_K
+    # Fetches the wider pool from the store...
+    assert store.last_k == LOOKUP_CANDIDATE_K
+    # ...but the caller only ever sees the top LOOKUP_TOP_K distinct docs.
+    assert len(result.results) == LOOKUP_TOP_K
+
+
+def test_lookup_returns_one_chunk_per_document() -> None:
+    # 30 candidates round-robined across 3 docs — a raw top-5 would give
+    # doc0 twice; diversification must return 3 distinct docs, one chunk each.
+    store = FakeVectorStore(_spread_candidates(30, docs=3))
+
+    result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    assert len(result.results) == 3
+    assert len({r.document_path for r in result.results}) == 3
+
+
+def test_lookup_caps_a_dominant_document_at_one_chunk() -> None:
+    # All 30 candidates from one document — A must return exactly one,
+    # not LOOKUP_TOP_K chunks of the same source (the q001 failure mode).
+    store = FakeVectorStore(_spread_candidates(30, docs=1))
+
+    result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    assert len(result.results) == LOOKUP_MAX_PER_DOCUMENT == 1
 
 
 def test_synthesis_uses_broader_candidate_k() -> None:
