@@ -8,6 +8,12 @@ requiring hours of live NVIDIA calls: the entire objective is computed
 from a single pre-fetched candidate pool per case, re-sliced and
 re-diversified in memory for every grid point.
 
+P2-4 note: `retrieve()`'s A path now diversifies to one chunk per
+document (LOOKUP_MAX_PER_DOCUMENT = 1) before taking the top
+LOOKUP_TOP_K, so `score_config`'s lookup branch does the same. The grid
+still tunes LOOKUP_TOP_K (as the count of distinct documents A returns);
+LOOKUP_MAX_PER_DOCUMENT is held fixed at retriever.py's value.
+
 Tunes against evals/cases/query_log.yaml only; evals/cases/placeholder.yaml
 is the held-out overfitting check-set (see its and query_log.yaml's
 header comments, and checkpoint.md's 2026-09-04 P2-2 entry) — the chosen
@@ -29,6 +35,7 @@ from pathlib import Path
 
 from tessera.embedding.base import Embedder
 from tessera.retrieval.retriever import (
+    LOOKUP_MAX_PER_DOCUMENT,
     LOOKUP_TOP_K,
     SYNTHESIS_CANDIDATE_K,
     SYNTHESIS_MAX_PER_DOCUMENT,
@@ -153,7 +160,15 @@ def score_config(
     for item in fetched:
         case = item.case
         if case.archetype is Archetype.LOOKUP:
-            results = item.candidates[: config.lookup_top_k]
+            # Mirrors retriever.retrieve()'s A path (P2-4): diversify to
+            # one chunk per document, then take the top lookup_top_k
+            # distinct documents. lookup_top_k is the grid knob;
+            # LOOKUP_MAX_PER_DOCUMENT is fixed at retriever.py's value.
+            results = _diversify_by_source(
+                item.candidates,
+                max_results=config.lookup_top_k,
+                max_per_document=LOOKUP_MAX_PER_DOCUMENT,
+            )
         else:
             narrowed = item.candidates[: config.synthesis_candidate_k]
             results = _diversify_by_source(

@@ -8,9 +8,16 @@ from tessera.embedding.base import Embedder
 from tessera.retrieval.router import Archetype
 from tessera.store.base import SearchResult, VectorStore
 
-# Lookup (A): the user wants "the document," not a survey — a small,
-# precise set of matches is the point.
+# Lookup (A): the user wants "the document(s)," not a survey — a small,
+# precise set of matches is the point. But "the document" is often a
+# family (market-entry-overview + market-sizing + competitive-landscape +
+# ...), and a raw top-k over chunks lets one strong document's chunks fill
+# every slot, hiding its siblings (P2-4: q001/ql003/ql004 recall floor).
+# So A pulls a wider candidate pool and returns one chunk per document —
+# the top LOOKUP_TOP_K *distinct* documents, best chunk first.
+LOOKUP_CANDIDATE_K = 30
 LOOKUP_TOP_K = 5
+LOOKUP_MAX_PER_DOCUMENT = 1
 
 # Synthesis (C): pull a wider candidate pool so multiple sources get a
 # chance to surface, then cap how many chunks any single document can
@@ -55,7 +62,14 @@ def retrieve(
     query_embedding = embedder.embed_query(query)
 
     if archetype is Archetype.LOOKUP:
-        results = store.query(query_embedding, k=LOOKUP_TOP_K, where=where)
+        candidates = store.query(
+            query_embedding, k=LOOKUP_CANDIDATE_K, where=where
+        )
+        results = _diversify_by_source(
+            candidates,
+            max_results=LOOKUP_TOP_K,
+            max_per_document=LOOKUP_MAX_PER_DOCUMENT,
+        )
     else:
         candidates = store.query(
             query_embedding, k=SYNTHESIS_CANDIDATE_K, where=where
@@ -71,15 +85,16 @@ def _diversify_by_source(
     max_per_document: int = SYNTHESIS_MAX_PER_DOCUMENT,
 ) -> list[SearchResult]:
     """Trim a best-match-first candidate list to max_results, capping how
-    many chunks come from any one document so synthesis pulls from
+    many chunks come from any one document so retrieval pulls from
     multiple sources instead of one dominant document.
 
-    max_results/max_per_document default to the module constants for
-    retrieve()'s real use; evals/tune_retrieval.py's grid search calls
-    this directly with candidate constant values so it re-diversifies an
-    already-fetched candidate pool instead of re-querying the store per
-    grid point — this function is the single source of truth for the
-    diversification logic either way.
+    Used by both archetypes: C (synthesis) with the SYNTHESIS_* caps for a
+    broad multi-source briefing, and A (lookup) with LOOKUP_MAX_PER_DOCUMENT
+    = 1 to return the top LOOKUP_TOP_K distinct documents rather than
+    LOOKUP_TOP_K chunks. The defaults are C's values, kept for
+    backwards-compatible callers; A and evals/tune_retrieval.py's grid
+    search pass their own. This function is the single source of truth for
+    the diversification logic either way.
     """
     per_document_count: dict[str, int] = {}
     diversified: list[SearchResult] = []
