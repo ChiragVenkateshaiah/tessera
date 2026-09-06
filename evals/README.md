@@ -157,6 +157,30 @@ P2-2. Run `python -m evals.tune_retrieval` (or `uv run` equivalent) to
 reproduce the grid search — it's retrieval-only, no LLM calls, seconds
 to run.
 
+**P2-4 (close the two known bar gaps):** the P2-3 grid confirmed the
+retrieval constants can't lift the multi-source-A recall floor, so
+`retriever.retrieve()`'s A path now diversifies to one chunk per
+document — it returns the top `LOOKUP_TOP_K` *distinct* documents from a
+30-candidate pool, the same mechanism C uses. `q001`/`ql003`/`ql004`
+recall 0.40/0.50 → 1.00; mean recall 0.88 → 0.95. `ROUTER_SYSTEM_PROMPT`
+gained a second A-vs-C note for queries describing a live client need
+("client wants help with X … what's our approach") — `ql035`/`ql038`
+now route C, routing 96% → 100%. `LOOKUP_ANSWER_SYSTEM_PROMPT` was
+tightened so single-target lookups don't pad their answers with the
+now-larger neighbour set. `evals/tune_retrieval.py`'s lookup branch
+mirrors the new A path.
+
+**P2-5 / Phase 2 exit sweep (50 cases, 2026-09-06, clean 50/50):**
+routing 100%, mean recall 0.95, mean precision 0.42, mean MRR 0.97, mean
+groundedness 4.77, mean relevance 4.60 — `tessera eval --check` →
+`=> PASS (gated thresholds)`. Relevance clears by only 0.10: the P2-4
+A-diversification means narrow single-target lookups now return 5
+same-family docs, and the judge marks a few down for breadth
+(`ql007`/`ql004`/`ql027`/`ql028`). Carried forward as the first
+post-Phase-2 tuning item — see `checkpoint.md` "Notes / open flags"
+(candidate lever: adaptive `k` for A). Precision fell 0.72 → 0.42 with
+the same change and stays ungated (`QUALITY_BAR.md`).
+
 ## What's in here
 
 - `harness.py` — loads cases, runs each through `route()` → `retrieve()`

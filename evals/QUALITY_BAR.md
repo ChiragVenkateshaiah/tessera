@@ -38,23 +38,39 @@ and precision is still low, gating it is revisited then.
 
 ## Current standing
 
-Full sweep, 2026-09-02, 31/33 cases scored (2 transient NVIDIA 503s
-excluded):
+Phase 2 exit sweep (P2-5) — full clean `tessera eval --check`,
+**2026-09-06, 50/50 cases, zero errors**:
 
 | Metric | Value | Bar |
 |---|---|---|
 | Routing accuracy | 100% | ✅ |
-| Mean recall@k | 0.88 | ✅ |
+| Mean recall@k | 0.95 | ✅ |
 | Mean MRR | 0.97 | ✅ |
-| Mean groundedness | 5.00 | ✅ |
-| Mean relevance | 4.89 | ✅ |
-| Per-case recall > 0.00 | yes | ✅ |
-| Mean precision@k | 0.72 | (not gated) |
+| Mean groundedness | 4.77 | ✅ |
+| Mean relevance | 4.60 | ✅ (thin — see below) |
+| Per-case recall > 0.00 | yes (min 0.50) | ✅ |
+| Mean precision@k | 0.42 | (not gated) |
 
-Every gated threshold already passes. Phase 2 tuning (P2-3, P2-4) is
-about **margin and robustness against a larger, audited eval set**, not
-clawing up to a failing bar — unless the expanded ~50-case set surfaces
-hard cases that break it.
+`=> PASS (gated thresholds)`. Every gated threshold passes on a
+reproducible clean sweep — this is the Phase 2 exit gate (Solution
+Design §6), met.
+
+**Relevance clears by only 0.10**, and it is the noisiest metric
+(4.60–4.75 across recent sweeps). The cause is the P2-4 A-path
+diversification trade-off: narrow single-target lookups ("Do we have a
+framework for X?") now return 5 same-family documents where the query
+wanted one, and the judge marks a few of them down for breadth
+(`ql007`, `ql004`, `ql027`, `ql028`). Carried forward as the first
+post-Phase-2 tuning item — candidate lever: adaptive `k` for archetype A
+(fewer documents when the top hit dominates on score, all
+`LOOKUP_TOP_K` when the family scores are tight). See `checkpoint.md`
+"Notes / open flags".
+
+**Precision fell 0.72 → 0.42** with the same P2-4 change and stays
+ungated — the label audit (P2-2) came back with only 4 under-labeled
+cases fixed, so the low score is the corpus's deliberate near-duplicate
+hard-negatives plus genuinely-relevant-but-unlabeled adjacent docs, not
+a labeling gap worth gating against.
 
 ## Regression discipline
 
