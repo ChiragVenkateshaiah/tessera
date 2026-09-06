@@ -1,7 +1,8 @@
 # Tessera — Phase 2 Plan (Claude Code Brief)
 
-**Status: ADOPTED 2026-09-04 (drafted 2026-09-02).** Task P2-1 is in
-progress; see `checkpoint.md` for current standing.
+**Status: COMPLETE 2026-09-06** (adopted 2026-09-04, drafted 2026-09-02).
+All 5 tasks (P2-1…P2-5) merged; exit gate met on a clean 50-case sweep;
+`v0.2.0` tagged. See `checkpoint.md` for the full record.
 
 This document is the working brief for Phase 2 of Project Tessera, in the
 same spirit as `Tessera_Phase1_Build_Plan.md`. Phase 1 is complete and

@@ -1,29 +1,38 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-09-04
+Last updated: 2026-09-06
 
 ## Status
 
-**Phase 1 complete** (`v0.1.0` tagged, all 8 tasks merged, all 5 exit
-criteria met). **2026-08-27: LLM provider swapped Gemini → NVIDIA NIM**
-(PR #25) to unblock Phase 2's eval-sweep quota, then **Phase 2 kicked
-off** (PR #27) with a 25-case synthesized query log and a same-session
-tuning pass (PR #28) — title-aware chunk embeddings + router A/C
-disambiguation, reaching 100% routing / 0.87 recall / 0.95 MRR on the
-33-case set at the time.
+**Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
+exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
+Phase 1 exit criteria re-confirmed still hold (see the end of this
+file).
 
-**2026-09-04: Phase 2 plan formally adopted** (`docs/Tessera_Phase2_Plan.md`,
-PR #30) and three of its five tasks completed in one session — **P2-1**
-quality bar (PR #31: `evals/QUALITY_BAR.md`, `tessera eval --check`),
-**P2-2** eval set 33→50 cases + label-completeness audit (PR #32),
-**P2-3** retrieval-constant grid search (PR #33: confirmed current
-constants and `RELEVANCE_THRESHOLD` both still hold, no change).
-Current baseline on the full 50-case set: **96.0% routing, 0.88 recall,
-0.79 precision, 0.97 MRR, 4.94 groundedness, 4.91 relevance — bar
-`=> PASS`**. Two known, named gaps remain, both explicitly P2-4's job
-(not yet fixed): a multi-source archetype-A recall floor (`q001` 0.40,
-`ql003`/`ql004` 0.50) and two archetype-C queries (`ql035`, `ql038`)
-that misroute to A. See Done below for full detail on every task.
+**Phase 2 arc:** LLM provider swapped Gemini → NVIDIA NIM (PR #25,
+2026-08-27) to unblock the eval-sweep quota → 25-case synthesized query
+log + first tuning pass (PRs #27/#28) → Phase 2 plan formally adopted
+(`docs/Tessera_Phase2_Plan.md`, PR #30, 2026-09-04) → **P2-1** quality
+bar (PR #31) → **P2-2** eval set 33→50 + label audit (PR #32) → **P2-3**
+retrieval-constant grid search, constants confirmed unchanged (PR #33) →
+**P2-4** A-path source diversification + router A/C boundary fix (PR
+#35, 2026-09-05) → **P2-5** Phase 2 exit: docs + final sweep + tag (PR
+pending, this session).
+
+**Phase 2 exit sweep** (P2-5, full clean `tessera eval --check`,
+2026-09-06, **50/50 cases, zero errors**): **100.0% routing, 0.95
+recall, 0.42 precision, 0.97 MRR, 4.77 groundedness, 4.60 relevance —
+`=> PASS (gated thresholds)`**. Every gated threshold clears on a
+reproducible clean sweep (the Solution Design §6 exit gate). Both P2-4
+target gaps closed: multi-source archetype-A recall (`q001`/`ql003`/
+`ql004` now 1.00) and the `ql035`/`ql038` C→A misroutes (routing 100%).
+
+**One carry-forward** into the next phase (user decision 2026-09-06 —
+close Phase 2 now, don't hold for it): relevance clears the bar by only
+0.10, because P2-4's A-diversification makes narrow single-target
+lookups return 5 same-family docs and the judge marks a few down for
+breadth. See "Notes / open flags". Precision dropped 0.79→0.42 with the
+same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Done
 
@@ -812,38 +821,140 @@ that misroute to A. See Done below for full detail on every task.
       baseline (4.94 vs 5.00 is judge noise, not a regression) —
       satisfies "groundedness/relevance ≥ prior baseline."
 
+- [x] **P2-4 — close remaining bar gaps** (2026-09-05, PR #35 merged).
+      `docs/Tessera_Phase2_Plan.md` §4. Diagnosed retrieval-only (zero
+      LLM) before writing any fix.
+
+      **Retrieval — multi-source-A recall floor.** The plan named
+      metadata filtering as the candidate lever; the diagnostic showed
+      it doesn't work — filtering archetype-A retrieval by `doc_type`
+      leaves `q001` at recall 0.60, and topic filtering is impossible
+      without re-serializing chunk metadata + a re-ingest (Chroma
+      stores `topics` as a joined string). The real cause is **source
+      concentration**: for `q001` ("market entry framework") the top-5
+      *chunks* collapsed to 2 *documents* (overview ×3,
+      competitive-landscape ×2), hiding the other 3 market-entry docs.
+      Fix — `retriever.retrieve()`'s A path now pulls a
+      `LOOKUP_CANDIDATE_K = 30` pool and reuses `_diversify_by_source()`
+      with `LOOKUP_MAX_PER_DOCUMENT = 1`, returning the top
+      `LOOKUP_TOP_K` (5) *distinct* documents, best chunk each — the
+      same mechanism C uses. **Confirmed with the user before
+      implementing** (deviation from the plan's named mechanism; user
+      chose "A-path diversification" over metadata filtering / both).
+      Retrieval-only sweep over all 50 A/C cases: mean recall
+      0.899 → 0.952, MRR unchanged 0.971, **zero recall regressions**;
+      `q001` 0.40 → 1.00, `ql003`/`ql004` 0.50 → 1.00, `ql001`
+      0.75 → 1.00.
+
+      **Routing — new A/C boundary pattern.** `ql035`/`ql038` ("client
+      wants help with X … what's our approach / what do we have to
+      frame that") misrouted C→A. Extended `ROUTER_SYSTEM_PROMPT`'s
+      A-vs-C note to cover queries describing a live client need the
+      consultant must deliver on, with two paraphrased calibrating
+      examples (not the verbatim eval queries — same discipline as the
+      2026-08-27 fix). Live spot-check: **9/9 correct**, both targets
+      now C, no overcorrection of genuine A/B/D.
+
+      **Follow-on — lookup-answer prompt.** The first full sweep showed
+      A groundedness/relevance sliding to 4.69/4.57 — the diversified
+      5-doc result set made single-target lookups pad answers with
+      same-topic neighbours. `LOOKUP_ANSWER_SYSTEM_PROMPT` now tells the
+      model the numbered sources include near-matches, to lead with the
+      directly-responsive ones, and to keep the answer short when only
+      one or two fit. Recovered to 4.77/4.71 on the re-sweep.
+
+      `evals/tune_retrieval.py`'s `score_config()` lookup branch mirrors
+      the new A path so the grid tool stays accurate. **No re-ingest** —
+      embedding path unchanged. `test_retriever.py`: −1 raw-k test, +3
+      diversification tests; full suite **145 passed, 8 skipped**.
+      genai-architect/quality-engineer review not invoked (gated to
+      build-plan Tasks 6/7/8; this is Phase 2 work).
+
+      **Acceptance check — met.** Full `tessera eval --check` sweep,
+      2026-09-05, 50/50: 47 in the main run; `q001`/`ql003`/`ql037` hit
+      transient NVIDIA 503s and were retried directly against the
+      persisted index (documented pattern) — all 3 clean on retry
+      (recall 1.00, g5 r5 each). Hand-merged:
+
+      ```
+      Routing accuracy: 100.0%          (was 96.0%)
+      Retrieval (35 A/C cases):
+        Mean recall:    0.95            (was 0.88)
+        Mean precision: 0.42            (was 0.79 — ungated)
+        Mean MRR:       0.97            (was 0.97)
+        Per-case recall > 0.00: PASS    (min 0.50 @ ql015)
+      Generation (LLM-judge, 1-5):
+        Mean groundedness: 4.77         (was ~4.94)
+        Mean relevance:    4.71         (was ~4.91)
+      => PASS (gated thresholds)
+      ```
+
+- [x] **P2-5 — Phase 2 exit** (2026-09-06, PR pending, this session).
+      `docs/Tessera_Phase2_Plan.md` §4. Docs + verification + tag — not
+      a tuning task.
+
+      - **`README.md`** — status → Phase 2 complete (`v0.2.0`); phase
+        table (Phase 1 ✅ `v0.1.0`, Phase 2 ✅ `v0.2.0` with what it
+        delivered, query log noted as the permanent synthesized
+        stand-in); architecture diagram + "Archetype handling" fixed
+        (archetype A is one-chunk-per-source diversification now, the
+        old "metadata-filtered" line was never accurate post-P2-4); eval
+        section rewritten for the 50-case set + `--check` gate; new
+        "Phase 2 — the quality bar" section with the bar table and the
+        exit-sweep numbers.
+      - **`evals/QUALITY_BAR.md`** — "Current standing" refreshed to the
+        2026-09-06 clean 50/50 sweep; added the thin-relevance-margin
+        and precision-drop explanations.
+      - **`evals/README.md`** — P2-4 + P2-5 entries appended to the
+        sweep-history section.
+      - No code changed — docs only.
+
+      **Acceptance check — met.** Full clean `tessera eval --check`
+      sweep, **2026-09-06, 50/50 cases, zero errors** (this run — not
+      hand-merged):
+
+      ```
+      === Tessera Eval Report ===
+      Cases: 50
+      Routing accuracy: 100.0%
+      Retrieval (A/C):  recall 0.95  precision 0.42  MRR 0.97
+      Generation:       groundedness 4.77  relevance 4.60
+      Quality bar:
+        [PASS] Routing accuracy: 100.0%   (>= 95%)
+        [PASS] Mean recall@k (A/C): 0.95  (>= 0.80)
+        [PASS] Mean MRR (A/C): 0.97       (>= 0.90)
+        [PASS] Mean groundedness: 4.77    (>= 4.50)
+        [PASS] Mean relevance: 4.60       (>= 4.50)
+        [PASS] Per-case recall > 0.00 (A/C): no total misses
+        [----] Mean precision@k (A/C): 0.42  (reported, not gated)
+        => PASS (gated thresholds)
+      Latency (mean s): A 50.6  B 28.2  C 67.7  D 25.2
+      ```
+
+      Relevance 4.60 clears the 4.5 gate by 0.10 — the tightest margin,
+      and the noisiest metric (4.60–4.75 across recent sweeps). **User
+      decided 2026-09-06 to close Phase 2 now** rather than hold for a
+      narrow-A tuning pass; the margin + candidate lever are recorded in
+      "Notes / open flags". `v0.2.0` tagged once PR merged to `main`.
+
 ## Next task to pick up
 
-**P2-4 — close remaining bar gaps (now load-bearing, not conditional)**
-(`docs/Tessera_Phase2_Plan.md` §4). P2-3 confirmed the constant grid
-can't lift the multi-source-A recall floor or fix the ql035/ql038
-routing misfires — P2-4 is where those actually get addressed:
+**Phase 2 is complete** — all 5 tasks (P2-1…P2-5) merged, exit gate met,
+`v0.2.0` tagged 2026-09-06. There is no Phase 3 build plan yet.
 
-- **Metadata filtering for A.** `retriever.retrieve()` already accepts
-  `where`, but `pipeline.answer_query()` never passes it (Task 5's
-  spec — "A uses narrow k *with metadata filtering*" — is arguably
-  unfinished here). Infer `doc_type`/`industry`/`topics` from the query
-  and filter, targeting `q001` (recall 0.40), `ql003`/`ql004` (0.50) —
-  all cases where 2+ same-family docs exist and only one surfaces.
-- **Router prompt fix for the new A/C boundary pattern.** `ql035`
-  ("...refreshing their long-range strategic plan — what's our
-  approach?") and `ql038` ("...whether their AI investments are
-  actually delivering value — what do we have to frame that?") both
-  misroute to A. Same shape as the 2026-08-27 disambiguation fix
-  (situational framing vs. trailing lookup-shaped wording) but a
-  pattern that note's calibrating examples didn't cover — extend
-  `ROUTER_SYSTEM_PROMPT` (`generation/prompts.py`), then a regression
-  spot-check across all four archetypes to confirm no overcorrection
-  (the 2026-08-27 pattern: 7 queries, 3×A/2×C/1×B/1×D).
+Per Solution Design §6 the project is "coherent and demoable if it stops
+after Phase 2." Whoever picks up next has three options, none urgent:
 
-**Acceptance:** all gated thresholds pass on the full 50-case set (they
-already do — this task is about closing the *known* gaps, i.e. no
-per-case recall below ~0.75 on the multi-source A cases and no
-misroutes on ql035/ql038, not about clearing a currently-failing bar).
-If both fixes land clean, P2-4 also verifies nothing else regressed.
-
-Then P2-5 (Phase 2 exit: README + checkpoint final sweep, confirm
-Phase 1 criteria + Phase 2 bar, tag `v0.2.0`).
+1. **Phase 3 planning** — write `docs/Tessera_Phase3_Plan.md` for
+   archetype B (expertise-finding). Blocked on the HR data source/
+   structure being knowable (Discovery Findings §9.8); until then B
+   stays a routed "not yet supported" response.
+2. **Post-Phase-2 retrieval tuning** — the narrow-A relevance margin
+   carried forward from P2-5 (see "Notes / open flags"). A self-
+   contained small task: adaptive `k` for archetype A. Would want its
+   own retrieval-only tuning + full sweep + bar-check PR.
+3. **Phase 4 groundwork** — `docs/adr/` already sketches the hybrid
+   Go/Python production architecture; nothing built.
 
 ---
 
@@ -859,14 +970,16 @@ misses) diagnosed and fixed same-session, verified with a clean 33/33
 post-tuning sweep (100% routing, recall 0.87, precision 0.71, MRR 0.95,
 groundedness 4.95, relevance 4.81 — see Done above for the full story).
 
-As of 2026-09-04 Phase 2 has a fixed task sequence — see
-`docs/Tessera_Phase2_Plan.md` §4 and "Next task to pick up" above. The
-open-ended framing that used to be here (chase per-case tuning
-patterns / widen the query log / revisit `LOOKUP_TOP_K` etc.) is now
-folded into P2-2/P2-3/P2-4 of that plan.
+Phase 2 ran that fixed sequence (`docs/Tessera_Phase2_Plan.md` §4) to
+completion: P2-1 quality bar → P2-2 eval set 33→50 + label audit → P2-3
+constant grid search (no change) → P2-4 A-path diversification + router
+fix → P2-5 exit (docs + clean sweep + `v0.2.0`). The Phase 2 exit gate
+(Solution Design §6 — "retrieval + answer metrics meet the agreed
+internal bar on a ~50-case set, reproducibly") is met: see the P2-5
+sweep in Status and Done above.
 
-Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
-(2026-08-20):
+Phase 1 exit criteria (build plan §7), **re-confirmed 2026-09-06 still
+holding** at the Phase 2 close (originally assessed 2026-08-20):
 
 1. Fresh clone can ingest + query with citations via CLI — **met**.
    Verified live (this session, via the installed console script) and
@@ -886,7 +999,17 @@ Phase 1 exit criteria (build plan §7), assessed the session Phase 1 closed
    this session's fixes to the stale "cases empty" line and the
    inverted diagram arrow.
 
-All 5 exit criteria satisfied and `v0.1.0` tagged (see Status above).
+**P2-5 re-confirmation (2026-09-06):** all 5 still hold. (1) fresh
+`uv sync` → `.env` → `ingest` → `query` path unchanged since Phase 1;
+(2) all 4 archetypes exercised every eval sweep, A/C observably
+different (A now one-chunk-per-source, C multi-source); (3) the P2-5
+50/50 clean sweep reports all 7 metric categories; (4) the three ports
+plus `load_corpus` are untouched — P2-4 only changed retrieval strategy
+*inside* the ports; (5) README updated this task to state Phase 2 as
+built and the query log as the permanent synthesized stand-in.
+
+All 5 Phase 1 exit criteria satisfied and `v0.1.0` tagged; all 6 gated
+Phase 2 bar thresholds satisfied and `v0.2.0` tagged (see Status above).
 Also closed this session: `evals/README.md` step 4 ("Populating with the
 real query log") still named `python -m evals.harness` as the re-run
 command, inconsistent with the "Running it" section's Task 8 update
@@ -914,6 +1037,35 @@ out of this sequence's scope (build plan §5 covers Phase 1 only).
 
 ## Notes / open flags
 
+- **CARRIED FORWARD from P2-5 — narrow-archetype-A relevance margin.**
+  The Phase 2 bar passes, but mean relevance clears the 4.5 gate by only
+  0.10 (4.60 on the 2026-09-06 exit sweep; range 4.60–4.75 across recent
+  sweeps — the noisiest gated metric). Cause: P2-4's A-path
+  diversification (`LOOKUP_MAX_PER_DOCUMENT = 1`, top-5 distinct docs)
+  means a narrow single-target lookup like "Do we have a framework for
+  value-based pricing?" now returns 5 same-family docs where the query
+  wanted one, and the LLM-judge marks a few down for breadth (`ql007`
+  scored relevance 2 on the exit sweep, `ql004`/`ql027`/`ql028` scored
+  3). The P2-4 `LOOKUP_ANSWER_SYSTEM_PROMPT` tightening recovered most
+  of a bigger initial drop but not all of it. **User decided 2026-09-06
+  to close Phase 2 without chasing this** — it's within the bar and the
+  judge is noisy. Candidate lever if it's ever picked up: **adaptive `k`
+  for archetype A** — return fewer documents when the top hit clearly
+  dominates on score (a lone winner like `ql007`), keep all
+  `LOOKUP_TOP_K` when the family scores are tight (`q001`'s market-entry
+  docs all score 0.66–0.72). That's new retrieval logic needing its own
+  retrieval-only tuning + full sweep + bar-check PR — a self-contained
+  small task, not a doc tweak. Don't touch the A diversification without
+  re-checking it doesn't give back the P2-4 recall gains (mean recall
+  0.88 → 0.95, `q001`/`ql003`/`ql004` → 1.00).
+- **Any change to archetype-A retrieval breadth re-opens the
+  precision/relevance/recall three-way tension.** P2-4 chose recall
+  (diversify to distinct docs) at a known, accepted cost to precision
+  (0.79 → 0.42, ungated) and a small cost to judged relevance (above).
+  P2-3's grid search is the tool for re-tuning `LOOKUP_TOP_K` /
+  `LOOKUP_CANDIDATE_K` / `LOOKUP_MAX_PER_DOCUMENT`
+  (`evals/tune_retrieval.py`, retrieval-only, seconds to run) — its
+  lookup branch already mirrors the post-P2-4 diversified A path.
 - **NVIDIA NIM latency is genuinely variable, not just occasionally
   503-flaky** — hit repeatedly across the 2026-09-04 P2-1/P2-2/P2-3
   sweeps: single-call latency ranged from ~10s to ~200s within the

@@ -4,26 +4,28 @@ Internal knowledge assistant pilot for Meridian Advisory — helping consultants
 find prior work, frameworks, and internal expertise instead of losing hours
 searching for it.
 
-**Status: Phase 1, in progress.** The local ingestion/retrieval core, the
-grounded-generation path, and the CLI below are built and working. Real
-consultant queries, archetype B, and everything past the local pilot are
-still ahead — see the phase table below.
+**Status: Phase 2 complete** (`v0.2.0`). The local ingestion/retrieval core,
+the grounded-generation path, the CLI below, and a populated + tuned
+evaluation harness held to a documented quality bar are all built and
+working. Archetype B (expertise-finding) and everything past the local
+pilot are still ahead — see the phase table below.
 
 ## Phase boundary — what's built vs. designed
 
 | Phase | Status | Scope |
 |---|---|---|
-| **Phase 1** | 🚧 In progress (this repo) | Local ingestion + retrieval core over a synthetic corpus. Archetypes A (lookup) and C (synthesis) only. Grounded generation with citations. Eval harness runnable end-to-end via `tessera eval`, with 8 illustrative cases against the synthetic corpus — the real consultant query log lands in Phase 2. |
-| Phase 2 | Designed, not built | Populate eval harness with the real consultant query log; tune against it. |
+| **Phase 1** | ✅ Complete (`v0.1.0`) | Local ingestion + retrieval core over a synthetic corpus. Archetypes A (lookup) and C (synthesis) only. Grounded generation with citations. Eval harness runnable end-to-end via `tessera eval`. |
+| **Phase 2** | ✅ Complete (`v0.2.0`, this repo) | Eval set populated to 50 cases against the synthetic corpus and retrieval/generation tuned against it; a documented internal quality bar (`evals/QUALITY_BAR.md`) enforced via `tessera eval --check` on every retrieval/prompt PR. The consultant query log Discovery described is fictional and will never arrive — `evals/cases/query_log.yaml` is a deliberately, transparently synthesized stand-in. |
 | Phase 3 | Designed, not built | Archetype B (expertise-finding), once HR data source/structure is known. |
 | Phase 4 | Documented, not built | Move off local: Bedrock, OpenSearch Serverless, S3, Lambda. |
 | Phase 5 | Documented, not built | MLOps: Terraform, CI/CD with eval gate, monitoring. |
 
-**Deliberately not in Phase 1:** archetype D (comparative — refusal guardrail
-only, confidentiality-sensitive), access-control enforcement (pilot corpus is
-low-sensitivity by construction), PowerPoint ingestion, any AWS deployment, a
-web UI. Full reasoning: [`CLAUDE.md`](CLAUDE.md) and
-[`docs/Tessera_Phase1_Build_Plan.md`](docs/Tessera_Phase1_Build_Plan.md).
+**Deliberately not in Phase 1–2:** archetype D (comparative — refusal
+guardrail only, confidentiality-sensitive), access-control enforcement (pilot
+corpus is low-sensitivity by construction), PowerPoint ingestion, any AWS
+deployment, a web UI. Full reasoning: [`CLAUDE.md`](CLAUDE.md),
+[`docs/Tessera_Phase1_Build_Plan.md`](docs/Tessera_Phase1_Build_Plan.md), and
+[`docs/Tessera_Phase2_Plan.md`](docs/Tessera_Phase2_Plan.md).
 
 Background reading:
 - [`docs/Tessera_Discovery_Findings.md`](docs/Tessera_Discovery_Findings.md) — the problem, the four query archetypes, the confidentiality model.
@@ -66,7 +68,7 @@ flowchart TB
     subgraph query["Query time"]
         cli["cli.py<br/>tessera query \"...\""]
         router["router.py<br/>archetype classifier: A / B / C / D"]
-        retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow+filtered, C: broad multi-source)"]
+        retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow, one chunk per source; C: broad multi-source)"]
         genIface["LLMClient interface"]
         genImpl["nvidia.py<br/>NVIDIA NIM API"]
         prompts["prompts.py<br/>grounded-answer prompts,<br/>per-archetype shapes"]
@@ -79,8 +81,8 @@ flowchart TB
     end
 
     subgraph evalh["Evaluation harness"]
-        cases["evals/cases/*.yaml<br/>(placeholder now, real query log later)"]
-        harness["harness.py"]
+        cases["evals/cases/*.yaml<br/>(50 synthesized cases;<br/>placeholder.yaml held out)"]
+        harness["harness.py<br/>+ quality-bar check"]
         metrics["metrics.py<br/>recall@k, precision@k, MRR,<br/>groundedness, relevance, routing acc., latency"]
         cases --> harness
         harness -->|calls router/retriever/generation directly, bypassing cli| router
@@ -91,7 +93,9 @@ flowchart TB
 ```
 
 **Archetype handling at query time:**
-- **A (lookup)** — narrow k, metadata-filtered retrieval, precision-oriented.
+- **A (lookup)** — narrow k, one chunk per source document so a document
+  family surfaces its members rather than one member's chunks filling
+  every slot; precision-oriented.
 - **B (expertise)** — not built; router returns "not yet supported."
 - **C (synthesis)** — broad k, multi-source retrieval, synthesis prompt.
 - **D (comparative)** — not attempted; router returns a confidentiality
@@ -104,6 +108,29 @@ Titan/Cohere, OpenSearch Serverless, and Claude-via-Bedrock implementations
 respectively, with S3 backing the corpus and Lambda fronting query handling.
 Nothing in the Phase 1 pipeline shape needs to change for that swap — that's
 the point of building it this way.
+
+## Phase 2 — the quality bar
+
+Phase 2 populated the eval set, tuned retrieval and generation against it,
+and committed to a documented internal bar that every future
+retrieval/prompt change is measured against. Full definition and rationale:
+[`evals/QUALITY_BAR.md`](evals/QUALITY_BAR.md).
+
+| Metric | Threshold | Gated? | Latest (50-case clean sweep, 2026-09-06) |
+|---|---|---|---|
+| Routing accuracy | ≥ 95% | yes | 100% |
+| Mean recall@k (A/C) | ≥ 0.80 | yes | 0.95 |
+| Mean MRR (A/C) | ≥ 0.90 | yes | 0.97 |
+| Mean groundedness (1–5) | ≥ 4.5 | yes | 4.77 |
+| Mean relevance (1–5) | ≥ 4.5 | yes | 4.60 |
+| Per-case recall (A/C) | > 0.00 | yes | pass (min 0.50) |
+| Mean precision@k (A/C) | reported | no | 0.42 |
+
+`k` = 5. Precision is reported but not gated — it is confounded by
+relevant-source labeling completeness (a genuinely relevant retrieved
+chunk that just isn't listed in a case's `relevant_sources` counts
+against it), and the corpus deliberately contains near-duplicate adjacent
+documents as retrieval hard-negatives. See `QUALITY_BAR.md`.
 
 ## Setup and usage
 
@@ -174,19 +201,27 @@ requests/minute and 10,000 requests/day — comfortably enough for scripted
 or looped queries.
 
 ```sh
-uv run tessera eval
+uv run tessera eval          # print the report
+uv run tessera eval --check   # ...and exit non-zero on any gated-bar failure
 ```
 
 Runs every case in `evals/cases/` through routing, retrieval, and
 generation, judges each answer with an LLM grader, and prints a report:
 routing accuracy, mean recall/precision/MRR@5, mean groundedness/relevance
-(1-5), and per-archetype latency. `evals/cases/placeholder.yaml` ships with
-8 illustrative cases against the synthetic corpus — swap in the real
-consultant query log when it arrives (Phase 2) without touching the harness
-itself. A full sweep costs roughly 2-3 NVIDIA NIM calls per case — well
-within the 10,000/day free-tier limit even for a large query log. A case
-that errors (e.g. a rate limit) is reported as an
-`ERROR` row and excluded from the aggregates rather than aborting the run.
+(1-5), per-archetype latency, and the quality-bar PASS/FAIL block.
+`evals/cases/` holds **50 cases** — `query_log.yaml` (42, the synthesized
+stand-in for the fictional consultant query log; the tuning set) and
+`placeholder.yaml` (8, held out as an overfitting check-set). A full sweep
+costs roughly 2-3 NVIDIA NIM calls per case — well within the 10,000/day
+free-tier limit. A case that errors (e.g. a transient 503) is reported as
+an `ERROR` row and excluded from the aggregates rather than aborting the
+run.
+
+`--check` is the manual regression gate (the precursor to the Phase 5 CI
+gate): any change touching `retriever.py`, `router.py`, `chunker.py`,
+`generation/`, or the eval set must paste a fresh `--check` report into
+its PR. The bar itself lives in
+[`evals/QUALITY_BAR.md`](evals/QUALITY_BAR.md).
 
 ### Tests
 
