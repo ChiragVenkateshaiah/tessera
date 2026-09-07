@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## Status
 
@@ -17,7 +17,7 @@ bar (PR #31) → **P2-2** eval set 33→50 + label audit (PR #32) → **P2-3**
 retrieval-constant grid search, constants confirmed unchanged (PR #33) →
 **P2-4** A-path source diversification + router A/C boundary fix (PR
 #35, 2026-09-05) → **P2-5** Phase 2 exit: docs + final sweep + tag (PR
-pending, this session).
+#36, 2026-09-06).
 
 **Phase 2 exit sweep** (P2-5, full clean `tessera eval --check`,
 2026-09-06, **50/50 cases, zero errors**): **100.0% routing, 0.95
@@ -533,7 +533,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       why the swap earlier this session mattered.
 
 - [x] **Phase 2 tuning pass: both baseline findings fixed** (2026-08-27,
-      same session, PR pending). User asked to continue straight into
+      same session, PR #28 merged). User asked to continue straight into
       tuning against the two findings above. Diagnosed each with a
       retrieval-only (zero-LLM-call) scratchpad script before writing
       any fix, rather than guessing.
@@ -693,7 +693,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       concern for now.** Don't re-raise unprompted.
 
 - [x] **P2-2 — expand eval set to 50 + label-completeness audit**
-      (2026-09-04, PR pending). `docs/Tessera_Phase2_Plan.md` §4.
+      (2026-09-04, PR #32 merged). `docs/Tessera_Phase2_Plan.md` §4.
 
       - **Label audit** (retrieval-only, zero LLM — scratchpad script
         against the persisted index) over all 21 existing A/C cases.
@@ -761,7 +761,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       multi-source recall floor and the routing prompt gap.
 
 - [x] **P2-3 — retrieval-constant grid-search re-tune** (2026-09-04, PR
-      pending). `docs/Tessera_Phase2_Plan.md` §4.
+      #33 merged). `docs/Tessera_Phase2_Plan.md` §4.
 
       - New committed `evals/tune_retrieval.py`: retrieval-only,
         zero-LLM grid search. `RetrievalConfig`/`ConfigScore`/
@@ -889,7 +889,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       => PASS (gated thresholds)
       ```
 
-- [x] **P2-5 — Phase 2 exit** (2026-09-06, PR pending, this session).
+- [x] **P2-5 — Phase 2 exit** (2026-09-06, PR #36 merged).
       `docs/Tessera_Phase2_Plan.md` §4. Docs + verification + tag — not
       a tuning task.
 
