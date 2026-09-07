@@ -4,12 +4,19 @@ Last updated: 2026-09-07
 
 ## Status
 
-**Phase 3 adopted 2026-09-07** (`docs/Tessera_Phase3_Plan.md`, PR #38
-merged; CLAUDE.md updated per its §7). Phase 3 = archetype B
+**Phase 3 adopted 2026-09-07** (`docs/Tessera_Phase3_Plan.md`, PR #38 +
+#39; CLAUDE.md updated per its §7). Phase 3 = archetype B
 (expertise-finding) built end to end over a synthesized ~600-person firm
 expertise dataset, per that doc's §5 six-task sequence (P3-1…P3-6).
-**Next: P3-1** — expertise dataset + seeded generator + schema. No P3
-code written yet.
+
+**P3-1 done** (PR #40, 2026-09-07): `data/expertise/` — a seeded
+deterministic generator (`generate.py`, `SEED=20260907`) + its committed
+600-consultant output (`people/*.yaml`, one file per practice) + schema
+(`README.md`), and the loader `src/tessera/ingestion/expertise_loader.py`
+(`Person`/`Skill`/`ProjectEntry`, `load_expertise`). Dataset is inert so
+far — nothing in the query path reads it yet; the P3-1 verification sweep
+matched the P2-5 baseline (`=> PASS`). **Next: P3-2** — `ExpertiseStore`
+port + local Chroma implementation.
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -944,37 +951,105 @@ same change and stays ungated (`QUALITY_BAR.md`).
       narrow-A tuning pass; the margin + candidate lever are recorded in
       "Notes / open flags". `v0.2.0` tagged once PR merged to `main`.
 
+- [x] **Phase 3 plan adopted** (2026-09-07, PRs #38 draft + #39
+      adoption). `docs/Tessera_Phase3_Plan.md` written, reviewed
+      same-day, four open decisions resolved in review (§8): dataset =
+      **full ~600** from a seeded generator; B recall bar = **person
+      recall@k ≥ 0.90** (stricter than A/C's 0.80); B generation = a
+      **new `generation/expertise.py` module**; B fallback = a
+      **dedicated `evals/cases/expertise_nomatch.yaml`**. CLAUDE.md
+      updated per plan §7 (B off the do-not-build list; `ExpertiseStore`
+      row; constraint #3 note; quality-bar check extended to
+      `retrieval/expertise.py` / `generation/` / `data/expertise/`).
+
+- [x] **P3-1 — expertise dataset + seeded generator + schema**
+      (2026-09-07, PR #40 merged). `docs/Tessera_Phase3_Plan.md` §5.
+
+      - `data/expertise/generate.py` — deterministic generator
+        (`SEED = 20260907` + sorted corpus iteration → byte-identical
+        re-runs, test-enforced). **600 consultants**, 10 practices,
+        junior-heavy pyramid (206/182/114/76/22 Analyst→Partner). Every
+        practice topic asserted against the real corpus vocabulary at
+        generation time; every `authored` path is a real corpus file. A
+        deliberate weak-signal tail (~17% flagged thin: 2 skills, low
+        levels, mostly self-reported, ≤1 project, no authorship) and a
+        `last_updated` staleness tail (62% 2026, then 2025/2024/2023).
+      - `data/expertise/people/*.yaml` — committed output, one file per
+        practice (~19k lines). Do-not-hand-edit.
+      - `data/expertise/README.md` — schema; the
+        evidenced-vs-`self_reported` decision (~45% of skill entries
+        evidenced = backed by a project or authored doc on that exact
+        topic); the **structural no-client-names guarantee**
+        (`project_history` is `{industry, topic, role, year}` from closed
+        vocabularies — no free-text field a client name could occupy).
+      - `src/tessera/ingestion/expertise_loader.py` — `Person` / `Skill`
+        / `ProjectEntry` dataclasses + `load_person` / `load_expertise`,
+        the archetype-B analogue of `loader.py`. Validates every field
+        against closed sets; given the corpus, validates `authored` paths
+        + all skill/project topics against the real corpus. Constraint-#6
+        I/O exemption same as `loader.py`; no hardcoded paths.
+      - 25 new tests (`test_expertise_loader.py`,
+        `test_expertise_generate.py`). Full suite **170 passed, 8
+        skipped** (was 145/8).
+
+      **Acceptance check — met.** Regenerates deterministically (test +
+      manual diff); ~600 records load and validate; every `authored`
+      path resolves to a real corpus file; `project_history` has no
+      client names (structural — verified zero client-name-shaped
+      strings in the committed files); spot-check confirms realistic
+      pyramid + evidenced/claimed split + weak-signal tail, and sample
+      queries (pharma-pricing, supply-chain, genai, due-diligence,
+      decarbonization) each surface ~6–13 strong evidenced experts above
+      a tail of ~15–24 weak self-reported claimers.
+
+      **Quality-bar sweep** (dataset not yet wired into any query path —
+      P3-2/P3-3 do that — so expected to match the P2-5 baseline). Full
+      `tessera eval --check`, 2026-09-07, 49/50 in the main run (`ql031`
+      transient NVIDIA 503, NVIDIA slow/flaky this run — A-latency ~2.5×
+      normal — retried clean: A routing=OK recall 1.00 g5 r5):
+
+      ```
+      Routing 100.0%   Retrieval (A/C): recall 0.95  precision 0.43  MRR 0.97
+      Generation: groundedness 4.82  relevance 4.62
+      => PASS (gated thresholds)
+      ```
+      Within judge noise of P2-5 (4.77 / 4.60), as expected. B cases all
+      still route B and short-circuit (no retrieval/judge). `genai-
+      architect` / `quality-engineer` not invoked — gated by convention
+      to build-plan Tasks 6/7/8; this is Phase 3.
+
 ## Next task to pick up
 
-**P3-1 — Expertise dataset + schema** (`docs/Tessera_Phase3_Plan.md`
-§5). First task of the adopted Phase 3 plan.
+**P3-2 — `ExpertiseStore` port + local implementation**
+(`docs/Tessera_Phase3_Plan.md` §5). Second Phase 3 task.
 
-- Commit the plan document (done — PR #38).
-- Define the record schema (`data/expertise/README.md` + a `Person`
-  dataclass / loader in `src/tessera/ingestion/`). Schema shape in
-  plan §2.1: `person_id`, `name`, `title`, `office`, `practice`,
-  `skills` (`{topic, level, basis}` where `basis` ∈
-  `self_reported`/`evidenced`), `project_history`
-  (`{industry, topic, role, year}` — **no client names**), `authored`
-  (corpus paths), `languages`, `last_updated`.
-- A committed, **seeded** generator script (`data/expertise/generate.py`
-  or under `scripts/`) that produces **~600 records** from fixed
-  parameters — practice/office/seniority distributions, a name pool,
-  skill-count ranges, project/authorship sampling weighted so evidenced
-  expertise clusters realistically and a weak-signal long tail exists.
-  Committed alongside its output (`data/expertise/people.yaml`, or
-  sharded by practice). Every `authored` path verified against real
-  `data/corpus/` filenames.
-- Loader validates the schema at load time (mirrors `loader.py`).
+- `ExpertiseStore` interface (`store/base.py` or a new module) +
+  `PersonMatch` dataclass. `Person` already exists in
+  `src/tessera/ingestion/expertise_loader.py` (P3-1) — reuse it.
+  Interface shape (plan §3.1): `add(people, embeddings)`,
+  `search(embedding, k, where=None) -> list[PersonMatch]`, `count()`.
+  `PersonMatch` carries the `Person`, a similarity `score`, and (filled
+  by the retrieval layer in P3-3, not the store) matched evidence.
+- Local Chroma implementation — a **separate collection** from the
+  document store (not the same `tessera_chunks` collection).
+- Profile-summary text generation from a `Person` record (the people
+  analogue of `chunker.chunk_embedding_text()`), embedded with the
+  **existing `Embedder` port** — no new embedding dependency. Structured
+  fields (`practice`, `office`, `title`, evidenced topics) go in as
+  Chroma metadata for `where` filtering.
+- `tessera index-people` CLI command (or `ingest --people`) — load →
+  summarize → embed → persist, zero LLM calls.
+- Tests: the interface-swap acceptance proven against a fake
+  `ExpertiseStore`, same pattern as `test_indexing.py` (the same
+  index/query function runs unchanged against the real Chroma impl and a
+  fake).
 
-**Acceptance (plan §5 P3-1, verbatim):** dataset regenerates
-deterministically from the script; ~600 records load and validate;
-every `authored` path resolves to a real corpus file; `project_history`
-contains no client names; a spot-check confirms realistic variation and
-a genuine weak-signal tail.
+**Acceptance (plan §5 P3-2, verbatim):** all ~600 people indexed; a
+manual query returns plausible people; swapping the implementation needs
+no change outside the store module.
 
-Then P3-2 (`ExpertiseStore` port + local Chroma impl) … P3-6 (exit,
-`v0.3.0`). Full sequence in plan §5.
+Then P3-3 (`retrieval/expertise.py` — semantic pool → evidence-strength
+re-rank) … P3-6 (exit, tag `v0.3.0`). Full sequence in plan §5.
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1060,15 +1135,33 @@ P2-1 ~~quality bar~~ (#31) · P2-2 ~~eval set 33→50~~ (#32) · P2-3
 fix~~ (#35) · P2-5 ~~exit~~ (#36).
 
 **Phase 3 (`docs/Tessera_Phase3_Plan.md` §5)** — adopted 2026-09-07
-(#38):
-- **P3-1 — expertise dataset + seeded generator + schema  ← next**
-- P3-2 — `ExpertiseStore` port + local Chroma impl
+(#38/#39):
+- ~~P3-1 — expertise dataset + seeded generator + schema~~ — done (#40)
+- **P3-2 — `ExpertiseStore` port + local Chroma impl  ← next**
 - P3-3 — expertise retrieval path (`retrieval/expertise.py`)
 - P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI
 - P3-5 — eval harness B metrics + bar extension + no-match set
 - P3-6 — Phase 3 exit, tag `v0.3.0`
 
 ## Notes / open flags
+
+- **The expertise dataset is generated, and its committed output must
+  stay in sync with `data/expertise/generate.py`.** Any change to the
+  generator's parameters (seed, distributions, name pools, practice
+  counts) requires re-running `python data/expertise/generate.py` and
+  committing the regenerated `data/expertise/people/*.yaml`.
+  `tests/test_expertise_generate.py::test_generator_output_matches_committed_dataset`
+  fails loudly on drift, so this can't slip silently — but a session
+  touching the generator should expect to regenerate. Also: **any change
+  to the dataset that P3-3+ retrieval reads means re-indexing** (P3-2's
+  `tessera index-people`) before live retrieval results can be trusted,
+  the same rule the document store already has.
+- **NVIDIA NIM was unusually slow the 2026-09-07 P3-1 sweep** —
+  per-archetype mean latency A 106s / C 118s (roughly 2.5× the usual
+  ~40s), one C case 248s, plus a 503 on `ql031`. Consistent with the
+  existing latency-variance note below, just a pronounced instance; a
+  50-case sweep took well over an hour. Not a code problem — let
+  backgrounded sweeps run.
 
 - **CARRIED FORWARD from P2-5 — narrow-archetype-A relevance margin.**
   The Phase 2 bar passes, but mean relevance clears the 4.5 gate by only
