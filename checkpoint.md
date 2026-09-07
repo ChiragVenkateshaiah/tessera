@@ -4,6 +4,13 @@ Last updated: 2026-09-07
 
 ## Status
 
+**Phase 3 adopted 2026-09-07** (`docs/Tessera_Phase3_Plan.md`, PR #38
+merged; CLAUDE.md updated per its §7). Phase 3 = archetype B
+(expertise-finding) built end to end over a synthesized ~600-person firm
+expertise dataset, per that doc's §5 six-task sequence (P3-1…P3-6).
+**Next: P3-1** — expertise dataset + seeded generator + schema. No P3
+code written yet.
+
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
 Phase 1 exit criteria re-confirmed still hold (see the end of this
@@ -939,22 +946,39 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
-**Phase 2 is complete** — all 5 tasks (P2-1…P2-5) merged, exit gate met,
-`v0.2.0` tagged 2026-09-06. There is no Phase 3 build plan yet.
+**P3-1 — Expertise dataset + schema** (`docs/Tessera_Phase3_Plan.md`
+§5). First task of the adopted Phase 3 plan.
 
-Per Solution Design §6 the project is "coherent and demoable if it stops
-after Phase 2." Whoever picks up next has three options, none urgent:
+- Commit the plan document (done — PR #38).
+- Define the record schema (`data/expertise/README.md` + a `Person`
+  dataclass / loader in `src/tessera/ingestion/`). Schema shape in
+  plan §2.1: `person_id`, `name`, `title`, `office`, `practice`,
+  `skills` (`{topic, level, basis}` where `basis` ∈
+  `self_reported`/`evidenced`), `project_history`
+  (`{industry, topic, role, year}` — **no client names**), `authored`
+  (corpus paths), `languages`, `last_updated`.
+- A committed, **seeded** generator script (`data/expertise/generate.py`
+  or under `scripts/`) that produces **~600 records** from fixed
+  parameters — practice/office/seniority distributions, a name pool,
+  skill-count ranges, project/authorship sampling weighted so evidenced
+  expertise clusters realistically and a weak-signal long tail exists.
+  Committed alongside its output (`data/expertise/people.yaml`, or
+  sharded by practice). Every `authored` path verified against real
+  `data/corpus/` filenames.
+- Loader validates the schema at load time (mirrors `loader.py`).
 
-1. **Phase 3 planning** — write `docs/Tessera_Phase3_Plan.md` for
-   archetype B (expertise-finding). Blocked on the HR data source/
-   structure being knowable (Discovery Findings §9.8); until then B
-   stays a routed "not yet supported" response.
-2. **Post-Phase-2 retrieval tuning** — the narrow-A relevance margin
-   carried forward from P2-5 (see "Notes / open flags"). A self-
-   contained small task: adaptive `k` for archetype A. Would want its
-   own retrieval-only tuning + full sweep + bar-check PR.
-3. **Phase 4 groundwork** — `docs/adr/` already sketches the hybrid
-   Go/Python production architecture; nothing built.
+**Acceptance (plan §5 P3-1, verbatim):** dataset regenerates
+deterministically from the script; ~600 records load and validate;
+every `authored` path resolves to a real corpus file; `project_history`
+contains no client names; a spot-check confirms realistic variation and
+a genuine weak-signal tail.
+
+Then P3-2 (`ExpertiseStore` port + local Chroma impl) … P3-6 (exit,
+`v0.3.0`). Full sequence in plan §5.
+
+**Deferred, not dropped:** the narrow-archetype-A relevance margin from
+P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
+sweep only if it becomes load-bearing.
 
 ---
 
@@ -1021,19 +1045,28 @@ drift, not new Phase 1 work.
 `evals/README.md`'s "populating with the real query log" section itself
 is Phase 2 scope, not something to build now.
 
-## Task sequence (build plan §5, for reference)
+## Task sequence
 
-1. ~~Repo scaffold and synthetic corpus~~ — done (PR #2)
-2. ~~Ingestion and chunking~~ — done (PR #5)
-3. ~~Embedding and vector store behind interfaces~~ — done (PR #7)
-4. ~~Archetype router~~ — done (PR #10)
-5. ~~Archetype-aware retrieval~~ — done (PR #13)
-6. ~~Grounded generation with citations~~ — done (PR #16)
-7. ~~Evaluation harness~~ — done (PR #18/#19)
-8. ~~CLI and README~~ — done (this session's PR)
+**Phase 1 (build plan §5)** — complete, tagged `v0.1.0`:
+1–8: ~~scaffold+corpus~~ (#2) · ~~ingestion+chunking~~ (#5) ·
+~~embedding+store~~ (#7) · ~~router~~ (#10) · ~~archetype retrieval~~
+(#13) · ~~grounded generation~~ (#16) · ~~eval harness~~ (#18/#19) ·
+~~CLI+README~~ (#20).
 
-Phase 1 build sequence complete and tagged `v0.1.0`. Phase 2+ items are
-out of this sequence's scope (build plan §5 covers Phase 1 only).
+**Phase 2 (`docs/Tessera_Phase2_Plan.md` §4)** — complete, tagged
+`v0.2.0`:
+P2-1 ~~quality bar~~ (#31) · P2-2 ~~eval set 33→50~~ (#32) · P2-3
+~~constant grid search~~ (#33) · P2-4 ~~A-diversification + router
+fix~~ (#35) · P2-5 ~~exit~~ (#36).
+
+**Phase 3 (`docs/Tessera_Phase3_Plan.md` §5)** — adopted 2026-09-07
+(#38):
+- **P3-1 — expertise dataset + seeded generator + schema  ← next**
+- P3-2 — `ExpertiseStore` port + local Chroma impl
+- P3-3 — expertise retrieval path (`retrieval/expertise.py`)
+- P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI
+- P3-5 — eval harness B metrics + bar extension + no-match set
+- P3-6 — Phase 3 exit, tag `v0.3.0`
 
 ## Notes / open flags
 

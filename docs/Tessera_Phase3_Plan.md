@@ -1,11 +1,13 @@
 # Tessera — Phase 3 Plan (Claude Code Brief)
 
-**Status: DRAFT — pending review.** Not yet adopted. Phase 2 is complete
-and tagged `v0.2.0`; all 5 Phase 1 exit criteria and all 6 gated Phase 2
-bar thresholds hold (see `checkpoint.md`). Companion documents
-(`Tessera_Discovery_Findings.md`, `Tessera_Solution_Design.md`) carry the
-problem context and full architecture; `Tessera_Phase2_Plan.md` is the
-immediate predecessor and the model for this document's shape.
+**Status: ADOPTED 2026-09-07** (drafted + reviewed same day, PR #38).
+Phase 3 is now driven by this document's §5 task sequence; see
+`checkpoint.md` for current standing. Phase 2 is complete and tagged
+`v0.2.0`; all 5 Phase 1 exit criteria and all 6 gated Phase 2 bar
+thresholds hold. Companion documents (`Tessera_Discovery_Findings.md`,
+`Tessera_Solution_Design.md`) carry the problem context and full
+architecture; `Tessera_Phase2_Plan.md` is the immediate predecessor and
+the model for this document's shape.
 
 The four open decisions this draft raised were resolved in review
 (2026-09-07); they are folded into the sections below and §8 keeps the

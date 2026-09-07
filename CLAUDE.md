@@ -35,12 +35,15 @@ Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Phase1_Build_Plan.md` — the authoritative instruction set for
   Phase 1 (complete, tagged `v0.1.0`). Re-read it before making structural
   decisions about the retrieval core.
-- `docs/Tessera_Phase2_Plan.md` — the authoritative brief for Phase 2 (the
-  current phase): eval set populated + tuned, a documented internal quality
-  bar. `evals/QUALITY_BAR.md` carries the bar itself.
+- `docs/Tessera_Phase2_Plan.md` — the authoritative brief for Phase 2
+  (complete, tagged `v0.2.0`): eval set populated + tuned, a documented
+  internal quality bar. `evals/QUALITY_BAR.md` carries the bar itself.
+- `docs/Tessera_Phase3_Plan.md` — the authoritative brief for Phase 3 (the
+  current phase): archetype B (expertise-finding) built end to end over a
+  synthesized firm expertise dataset. §5 is the task sequence.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
   (e.g. the hybrid Go/Python production split). Documentation only; none
-  of it is built in Phase 1.
+  of it is built in Phases 1–3.
 
 ## Phase 1 objective and boundaries
 
@@ -54,20 +57,30 @@ embedding + local vector store, retrieval for archetype A (lookup) and C
 (synthesis), grounded generation with mandatory citations, eval harness
 scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 
-**Explicitly NOT in Phase 1 — do not build these:**
-- Archetype B (expertise-finding) — blocked on unknown HR data structure.
-  Return "not yet supported."
+**Explicitly NOT in Phases 1–3 — do not build these:**
 - Archetype D (comparative) — out of pilot scope by design (confidentiality).
   Implement only as a refusal guardrail — never actually attempt it.
+- Real HR-system integration (Workday, an SSO directory, an SFDC
+  people-index) — Phase 4+. Phase 3's `ExpertiseStore` is a local
+  implementation behind the port, the same as `ChromaVectorStore` is for
+  documents.
+- Expertise staleness / live-sync mechanism — Phase 4+. Phase 3 ships a
+  dated static snapshot whose age the answer surfaces.
 - Any AWS deployment, Terraform, CI/CD, or monitoring — Phases 4–5.
 - PowerPoint/deck ingestion — not in the pilot corpus.
-- Access-control enforcement — pilot corpus is low-sensitivity by
-  construction; this sidesteps the confidentiality problem, it doesn't solve
-  it.
+- Access-control enforcement — pilot corpus and the expertise dataset are
+  low-sensitivity by construction; this sidesteps the confidentiality
+  problem, it doesn't solve it.
 - A web UI — CLI is sufficient.
 
 If a task seems to require something on this list, stop and flag it rather
 than building it.
+
+**Archetype B (expertise-finding)** was on this list through Phases 1–2
+("blocked on unknown HR data structure; return 'not yet supported'"). It
+is the subject of Phase 3 — `docs/Tessera_Phase3_Plan.md`. The HR data
+structure is synthesized (deliberately, transparently), the same way the
+pilot corpus and query log were.
 
 ## Design constraints that shape the code
 
@@ -83,7 +96,10 @@ These are reasons, not preferences:
    than fabricating.
 3. **Archetypes are first-class.** Retrieval behaviour differs by archetype
    (lookup: narrow, precise; synthesis: broad, multi-source). Do not collapse
-   them into one pipeline.
+   them into one pipeline. Archetype B (expertise-finding, Phase 3) is a
+   third distinct retrieval path — structured-evidence ranking over the
+   expertise dataset via `ExpertiseStore`, not document retrieval, and not
+   a refusal.
 4. **Evals are infrastructure, not an afterthought.** The harness is built now
    even though real test cases arrive later, because it becomes the CI gate
    in Phase 5.
@@ -116,6 +132,7 @@ These are reasons, not preferences:
 | Env / deps | `uv` (or venv + pip) | same | Lockfile committed |
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
+| Expertise store (Phase 3) | Chroma collection, separate from documents | Real people-index / HR API | Behind `ExpertiseStore` interface; reuses the `Embedder` port |
 | LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day for Phase 1-2 (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps), swapped for Claude/Bedrock in Phase 4 |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
@@ -134,14 +151,16 @@ These are reasons, not preferences:
 - When a decision is ambiguous, prefer the option that keeps the AWS
   migration cheap.
 - Work task by task per the current phase's plan — `docs/Tessera_Phase1_Build_Plan.md`
-  §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2. Stop after
-  each task and report against its acceptance check before continuing.
+  §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2,
+  `docs/Tessera_Phase3_Plan.md` §5 for Phase 3. Stop after each task and
+  report against its acceptance check before continuing.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
 - **Quality-bar regression check (Phase 2+).** Any PR that touches
-  `retriever.py`, `router.py`, `chunker.py`, `generation/` (including any
-  prompt string), or the eval set (`evals/cases/`) must run a fresh
-  `tessera eval --check` and paste the report — including its final
+  `retrieval/` (`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
+  `generation/` (including any prompt string), the expertise dataset or its
+  generator (`data/expertise/`), or the eval set (`evals/cases/`) must run a
+  fresh `tessera eval --check` and paste the report — including its final
   `=> PASS/FAIL` line — into the PR body. A gated-threshold failure blocks
   the merge. The bar lives in `evals/QUALITY_BAR.md` /
   `evals.harness.QualityBar`.
@@ -164,9 +183,9 @@ Every change ships through a PR:
 criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
 exits. Not cut per-task; tasks are checkpoints, phases are releases.
 
-**CI/CD:** intentionally not set up in Phase 1–2 (build plan §1 do-not-build
-list). It earns its place at Phase 5, gated by the eval harness built in
-Task 7 — no change ships if retrieval/answer quality regresses (Solution
+**CI/CD:** intentionally not set up in Phases 1–3 (do-not-build list). It
+earns its place at Phase 5, gated by the eval harness built in Task 7 —
+no change ships if retrieval/answer quality regresses (Solution
 Design §5). Until then, quality gating is manual: run `pytest` and
 `tessera eval --check` locally before opening a PR, and paste the
 bar-check result into the PR body for any retrieval/prompt change (see
