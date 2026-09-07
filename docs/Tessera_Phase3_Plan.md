@@ -7,6 +7,10 @@ bar thresholds hold (see `checkpoint.md`). Companion documents
 problem context and full architecture; `Tessera_Phase2_Plan.md` is the
 immediate predecessor and the model for this document's shape.
 
+The four open decisions this draft raised were resolved in review
+(2026-09-07); they are folded into the sections below and §8 keeps the
+record.
+
 ---
 
 ## 0. Context in one paragraph
@@ -48,13 +52,14 @@ new B thresholds (§4) — reproducibly, on a clean sweep.
   cites the profile evidence for each, and surfaces the staleness /
   self-reported-vs-evidenced distinction
 - Router change: B stops short-circuiting and routes into the expertise
-  path; the "not yet supported" message is retained only as the
-  no-match fallback
+  path; a no-match message fires from generation (not the router) when
+  nobody clears the relevance floor
 - `pipeline.answer_query()` and `cli.py` handle B
-- Eval harness: B cases get real metrics (person recall@k, an
-  answer-quality judge); the 10 existing B cases rewritten with
-  `relevant_people` + `ideal_answer`
-- `evals/QUALITY_BAR.md`: B thresholds added
+- Eval harness: B cases get real metrics (person recall@k / MRR, a
+  B-answer judge); the 10 existing B cases rewritten with
+  `relevant_people` + `ideal_answer`; a dedicated no-match set
+- `evals/QUALITY_BAR.md`: B thresholds added (person recall@k ≥ 0.90 —
+  stricter than the A/C bar)
 - Phase 3 exit: README, checkpoint, clean full sweep, tag `v0.3.0`
 
 **Explicitly NOT in Phase 3 — unchanged from the Phase 1–2 do-not-build
@@ -141,13 +146,25 @@ security promises).
 
 ### 2.4 Size
 
-Proposed: **~120–150 synthesized consultants**, not the full 600.
-Rationale: enough that retrieval has to genuinely discriminate (multiple
-plausible people per query, a long tail of weak matches), few enough to
-generate with real variation and to label eval cases against by hand.
-The firm is described as 600-strong; the dataset header notes it models a
-representative slice. **Open decision for review** — go to the full 600
-if the extra realism is worth the generation and labeling cost.
+**The full ~600 consultants** (decision 1, resolved in review). Matches
+the firm Discovery describes, and gives retrieval a genuinely hard
+discrimination problem — many plausible people per query, a deep
+weak-signal tail. Cost is borne in two places and both are managed:
+
+- **Generation** — a scripted, parameterized generator (fixed
+  distributions over practice / office / seniority / skill counts; a
+  name pool; project/authorship sampling weighted so evidenced expertise
+  clusters realistically). Not 600 hand-written records. The generator
+  script is committed alongside the data so the dataset is reproducible.
+- **Eval labeling** — `relevant_people` for a B case is labelled by
+  running the P3-3 retrieval over the query, reading the top ~15–20
+  candidates, and marking who genuinely belongs — not by scanning 600.
+  This is the same method P2-2 used to audit A/C `relevant_sources`
+  against retrieved-and-cited docs, and P3-5's label audit re-checks it.
+
+The dataset header and `data/expertise/README.md` state that it is
+generated, with the generator's parameters, so it is reproducible and
+its shape is inspectable.
 
 ## 3. Architecture
 
@@ -202,17 +219,24 @@ here, since the query often names a practice or location.
   self-reported skills only; surface the snapshot date; if no one clears
   a relevance floor, say so plainly (the retained "not yet supported"
   message's spirit, now "we don't have an obvious expert on that").
-- `generate_expertise_answer(result, llm) -> GeneratedAnswer` in a new
-  `generation/expertise.py` (or folded into `answer.py` — P3-4's call),
-  mirroring `generate_answer()`'s shape: a relevance floor that
-  short-circuits to a fixed no-match message with **zero LLM calls**
-  when nothing qualifies.
+- `generate_expertise_answer(result, llm) -> GeneratedAnswer` in a **new
+  `generation/expertise.py` module** (decision 3, resolved in review —
+  not folded into `answer.py`; B's evidence-citation and
+  self-reported-flagging logic is different enough from document
+  citation that a shared module would blur both). It mirrors
+  `generate_answer()`'s *shape*: a relevance floor that short-circuits
+  to a fixed no-match message with **zero LLM calls** when nothing
+  qualifies. Any genuinely shared helper (e.g. the markdown-fence-
+  tolerant JSON parse, `filter_relevant()`'s analogue) is lifted to a
+  shared location rather than duplicated or forced into `answer.py`.
 
 ### 3.4 Router and pipeline
 
 - `router.terminal_response_for()` no longer returns a message for
   `Archetype.EXPERTISE` — only D stays terminal. `NOT_YET_SUPPORTED_
-  MESSAGE` is removed or repurposed as the no-match fallback.
+  MESSAGE` is retired; its role (a plain-language "the system can't help
+  here") passes to the B no-match message, which now fires from
+  generation when nobody clears the relevance floor, not from the router.
 - `pipeline.answer_query()` gains a B branch: `route` → `find_experts` →
   `generate_expertise_answer`, returning the same `AnswerResult` shape as
   A/C (one shape regardless of archetype — the existing contract).
@@ -240,15 +264,30 @@ here, since the query often names a practice or location.
 
 ### 4.2 How the bar extends
 
-`evals/QUALITY_BAR.md` gains a B section. **Proposed thresholds
-(provisional — see below):** person recall@k ≥ 0.80, person MRR ≥ 0.90,
-B groundedness / relevance ≥ 4.5, per-case person-recall > 0.00.
+`evals/QUALITY_BAR.md` gains a B section. Thresholds:
+
+| Metric | Threshold | Gated? |
+|---|---|---|
+| Person recall@k — B | **≥ 0.90** | yes (after audit) |
+| Person MRR — B | ≥ 0.90 | yes (after audit) |
+| B groundedness (LLM-judge, 1–5) | ≥ 4.5 | yes (after audit) |
+| B relevance (LLM-judge, 1–5) | ≥ 4.5 | yes (after audit) |
+| Per-case person-recall — B | > 0.00 (no total misses) | yes (after audit) |
+| No-match set — correct-refusal rate | 100% | yes (after audit) |
+| Person precision@k — B | reported | no |
+
+Person recall@k is set **stricter than the A/C recall bar (0.90 vs.
+0.80)** (decision 2, resolved in review): a missed expert is a worse
+failure than a missed document — for a lookup the user still has the
+other retrieved docs, but "who knows about X" returning the wrong
+shortlist sends the user to the wrong person entirely. `k` for B is the
+shortlist length the answer presents (P3-3 fixes it; start at 5).
 
 B thresholds enter **provisional (reported, not gated)** for the first
-Phase 3 sweep, then are gated once a label-completeness audit
-(§4.3) confirms the `relevant_people` sets are sound — the same staged
-approach P2-1 → P2-2 took with precision. `--check` gates only what is
-marked gated at any given time.
+Phase 3 sweep, then are gated once the §4.3 label-completeness audit
+confirms the `relevant_people` sets are sound — the same staged approach
+P2-1 → P2-2 took with precision. `--check` gates only what is marked
+gated at any given time.
 
 ### 4.3 The B eval cases
 
@@ -257,9 +296,16 @@ marked gated at any given time.
   Rewrite each with `relevant_people` (verified `person_id`s from the
   synthesized dataset) and an `ideal_answer` for the judge.
 - Add a `relevant_people` field to the case schema and `evals/README.md`.
-- Consider 2–3 **no-match** B cases (a query for expertise the firm
-  genuinely doesn't have) to exercise the zero-LLM-call fallback — the
-  B-side analogue of the off-corpus A refusal.
+- **A dedicated no-match set** (decision 4, resolved in review):
+  `evals/cases/expertise_nomatch.yaml`, ~5–6 cases, each a query for
+  expertise the firm genuinely doesn't have (a niche topic absent from
+  every profile). It is the B-side analogue of an off-corpus A refusal
+  set — Task 7's genai-architect review flagged that correct-refusal
+  behaviour (CLAUDE.md constraint #2) is currently outside the eval's
+  reach, and this closes that gap for B. Scored on one metric: did the
+  system return the fixed no-match message with **zero LLM calls**
+  (100%, gated after the audit). Held separate from the scored B cases
+  so it can't distort the recall / judge aggregates.
 - `placeholder.yaml`'s 2 B cases (`q003`/`q004`) stay in the held-out
   check-set.
 
@@ -275,18 +321,24 @@ task and report against its acceptance check.
 - Commit this document.
 - Define the record schema (`data/expertise/README.md` + a
   `Person` dataclass / loader in `src/tessera/ingestion/`).
-- Synthesize ~120–150 consultant records (`data/expertise/people.yaml`
-  or one file per person — P3-1's call). Realistic distribution across
-  practice / office / seniority; deliberate overlap so multiple people
-  plausibly match a query; a weak-signal long tail.
-- Every `authored` path mechanically verified against real
-  `data/corpus/` filenames. No client names anywhere in
-  `project_history`.
+- **A committed generator script** (`data/expertise/generate.py` or
+  under `scripts/`) that produces **~600 consultant records** from fixed
+  parameters — practice / office / seniority distributions, a name pool,
+  skill-count ranges, and project/authorship sampling weighted so
+  evidenced expertise clusters realistically and a weak-signal long tail
+  exists. Committed alongside its output (`data/expertise/people.yaml`,
+  or sharded by practice if one file is unwieldy) so the dataset is
+  reproducible and inspectable.
+- Every `authored` path emitted by the generator mechanically verified
+  against real `data/corpus/` filenames. **No client names anywhere in
+  `project_history`** — the generator only ever emits industry + topic +
+  role + year.
 - Loader validates the schema at load time (mirrors `loader.py`).
 
-**Acceptance:** dataset loads, every record validates, every `authored`
-path resolves to a real corpus file, `project_history` contains no
-client names; a spot-check confirms realistic variation.
+**Acceptance:** dataset regenerates deterministically from the script;
+~600 records load and validate; every `authored` path resolves to a real
+corpus file; `project_history` contains no client names; a spot-check
+confirms realistic variation and a genuine weak-signal tail.
 
 ### P3-2 — `ExpertiseStore` port + local implementation
 - `store/base.py` (or a new module): `ExpertiseStore` interface +
@@ -298,15 +350,18 @@ client names; a spot-check confirms realistic variation.
 - Tests: interface swap proven with a fake, same pattern as
   `test_indexing.py`.
 
-**Acceptance:** all ~120–150 people indexed; a manual query returns
+**Acceptance:** all ~600 people indexed; a manual query returns
 plausible people; swapping the implementation needs no change outside the
 store module.
 
 ### P3-3 — Expertise retrieval path
 - `retrieval/expertise.py`: `find_experts()` — semantic candidate pool →
-  evidence-strength re-rank → top-N with per-person evidence. Pure per
-  constraint #6.
+  evidence-strength re-rank → top-`k` (k = 5) with per-person evidence.
+  Pure per constraint #6.
 - `where` pre-filtering on `practice` / `office`.
+- A retrieval-only diagnostic script (zero LLM), the P3 analogue of
+  `evals/tune_retrieval.py`, for hand-checking rank quality and for
+  labelling `relevant_people` in P3-5.
 - Tests against fake `Embedder` / `ExpertiseStore`: ranking prefers
   evidenced over claimed; `where` filter passes through; evidence is
   attached to each result.
@@ -316,42 +371,48 @@ the people with real pharma-pricing project history and/or authored docs
 rank above people who only self-tagged the skill.
 
 ### P3-4 — B generation + router/pipeline/CLI wiring
-- `EXPERTISE_ANSWER_SYSTEM_PROMPT` + `generate_expertise_answer()` with a
-  zero-LLM-call no-match fallback.
-- `router.terminal_response_for()`: B no longer terminal.
+- **New `generation/expertise.py`**: `EXPERTISE_ANSWER_SYSTEM_PROMPT` (in
+  `prompts.py`) + `generate_expertise_answer()` with a zero-LLM-call
+  no-match fallback. Shared helpers lifted to a common location, not
+  duplicated from `answer.py`.
+- `router.terminal_response_for()`: B no longer terminal; the fixed
+  no-match message replaces `NOT_YET_SUPPORTED_MESSAGE`'s role.
 - `pipeline.answer_query()`: B branch, same `AnswerResult` shape.
 - `cli.py`: `tessera query` handles B; no-match path verified.
-- Tests: fake-LLM unit tests for the prompt selection, evidence
-  citation, self-reported flagging, and the no-match short-circuit;
-  a real-dataset integration test proving B never touches the document
-  retriever.
+- Tests: fake-LLM unit tests for evidence citation, self-reported
+  flagging, and the no-match short-circuit; a real-dataset integration
+  test proving B never touches the document retriever.
 - Live spot-check: 3–4 B queries against real NVIDIA NIM, all four
   archetypes still route correctly.
 
 **Acceptance:** `tessera query "who at the firm knows about <topic>"`
-returns named people with cited evidence; a query for absent expertise
-returns the no-match message with zero LLM calls; A/C/D behaviour
-unchanged.
+returns named people with cited evidence and self-reported-only matches
+flagged; a query for absent expertise returns the no-match message with
+zero LLM calls; A/C/D behaviour unchanged.
 
 ### P3-5 — Eval harness + bar extension
-- `evals/metrics.py`: person recall@k / MRR; extend `judge_answer()` (or
-  a B variant) for person-answers.
+- `evals/metrics.py`: person recall@k / MRR; a B-answer judge (person +
+  evidence groundedness, fit + self-reported-flagging relevance).
 - `evals/harness.py`: B cases run the real B path and produce metrics;
   `run_case()` / `run_harness()` / `format_report()` / the bar-check
-  handle B aggregates.
-- `evals/cases/`: rewrite the 10 B cases with `relevant_people` +
-  `ideal_answer`; add 2–3 no-match cases; schema doc updated.
-- `evals/QUALITY_BAR.md`: B section, thresholds **provisional** for this
-  first sweep.
-- Label-completeness audit of `relevant_people`; then gate the B
-  thresholds.
-- Tests: metric logic (deterministic, no LLM); bar-check with B
-  thresholds.
+  handle B aggregates and the no-match set's correct-refusal rate.
+- `evals/cases/`: rewrite the 10 B cases with `relevant_people` (labelled
+  via the P3-3 diagnostic — read the top ~15–20, mark who belongs) +
+  `ideal_answer`; new `evals/cases/expertise_nomatch.yaml` (~5–6 cases);
+  `relevant_people` added to the case schema + `evals/README.md`.
+- `evals/QUALITY_BAR.md`: B section per §4.2, thresholds **provisional**
+  for the first sweep.
+- Label-completeness audit of every `relevant_people` set; **then** gate
+  the B thresholds (person recall@k ≥ 0.90, MRR ≥ 0.90, judge ≥ 4.5,
+  per-case recall > 0, no-match refusal rate 100%).
+- Tests: metric logic (deterministic, no LLM); bar-check with the B
+  thresholds; no-match short-circuit counted correctly.
 
 **Acceptance:** `tessera eval --check` reports A/C **and** B metric
-blocks; a full sweep is recorded in `checkpoint.md`; every
-`relevant_people` id resolves to a real record; B thresholds gated after
-the audit.
+blocks plus the no-match refusal rate; a full sweep is recorded in
+`checkpoint.md`; every `relevant_people` id resolves to a real record;
+B thresholds gated after the audit; A/C thresholds unchanged and still
+passing.
 
 ### P3-6 — Phase 3 exit
 - `README.md` — archetype B moves from "not built" to built; phase table,
@@ -370,13 +431,22 @@ tagged and pushed.
   over-indexing on the embedding similarity and under-weighting the
   structured evidence — the P3-3 acceptance check (evidenced people beat
   self-taggers) exists specifically to catch that.
-- **Synthesized-dataset realism.** ~150 fabricated people is a small,
-  self-authored world; retrieval can look better than it would against a
-  messy real directory. Mitigations: a deliberate weak-signal long tail;
-  no-match eval cases; `placeholder.yaml`'s B cases held out; explicit
-  honesty in the docs. Same posture as the Phase 2 overfitting note.
+- **Synthesized-dataset realism.** ~600 generator-produced people is
+  still a self-authored world — retrieval can look better than it would
+  against a messy real directory, and a generator can accidentally make
+  the evidenced/claimed split *too* clean to be a real test. Mitigations:
+  a deliberate weak-signal long tail and near-miss people (right
+  industry, wrong topic; adjacent skill only); the dedicated no-match
+  set; `placeholder.yaml`'s B cases held out; the P3-1 spot-check
+  explicitly looks for a realistic tail, not just valid records; honesty
+  in the docs. Same posture as the Phase 2 overfitting note.
+- **Generator determinism.** The dataset must regenerate byte-stable from
+  a fixed seed, or the committed `people.yaml` and the committed script
+  drift apart and eval labels rot. P3-1 pins the seed and the acceptance
+  check re-runs the generator and diffs.
 - **Confidentiality creep.** It is easy to make `project_history` more
-  "realistic" by adding identifying detail. The P3-1 acceptance check
+  "realistic" by adding identifying detail. The generator only ever
+  emits industry + topic + role + year; the P3-1 acceptance check
   (no client names) is a hard gate, not a guideline.
 - **The `NvidiaClient` request-timeout** note (no timeout, openai SDK
   600s default) still stands from Phase 2 — user decided 2026-09-04 to
@@ -390,7 +460,14 @@ tagged and pushed.
   relevance margin (adaptive-`k` candidate lever, `checkpoint.md` Notes).
   Independent of Phase 3 — fold it in only if a Phase 3 sweep makes it
   load-bearing.
-- **Estimated effort:** ~5–6 work sessions.
+- **Stricter B recall bar (0.90) is a real commitment.** If the first
+  gated sweep can't clear it, the options are a genuine retrieval fix
+  (P3-3 re-tune) or a documented, user-signed-off threshold change — not
+  quietly dropping to 0.80. Recorded here so that's a conscious call
+  later, not a surprise.
+- **Estimated effort:** ~6–7 work sessions (up from the ~5–6 first
+  estimate — the full 600-person dataset and its generator, plus the
+  dedicated no-match set, add scope over the initial draft).
 
 ## 7. What changes in CLAUDE.md when this plan is adopted
 
@@ -405,16 +482,20 @@ tagged and pushed.
   eval cases and `retrieval/expertise.py` / `generation/expertise.py`.
 - `docs/` list gains this document as the Phase 3 authority.
 
-## 8. Open decisions for review
+## 8. Decisions resolved in review (2026-09-07)
 
-1. **Dataset size** — ~120–150 (proposed) vs. the full 600.
-2. **B threshold values** — person recall@k ≥ 0.80 / MRR ≥ 0.90 /
-   judge ≥ 4.5 mirrors the A/C bar; is that the right bar for a
-   person-answer, or should person-recall be stricter (a missed expert
-   is arguably worse than a missed document)?
-3. **`generation/expertise.py` vs. folding B into `answer.py`** — a
-   structural call better made once P3-3's result shape is concrete;
-   flagged here so it is a conscious decision, not a default.
-4. **No-match cases** — 2–3 proposed; enough, or does the B fallback
-   deserve its own small labelled set the way off-corpus A refusals
-   arguably should?
+1. **Dataset size → the full ~600 consultants.** Produced by a committed,
+   seeded generator script, not hand-written. Rationale and cost
+   handling in §2.4.
+2. **B recall bar → stricter than A/C: person recall@k ≥ 0.90** (vs.
+   0.80 for documents). A missed expert sends the user to the wrong
+   person entirely, with no other retrieved results to fall back on.
+   §4.2.
+3. **B generation → a new `generation/expertise.py` module**, not folded
+   into `answer.py`. Evidence-citation and self-reported-flagging logic
+   is distinct enough that sharing a module would blur both. §3.3.
+4. **B fallback → a dedicated labelled set**,
+   `evals/cases/expertise_nomatch.yaml` (~5–6 cases), scored on
+   correct-refusal rate (100%, gated after audit), held separate from
+   the scored B cases. Closes the constraint-#2 gap the Task 7 review
+   flagged, for B. §4.3.
