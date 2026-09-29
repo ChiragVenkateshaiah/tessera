@@ -79,14 +79,12 @@ def test_terminal_response_none_for_lookup_and_synthesis() -> None:
     assert terminal_response_for(Archetype.SYNTHESIS) is None
 
 
-def test_terminal_response_present_for_expertise_and_comparative() -> None:
-    expertise_msg = terminal_response_for(Archetype.EXPERTISE)
+def test_only_comparative_is_terminal() -> None:
+    """B is routed to expertise retrieval (Phase 3) — only D short-circuits."""
+    assert terminal_response_for(Archetype.EXPERTISE) is None
     comparative_msg = terminal_response_for(Archetype.COMPARATIVE)
 
-    assert expertise_msg is not None
     assert comparative_msg is not None
-    assert expertise_msg != comparative_msg
-    assert "not" in expertise_msg.lower() or "yet" in expertise_msg.lower()
     assert (
         "confidential" in comparative_msg.lower()
         or "restrict" in comparative_msg.lower()

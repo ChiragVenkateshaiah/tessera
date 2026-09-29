@@ -9,6 +9,7 @@ import pytest
 
 from evals.harness import (
     DEFAULT_K,
+    EXPERTISE_NOT_SCORED_NOTE,
     CaseResult,
     EvalCase,
     EvalReport,
@@ -30,7 +31,6 @@ from tessera.generation.prompts import (
 )
 from tessera.retrieval.router import (
     COMPARATIVE_REFUSAL_MESSAGE,
-    NOT_YET_SUPPORTED_MESSAGE,
     Archetype,
 )
 from tessera.store.base import SearchResult, VectorStore
@@ -215,7 +215,7 @@ def test_run_case_lookup_computes_retrieval_metrics_and_judge() -> None:
     assert result.latency_seconds >= 0.0
 
 
-def test_run_case_expertise_short_circuits_without_retrieval_or_judge() -> None:
+def test_run_case_expertise_is_routing_only_without_retrieval_or_judge() -> None:
     llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("B")})
     store = FakeVectorStore([_result("data/corpus/a.md", 0.9)])
     case = EvalCase(
@@ -229,7 +229,7 @@ def test_run_case_expertise_short_circuits_without_retrieval_or_judge() -> None:
     result = run_case(case, llm, FakeEmbedder(), store, CORPUS_DIR)
 
     assert result.routing_correct is True
-    assert result.answer == NOT_YET_SUPPORTED_MESSAGE
+    assert result.answer == EXPERTISE_NOT_SCORED_NOTE
     assert result.recall is None
     assert result.precision is None
     assert result.reciprocal_rank_score is None

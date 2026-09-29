@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from tessera.store.base import SearchResult
+from tessera.store.base import PersonMatch, SearchResult
 
 ROUTER_SYSTEM_PROMPT = """You are a query router for Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. Classify each user query into exactly one of four archetypes.
 
@@ -61,3 +61,37 @@ def build_grounded_answer_user_prompt(query: str, sources: list[SearchResult]) -
         for i, source in enumerate(sources, start=1)
     )
     return f"Question: {query}\n\nSources:\n\n{formatted_sources}"
+
+
+# --- Expertise-finding prompt (Phase 3, archetype B) ---
+
+EXPERTISE_ANSWER_SYSTEM_PROMPT = """You are Tessera, an internal knowledge assistant for Meridian Advisory, a management consulting firm. The user wants to know who at the firm has expertise in a topic.
+
+Answer using ONLY the numbered person records below — never use outside knowledge and never invent skills, projects, availability or contact details. Name each person you recommend and cite their record inline with its number in square brackets, e.g. [1], right after each claim. For every person, give the concrete evidence from their record in plain words (for example "led a pharma-pricing project in pharma in 2025" or "authored the value-based pricing methodology document"), not just a bare claim that they know the topic.
+
+Each record ends with a basis line. Recommend people whose basis is EVIDENCED first. If a record's basis is SELF-REPORTED ONLY, the person merely lists the skill with no project or authored document behind it — you may mention them, but only after the evidenced people, and you must say explicitly that it is self-reported and not backed by project or authorship evidence. Never present a self-reported match as equivalent to an evidenced one.
+
+Each record shows when the profile was last updated. Mention that expertise data is a dated snapshot (give the most recent date shown) and may be out of date, so the user should confirm availability and current focus before reaching out. If none of the records genuinely fits the question, say plainly that we don't have an obvious expert on that — do not stretch a weak match to fill the answer. Keep it concise."""
+
+
+def build_expertise_user_prompt(query: str, matches: list[PersonMatch]) -> str:
+    """Format ranked people as numbered records the model can cite by
+    number. Evidence lines come from the retrieval layer, so the model is
+    only ever shown (and can only cite) what actually surfaced the person.
+    """
+    blocks = []
+    for i, m in enumerate(matches, start=1):
+        p = m.person
+        lines = [
+            f"[{i}] {p.name} — {p.title}, {p.practice} practice, {p.office} office "
+            f"(profile last updated {p.last_updated.isoformat()})"
+        ]
+        lines.extend(f"  - {e.kind}: {e.description}" for e in m.evidence)
+        basis = (
+            "EVIDENCED"
+            if m.is_evidenced
+            else "SELF-REPORTED ONLY — no project or authored document behind it"
+        )
+        lines.append(f"  Basis: {basis}")
+        blocks.append("\n".join(lines))
+    return f"Question: {query}\n\nPerson records:\n\n" + "\n\n".join(blocks)

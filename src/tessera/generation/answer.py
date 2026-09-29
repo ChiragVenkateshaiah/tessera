@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tessera.generation.base import LLMClient
 from tessera.generation.prompts import (
@@ -12,7 +12,7 @@ from tessera.generation.prompts import (
 )
 from tessera.retrieval.retriever import RetrievalResult
 from tessera.retrieval.router import Archetype
-from tessera.store.base import SearchResult
+from tessera.store.base import PersonMatch, SearchResult
 
 # Below this cosine similarity, a chunk is treated as noise rather than a
 # real match. Measured against the real corpus/embedder (LocalEmbedder).
@@ -54,12 +54,18 @@ class Citation:
 
 @dataclass(frozen=True)
 class GeneratedAnswer:
-    """A grounded answer plus the sources it was allowed to draw from."""
+    """A grounded answer plus the sources it was allowed to draw from.
+
+    Archetype B answers cite people rather than documents: ``citations``
+    stays empty and ``experts`` carries the ranked people (with their
+    evidence) the model was shown. A/C leave ``experts`` empty.
+    """
 
     query: str
     archetype: Archetype
     answer: str
     citations: list[Citation]
+    experts: list[PersonMatch] = field(default_factory=list)
 
 
 def filter_relevant(
@@ -80,9 +86,9 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
 
     Pure with respect to infrastructure per CLAUDE.md constraint #6: the
     LLMClient is injected, not constructed. Only called for archetypes A
-    and C — retrieve() already rejects B/D, and pipeline.py short-circuits
-    them earlier via router.terminal_response_for() before generation
-    would run.
+    and C — retrieve() already rejects B/D. B has its own generator
+    (generation/expertise.py); D is short-circuited earlier via
+    router.terminal_response_for().
 
     Chunks below RELEVANCE_THRESHOLD are dropped before the LLM ever sees
     them. If nothing clears the bar, this returns the fixed "nothing on

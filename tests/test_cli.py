@@ -321,3 +321,69 @@ def test_index_people_wires_loader_summary_embedder_and_expertise_store(
         "add",
     ]
     assert "Indexed 3 people" in result.output
+
+
+def _patch_query_deps(monkeypatch: pytest.MonkeyPatch, expertise_count: int, seen: dict) -> None:
+    class NonEmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    class FakeExpertiseStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return expertise_count
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", FakeExpertiseStore)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+
+    def fake_answer(text, llm, embedder, store, expertise_store=None):
+        seen["expertise_store"] = expertise_store
+        return seen["canned"]
+
+    monkeypatch.setattr(cli, "answer_query", fake_answer)
+
+
+def test_query_prints_people_for_an_expertise_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.test_expertise_generation import match
+
+    seen: dict = {
+        "canned": AnswerResult(
+            query="who knows pricing?",
+            archetype=Archetype.EXPERTISE,
+            answer="Ask Person a [1].",
+            citations=[],
+            experts=[match("a", 2.0), match("b", 0.1, self_reported=True)],
+        )
+    }
+    _patch_query_deps(monkeypatch, expertise_count=600, seen=seen)
+
+    result = runner.invoke(cli.app, ["query", "who knows pricing?"])
+
+    assert result.exit_code == 0
+    assert "[B] Ask Person a [1]." in result.output
+    assert "[1] Person a — Consultant, pricing, London" in result.output
+    assert "[2] Person b" in result.output and "[self-reported only]" in result.output
+    assert seen["expertise_store"] is not None
+
+
+def test_query_passes_no_expertise_store_when_people_index_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict = {
+        "canned": AnswerResult(
+            query="q", archetype=Archetype.LOOKUP, answer="ok", citations=[]
+        )
+    }
+    _patch_query_deps(monkeypatch, expertise_count=0, seen=seen)
+
+    result = runner.invoke(cli.app, ["query", "q"])
+
+    assert result.exit_code == 0
+    assert seen["expertise_store"] is None
