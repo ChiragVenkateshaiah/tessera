@@ -22,8 +22,14 @@ matched the P2-5 baseline (`=> PASS`).
 (`store/chroma_expertise.py`, separate `tessera_people` collection),
 `profile_summary_text()` (`expertise_loader.py`), `tessera index-people`,
 `TESSERA_EXPERTISE_DIR` setting. All 600 people indexed. Nothing in the
-query path reads the people index yet. **Next: P3-3** — expertise
-retrieval path (`retrieval/expertise.py`).
+query path reads the people index yet.
+
+**P3-3 done** (PR #44, 2026-09-29): `retrieval/expertise.py` —
+`find_experts()` (candidate pool of 50 → evidence-strength re-rank →
+top 5 with per-person `Evidence`), structured `Evidence` on `PersonMatch`,
+and `evals/diagnose_expertise.py`. Bar check `=> PASS` (50/50, zero
+errors; matches P2-5 baseline). **Next: P3-4** — B generation +
+router/pipeline/CLI wiring.
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1062,36 +1068,92 @@ same change and stays ungated (`QUALITY_BAR.md`).
       retail projects) and doesn't separate evidenced from self-reported
       skills, which is exactly the evidence-strength re-rank's job.
 
+- [x] **P3-3 — expertise retrieval path** (2026-09-29, PR #44 merged).
+      `docs/Tessera_Phase3_Plan.md` §5.
+
+      - `retrieval/expertise.py`: `find_experts(query, embedder, store,
+        where=None, k=5, reference_year=2026) -> ExpertiseResult`. Pulls
+        `CANDIDATE_K = 50` profiles, then re-ranks by evidence: authored
+        docs (weight 1.5), projects (1.0, halving every 5 years, ×1.5
+        boost when the query names the project's industry), skills (0.5 ×
+        level/5, self-reported ×0.25); final = evidence score + semantic
+        cosine. "Relevant" topic / industry / authored-doc is decided by
+        embedding the distinct names in the pool with the injected
+        `Embedder` and mapping cosine through a ramp (topics 0.35→0.65,
+        industries 0.50→0.75; calibrated on real similarity: exact topic
+        ≈0.9, unrelated ≈0.3–0.4). Pure per constraint #6; recency is
+        measured from a passed-in year, not the clock.
+      - `store/base.py`: `Evidence(kind, description, strength,
+        self_reported)`; `PersonMatch.evidence` is now
+        `tuple[Evidence, ...]` with `evidence_score` and `is_evidenced`
+        (False when a match rests on self-reported skills alone — what
+        P3-4 must flag). `score` stays raw semantic cosine.
+      - `evals/diagnose_expertise.py`: zero-LLM ranked-people + evidence
+        printer (`--practice`, `--office`, `-k`).
+      - `Person.evidenced_topics` docstring corrected (project-based
+        only; authored docs are credited in retrieval from document
+        names).
+      - 13 new tests (`test_expertise_retrieval.py`). Full suite **191
+        passed, 8 skipped**.
+
+      **Acceptance check — met.** "Who knows pharma pricing" on the real
+      dataset + embedder: all top-5 have real pharma-pricing project
+      history or authored docs; self-reported-only people rank below
+      everyone with real pharma-pricing evidence. People evidenced on
+      *adjacent* topics (e.g. a value-based-pricing project in pharma) can
+      legitimately sit above someone with one old exact-topic project.
+
+      **Quality-bar sweep** (`tessera eval --check`, 2026-09-29, 50/50,
+      zero errors; document path untouched, so expected ≈ P2-5):
+      ```
+      Routing 100.0%   Retrieval (A/C): recall 0.95  precision 0.42  MRR 0.97
+      Generation: groundedness 4.80  relevance 4.69
+      => PASS (gated thresholds)
+      ```
+
 ## Next task to pick up
 
-**P3-3 — Expertise retrieval path** (`docs/Tessera_Phase3_Plan.md` §5).
-Third Phase 3 task.
+**P3-4 — B generation + router/pipeline/CLI wiring**
+(`docs/Tessera_Phase3_Plan.md` §5). Fourth Phase 3 task.
 
-- `retrieval/expertise.py`: `find_experts()` — semantic candidate pool
-  from `ExpertiseStore.search` → evidence-strength re-rank → top-`k`
-  (k = 5) with per-person evidence attached. Pure per constraint #6
-  (injected `Embedder` / `ExpertiseStore`, returns data).
-- `where` pre-filtering on `practice` / `office` (store already supports
-  it).
-- A retrieval-only diagnostic script (zero LLM), the P3 analogue of
-  `evals/tune_retrieval.py`, for hand-checking rank quality and for
-  labelling `relevant_people` in P3-5.
-- Tests against fake `Embedder` / `ExpertiseStore`: ranking prefers
-  evidenced over claimed; `where` passes through; evidence is attached.
+- New `generation/expertise.py`: `EXPERTISE_ANSWER_SYSTEM_PROMPT` (in
+  `prompts.py`) + `generate_expertise_answer(result, llm)` with a
+  **zero-LLM-call no-match fallback** when nobody clears a relevance
+  floor. Shared helpers (e.g. fence-tolerant JSON parse) lifted to a
+  common location, not duplicated from `answer.py`.
+- `router.terminal_response_for()`: B no longer terminal; the fixed
+  no-match message replaces `NOT_YET_SUPPORTED_MESSAGE`'s role.
+- `pipeline.answer_query()`: B branch (`route` → `find_experts` →
+  `generate_expertise_answer`), same `AnswerResult` shape.
+- `cli.py`: `tessera query` handles B; no-match path verified.
+- Tests: fake-LLM unit tests for evidence citation, self-reported
+  flagging, no-match short-circuit; a real-dataset test proving B never
+  touches the document retriever.
+- Live spot-check: 3–4 B queries against real NVIDIA NIM; all four
+  archetypes still route correctly.
 
-**Acceptance (plan §5 P3-3, verbatim):** for a hand-checked query ("who
-knows pharma pricing"), the people with real pharma-pricing project
-history and/or authored docs rank above people who only self-tagged the
-skill.
+**Acceptance (plan §5 P3-4, verbatim):** `tessera query "who at the firm
+knows about <topic>"` returns named people with cited evidence and
+self-reported-only matches flagged; a query for absent expertise returns
+the no-match message with zero LLM calls; A/C/D behaviour unchanged.
 
-**Watch out:** `Person.evidenced_topics` currently derives from
-`project_history` only, although its docstring says "project or authored
-document". Authored docs aren't mapped to topics there. Decide in P3-3
-whether the re-rank should also credit `authored` (via corpus topics) or
-the docstring should be corrected.
+**Carry-ins from P3-3:**
+- The relevance floor needs a signal. `PersonMatch.score` is raw
+  semantic cosine and `evidence_score` is the re-rank total; calibrate
+  the floor against real queries (present topic vs absent, e.g. the
+  "parental leave"-style adjacent-but-absent probe) the way
+  `RELEVANCE_THRESHOLD` was for documents.
+- A place or practice named in the query ("… in London") is **not** yet
+  turned into a `where` filter. `find_experts(where=...)` and the store
+  support it; deciding how the pipeline derives it is P3-4's call (or
+  explicitly defer to P3-5).
+- Scoring constants in `retrieval/expertise.py` are plan rules + spot
+  checks, not grid-searched. P3-5's labelled cases are the point to
+  tune them.
 
-This task touches `retrieval/expertise.py`, so the PR needs a fresh
-`tessera eval --check` pasted in. Then P3-4 … P3-6 (exit, tag `v0.3.0`).
+This task touches `generation/` (incl. a prompt) and the router, so the
+PR needs a fresh `tessera eval --check` pasted in. Then P3-5 … P3-6
+(exit, tag `v0.3.0`).
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1180,8 +1242,8 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 (#38/#39):
 - ~~P3-1 — expertise dataset + seeded generator + schema~~ — done (#40)
 - ~~P3-2 — `ExpertiseStore` port + local Chroma impl~~ — done (#42)
-- **P3-3 — expertise retrieval path (`retrieval/expertise.py`)  ← next**
-- P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI
+- ~~P3-3 — expertise retrieval path (`retrieval/expertise.py`)~~ — done (#44)
+- **P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI  ← next**
 - P3-5 — eval harness B metrics + bar extension + no-match set
 - P3-6 — Phase 3 exit, tag `v0.3.0`
 
