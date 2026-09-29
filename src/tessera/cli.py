@@ -158,11 +158,22 @@ def eval_command(
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
     _require_index(store)
 
+    expertise_store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
+    if expertise_store.count() == 0:
+        typer.echo(
+            "No people index found — run `tessera index-people` first "
+            "(archetype B cases can't be scored without it).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
     embedder = LocalEmbedder()
     llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
 
     cases = load_cases(EVAL_CASES_DIR)
-    report = run_harness(cases, llm, embedder, store, settings.corpus_dir)
+    report = run_harness(
+        cases, llm, embedder, store, settings.corpus_dir, expertise_store=expertise_store
+    )
 
     typer.echo(format_report(report))
 

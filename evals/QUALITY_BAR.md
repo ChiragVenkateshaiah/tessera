@@ -20,9 +20,43 @@ and paste the result into the PR (see "Regression discipline" below).
 | Per-case recall — A/C | > 0.00 (no total misses) | **yes** |
 | Mean precision@k — A/C | tracked and reported | no |
 
+### Archetype B (Phase 3)
+
+Added with P3-5 (`docs/Tessera_Phase3_Plan.md` §4.2). Applies whenever
+the harness is given an expertise store (`tessera eval` always is —
+it requires `tessera index-people`).
+
+| Metric | Threshold | Gated? |
+|---|---|---|
+| Mean person recall@k — B cases with `relevant_people` | ≥ 0.90 | provisional |
+| Mean person MRR — B | ≥ 0.90 | provisional |
+| B groundedness (LLM-judge, 1–5) | ≥ 4.5 | provisional |
+| B relevance (LLM-judge, 1–5) | ≥ 4.5 | provisional |
+| Per-case person recall — B | > 0.00 (no total misses) | provisional |
+| No-match set — correct-refusal rate | 100% | provisional |
+| Mean person precision@k — B | tracked and reported | no |
+
+**Provisional** = shown in the report with its threshold but not counted
+toward `=> PASS/FAIL`, exactly as plan §4.2 stages it ("enter provisional
+for the first Phase 3 sweep, then are gated once the label audit
+confirms the sets"). It flips with one switch, `QualityBar.gate_expertise`
+(default `False`), once B retrieval is improved and a sweep clears every
+B row. First B sweep (P3-5, 2026-09-29, 55/55 cases, zero errors):
+person recall **0.89** (misses the 0.90 threshold by 0.01), MRR 1.00,
+groundedness 5.00, relevance 4.67, no-match refusal 100%. The recall
+shortfall comes from three cases: `ql019` 0.40 ("who **led** …
+recently" — retrieval doesn't weigh role), `ql041` 0.80, `ql042` 0.80.
+
+Person recall is stricter than A/C's 0.80: a missed expert sends the user
+to the wrong person entirely. It is scored against `min(|relevant|, k)`
+(see `evals/README.md`) so a case with more genuine experts than
+shortlist slots can still reach 1.0. B judge scores are kept apart from
+the A/C means, as are all person metrics. "Correct refusal" means the
+fixed no-match message with zero generation LLM calls.
+
 `k` is `evals.harness.DEFAULT_K` (5). "A/C cases" are cases whose
-`relevant_sources` is non-empty; B/D cases never reach retrieval and are
-excluded from every retrieval metric.
+`relevant_sources` is non-empty; B/D cases are excluded from every
+document-retrieval metric (B has its own person metrics, below).
 
 A gated metric with **no value** (e.g. `mean_recall` is `n/a` because the
 eval set had no A/C cases) counts as a **failure**, not a skip — a sweep

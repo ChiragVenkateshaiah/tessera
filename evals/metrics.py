@@ -48,6 +48,23 @@ def reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
     return 0.0
 
 
+def shortlist_recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    """Recall for a fixed-length shortlist (archetype B): hits in the top k
+    divided by min(len(relevant), k).
+
+    Plain recall@k can't reach 1.0 when a case has more relevant people
+    than the shortlist has slots — a query with 20 genuine experts and a
+    5-person shortlist would cap at 0.25 no matter how good the ranking.
+    Capping the denominator at k asks the right question: how much of the
+    achievable shortlist is made of people who belong? With
+    len(relevant) <= k it is identical to recall_at_k.
+    """
+    if not relevant:
+        raise ValueError("relevant must be non-empty to compute shortlist recall")
+    hits = len(set(retrieved[:k]) & relevant)
+    return hits / min(len(relevant), k)
+
+
 def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
@@ -94,12 +111,26 @@ class JudgeError(ValueError):
     """The LLM judge's response couldn't be parsed into a valid score."""
 
 
+EXPERTISE_JUDGE_SYSTEM_PROMPT = """You are grading answers from Tessera, an internal knowledge assistant for a consulting firm, to "who at the firm knows about X" questions. You will be shown the user's question, a description of what an ideal answer should cover, the person records the assistant was allowed to use (each with its evidence and a basis line, EVIDENCED or SELF-REPORTED ONLY), and the assistant's actual answer.
+
+Score two dimensions, each 1-5:
+
+groundedness: does every named person and every cited piece of evidence (project, authored document, skill, date) trace back to the provided records, with no invented people, projects or details? 5 = fully grounded. 1 = largely invented or contradicts the records.
+
+relevance: do the people named actually fit the question as the ideal-answer description says they should, and does the answer clearly flag any SELF-REPORTED ONLY match as a claim not backed by project or authored evidence rather than presenting it as equivalent to an evidenced one? 5 = right people, honestly labelled. 1 = wrong people, or self-reported claims presented as proven expertise.
+
+Respond with strict JSON only — no markdown fences, no other text — in exactly this shape:
+{"groundedness": 4, "relevance": 5, "reasoning": "one sentence explaining both scores"}
+"""
+
+
 def judge_answer(
     query: str,
     ideal_answer: str,
     sources: list[str],
     answer: str,
     llm: LLMClient,
+    system: str = JUDGE_SYSTEM_PROMPT,
 ) -> JudgeScore:
     """Score a generated answer's groundedness and relevance via LLM-as-judge.
 
@@ -107,7 +138,7 @@ def judge_answer(
     LLMClient is injected, not constructed.
     """
     raw = llm.complete(
-        system=JUDGE_SYSTEM_PROMPT,
+        system=system,
         user=build_judge_user_prompt(query, ideal_answer, sources, answer),
     )
     try:

@@ -10,6 +10,8 @@ this becomes the CI quality gate in Phase 5.
 
 ```
 set -a; source .env; set +a   # NVIDIA_API_KEY must be set
+uv run tessera ingest         # once: the document index
+uv run tessera index-people   # once: the people index (archetype B)
 uv run tessera eval           # from the repo root
 ```
 
@@ -22,7 +24,9 @@ persisted one at `data/vectorstore/`; `tessera eval` requires
 Either way, every case in `evals/cases/*.yaml` runs and a metrics report
 prints. Each
 case that reaches generation costs up to 3 live LLM calls (route,
-generate, judge) — B/D cases that terminate at routing cost just 1.
+generate, judge) — D cases that terminate at routing cost just 1. A
+scored B case costs 3 (route, generate, judge); a B no-match case costs
+just 1, because the no-match path makes no generation call.
 NVIDIA NIM's free tier allows up to 40 requests/minute and 10,000
 requests/day, so a full sweep — even against a real query log of a few
 dozen cases — fits comfortably without special pacing.
@@ -39,10 +43,11 @@ Cases live in `evals/cases/*.yaml`, one list of entries per file:
   ideal_answer: "Points to the market entry methodology page, summarises the key steps, cites the source."
 ```
 
-- `archetype`: one of `A`/`B`/`C`/`D`. Only `A` (lookup) and `C`
-  (synthesis) reach retrieval and generation; `B`/`D` cases exist to
-  check that routing and the terminal refusal/not-yet-supported
-  messages are correct, and should leave `relevant_sources` empty.
+- `archetype`: one of `A`/`B`/`C`/`D`. `A` (lookup) and `C` (synthesis)
+  run document retrieval and generation; `B` (expertise) runs expertise
+  retrieval (`find_experts`) and generation; `D` cases exist to check
+  that routing and the terminal refusal are correct, and should leave
+  `relevant_sources` empty.
 - `relevant_sources`: corpus-relative paths (relative to
   `data/corpus/`, e.g. `"methodology/pricing-strategy-overview.md"`) —
   used for recall@k/precision@k/MRR. Leave empty for `B`/`D` cases.
@@ -50,6 +55,21 @@ Cases live in `evals/cases/*.yaml`, one list of entries per file:
   cover, fed to the LLM-judge for groundedness/relevance scoring. Leave
   empty to skip judging (e.g. for `B`/`D` cases, or any case where you
   only want the routing/retrieval metrics).
+- `relevant_people` (archetype B): `person_id`s from `data/expertise/`
+  who belong in the shortlist. Used for person recall@k / precision@k /
+  MRR. Person recall is scored against `min(|relevant_people|, k)`
+  (`metrics.shortlist_recall_at_k`), not `|relevant_people|`: a query with
+  20 genuine experts and a 5-person shortlist would otherwise cap at 0.25
+  however good the ranking. Sets are derived mechanically from the raw
+  records (project / authored evidence on the query's topic, plus
+  industry or role/recency where the query says so) and audited against
+  retrieval's top 20 — see the comment on each case. A test asserts every
+  id resolves to a real record.
+- `expect_no_match` (archetype B): the query asks for expertise the firm
+  doesn't have. Correct = the fixed no-match message **and** zero
+  generation LLM calls (counted, not assumed). These live in
+  `expertise_nomatch.yaml`, are not judged, and don't contribute to
+  recall/MRR; they are scored only by the no-match refusal rate.
 
 `evals/cases/placeholder.yaml` holds the 8 workshop queries from
 Discovery Findings §7 (two per archetype). Since P2-2 it is **held out

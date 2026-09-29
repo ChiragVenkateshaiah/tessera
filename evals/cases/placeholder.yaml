@@ -1,9 +1,10 @@
 # 8 workshop queries (Discovery Findings §7) — placeholder, non-representative
 # of the real query log. Two per archetype (A/B/C/D). relevant_sources are
 # corpus-relative paths (relative to data/corpus/), verified against the
-# actual pilot corpus rather than guessed. B/D cases carry no
+# actual pilot corpus rather than guessed. D cases carry no
 # relevant_sources or judged answer — they never reach retrieval/generation,
-# so only routing accuracy applies to them.
+# so only routing accuracy applies to them. B cases (q003, q004) carry
+# relevant_people (P3-5) and run the expertise path.
 #
 # Replace this file's contents with real consultant-query/ideal-answer pairs
 # once the query log arrives — see evals/README.md.
@@ -45,16 +46,34 @@
   query: "Who at the firm knows about pharma pricing?"
   archetype: B
   relevant_sources: []
+  # relevant_people (12): everyone in data/expertise/ with projects or authored docs on pharma-pricing.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0017, c0028, c0032, c0039, c0042, c0046, c0050, c0051, c0055,
+    c0062, c0065, c0066
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message — expertise-finding needs
-    staffing/HR data this system doesn't have access to in Phase 1.
+    Names people with real pharma-pricing project history or authored
+    pharma pricing documents, citing that evidence, and notes the
+    expertise data is a dated snapshot.
 
 - id: q004
   query: "Who's our expert on supply chain network optimization?"
   archetype: B
   relevant_sources: []
+  # relevant_people (22): everyone in data/expertise/ with network-optimization projects, or authored supply-chain-network-optimization methodology.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0019, c0441, c0443, c0448, c0449, c0450, c0453, c0454, c0460,
+    c0461, c0463, c0464, c0469, c0473, c0475, c0476, c0478, c0483,
+    c0484, c0485, c0493, c0494
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
+    Names people with network-optimization project history or who
+    authored the supply-chain network optimization methodology, citing
+    that evidence.
 
 - id: q005
   query: >

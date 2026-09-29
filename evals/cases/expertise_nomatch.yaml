@@ -1,0 +1,52 @@
+# Archetype B no-match set (P3-5, docs/Tessera_Phase3_Plan.md §4.3): queries
+# for expertise the firm's people data genuinely does not contain. The
+# correct outcome is the fixed "we don't have an obvious expert" message
+# with ZERO generation LLM calls (generation/expertise.py) — the B analogue
+# of an off-corpus A refusal (CLAUDE.md constraint #2, grounded generation
+# only; Task 7's architect review flagged correct-refusal as outside the
+# eval's reach until now).
+#
+# Scored on one metric only: no-match correct-refusal rate (gated at 100%).
+# Held separate from the scored B cases so these can't distort person
+# recall / MRR / judge aggregates. Meridian Advisory and its staff are
+# fictional; so is this data — see data/expertise/README.md.
+#
+# Each query was checked against the real dataset before being included:
+# retrieval's best evidence score is 0.00–0.13, below the generation
+# gate (EXPERTISE_QUERY_FLOOR = 1.0), and no skill or project topic in
+# data/expertise/ is about the subject. ql022 moved here from
+# query_log.yaml (no clinical-trial topic exists in the dataset). ql020
+# ("open banking and payments") was checked for this set too and
+# deliberately left OUT: its best evidence is 1.69 because "banking"
+# matches core-banking experts, so it is not a clean absence — it lives in
+# query_log.yaml as a scored B case against that nearest expertise.
+
+- id: ql022
+  query: "Who's done clinical trial site selection work before?"
+  archetype: B
+  expect_no_match: true
+
+- id: nm001
+  query: "Who at the firm has done cybersecurity incident response work?"
+  archetype: B
+  expect_no_match: true
+
+- id: nm002
+  query: "Who's our go-to person for actuarial modelling in insurance?"
+  archetype: B
+  expect_no_match: true
+
+- id: nm003
+  query: "Who has experience structuring cross-border tax arrangements?"
+  archetype: B
+  expect_no_match: true
+
+- id: nm004
+  query: "Who can advise on legal contract negotiation?"
+  archetype: B
+  expect_no_match: true
+
+- id: nm005
+  query: "Who has run a brand redesign or advertising campaign for a client?"
+  archetype: B
+  expect_no_match: true
