@@ -68,19 +68,44 @@ class VectorStore(ABC):
 
 
 @dataclass(frozen=True)
+class Evidence:
+    """One concrete reason a person matched a query.
+
+    kind: "project" | "authored" | "skill". ``strength`` is the
+    contribution to the person's evidence score. ``self_reported`` is True
+    only for a skill claim with nothing behind it — generation (P3-4) must
+    flag those rather than present them as equivalent to project or
+    authorship evidence.
+    """
+
+    kind: str
+    description: str
+    strength: float
+    self_reported: bool = False
+
+
+@dataclass(frozen=True)
 class PersonMatch:
     """One person returned by an ExpertiseStore search.
 
-    score: higher is better (cosine similarity), same direction contract
-    as SearchResult.score. ``evidence`` is empty as returned by a store —
-    the retrieval layer (P3-3) fills in which skills/projects/authored
-    documents actually matched the query; the store only knows the
-    embedded profile, not why it matched.
+    score: higher is better (cosine similarity between query and profile),
+    same direction contract as SearchResult.score. ``evidence`` and
+    ``evidence_score`` are empty/zero as returned by a store — the
+    retrieval layer (retrieval/expertise.py) fills them in; the store only
+    knows the embedded profile, not why it matched.
     """
 
     person: Person
     score: float
-    evidence: tuple[str, ...] = ()
+    evidence: tuple[Evidence, ...] = ()
+    evidence_score: float = 0.0
+
+    @property
+    def is_evidenced(self) -> bool:
+        """True if any evidence is a project, authored doc, or evidenced
+        skill — False when the match rests on self-reported skills alone.
+        """
+        return any(not e.self_reported for e in self.evidence)
 
 
 class ExpertiseStore(ABC):

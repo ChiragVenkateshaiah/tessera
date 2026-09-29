@@ -134,8 +134,10 @@ class Person:
 
     @property
     def evidenced_topics(self) -> frozenset[str]:
-        """Topics this person has a project or authored document behind —
-        the set the B answer can cite as evidenced rather than claimed.
+        """Topics this person has a ``project_history`` entry on. Authored
+        documents are not included (mapping them to topics needs the
+        corpus); retrieval credits those separately, from the document
+        names, in ``retrieval/expertise.py``.
         """
         topics = {p.topic for p in self.project_history}
         return frozenset(topics)
