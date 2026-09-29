@@ -36,8 +36,14 @@ fixed message, zero LLM calls), `EXPERTISE_ANSWER_SYSTEM_PROMPT`, B no
 longer terminal in the router (`NOT_YET_SUPPORTED_MESSAGE` retired),
 `pipeline.answer_query()` B branch with an optional `expertise_store`,
 `tessera query` prints a People section. Bar check `=> PASS` (50/50, zero
-errors). B answers are **not yet scored** by the harness. **Next: P3-5**
-— eval harness B metrics + bar extension + no-match set.
+errors).
+
+**P3-5 done** (PR #48, 2026-09-29): archetype B is now measured — person
+recall / precision / MRR, a B judge, a 6-case no-match set, B rows in the
+bar. **B thresholds are provisional** (reported, not gated; user decision
+2026-09-29, plan §4.2 staging) because the first sweep missed person
+recall by 0.01 (0.89 vs 0.90). **Next: a B-retrieval improvement pass,
+then flip `QualityBar.gate_expertise`, then P3-6** (exit, `v0.3.0`).
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1180,55 +1186,96 @@ same change and stays ungated (`QUALITY_BAR.md`).
       => PASS (gated thresholds)
       ```
 
+- [x] **P3-5 — eval harness B metrics + bar extension + no-match set**
+      (2026-09-29, PR #48 merged). `docs/Tessera_Phase3_Plan.md` §5.
+
+      - `evals/metrics.py`: `shortlist_recall_at_k` (denominator
+        `min(|relevant|, k)` — plain recall@5 caps at 0.25 for a query with
+        20 genuine experts; identical to recall_at_k when the set fits),
+        `EXPERTISE_JUDGE_SYSTEM_PROMPT`; `judge_answer(..., system=)`.
+      - `evals/harness.py`: B cases run `find_experts` →
+        `generate_expertise_answer` (needs an `expertise_store`; without
+        one a B case is routing-only) and are scored on the people the
+        answer *presents*. Person metrics and B judge scores live in
+        their own `CaseResult` / `EvalReport` fields so A/C means are
+        never blended. No-match cases are correct only with the fixed
+        message **and zero generation LLM calls** (`_CountingLLM`); a
+        misrouted no-match case counts as wrong. B rows in
+        `evaluate_bar` / `format_report`, behind `QualityBar.gate_expertise`
+        (default `False` = provisional).
+      - `tessera eval` requires `tessera index-people`;
+        `python -m evals.harness` builds a temporary people index.
+      - Cases: 9 scored B cases with `relevant_people` (derived
+        mechanically from raw records — project/authored evidence on the
+        topic, plus industry or role+recency where the query says so —
+        then audited against retrieval's top 20); new
+        `evals/cases/expertise_nomatch.yaml` (6). Set is now 55 cases
+        (A20 B15 C15 D5). A test asserts every id resolves.
+      - Label audit findings: `ql042` set widened (query names reshoring
+        *and* network moves); `ql020` ("open banking and payments") is
+        **not** a clean absence (best evidence 1.69 — "banking" matches
+        core-banking experts) so it stays a scored case against that
+        nearest expertise; `ql022` (clinical trials) moved to no-match.
+      - 26 new tests. Full suite **230 passed, 8 skipped**.
+
+      **Sweep** (`tessera eval`, 2026-09-29, 55/55, zero errors — run
+      through a scratchpad-only pacing wrapper, see Notes):
+      ```
+      Routing 100.0%   Retrieval (A/C): recall 0.95  precision 0.42  MRR 0.97
+      Generation (A/C): groundedness 4.83  relevance 4.71
+      Expertise (B): person recall 0.89  precision 0.89  MRR 1.00
+                     groundedness 5.00  relevance 4.67
+      No-match refusal rate: 100%
+      ```
+      Every gated A/C row passes (unchanged from Phase 2). The one B row
+      short of its threshold is person recall (0.89 vs 0.90): `ql019`
+      0.40, `ql041` 0.80, `ql042` 0.80. The run's own verdict was `=>
+      FAIL` because B was gated in that build; with B provisional as
+      merged, the gated verdict on the same numbers is PASS — **derived,
+      not a separate run** (a re-run costs ~1.5 h of LLM calls).
+
+      **Real gap found:** `ql019` ("who *led* our M&A integration
+      engagements recently") — the label is right (lead roles since 2023,
+      5 people) but retrieval gets 2 of 5: it doesn't weigh role. A
+      throwaway experiment weighting project evidence by role seniority
+      did **not** fix it (still 2/5; it did lift `ql042`), so it was
+      reverted rather than shipped to fit an 8-case set.
+
 ## Next task to pick up
 
-**P3-5 — Eval harness + bar extension** (`docs/Tessera_Phase3_Plan.md`
-§5). Fifth Phase 3 task.
+**B-retrieval improvement pass → flip `gate_expertise` → then P3-6.**
+(Not a numbered plan task: it is the cleanup P3-5's provisional B bar
+calls for, before the Phase 3 exit.)
 
-- `evals/metrics.py`: person recall@k / MRR; a B-answer judge (person +
-  evidence groundedness, fit + self-reported-flagging relevance).
-- `evals/harness.py`: B cases run the real B path (`find_experts` →
-  `generate_expertise_answer`; needs an `ExpertiseStore` threaded through
-  `run_case` / `run_harness` / `tessera eval`) and produce metrics;
-  `format_report()` and the bar-check handle B aggregates and the
-  no-match set's correct-refusal rate. **Replace the
-  `EXPERTISE_NOT_SCORED_NOTE` routing-only stub** P3-4 left in
-  `run_case`.
-- `evals/cases/`: rewrite the 10 B cases with `relevant_people` (labelled
-  via `evals/diagnose_expertise.py` — read the top ~15–20, mark who
-  belongs) + `ideal_answer`; new `evals/cases/expertise_nomatch.yaml`
-  (~5–6 cases); `relevant_people` added to the case schema +
-  `evals/README.md`.
-- `evals/QUALITY_BAR.md`: B section per plan §4.2, thresholds
-  **provisional** for the first sweep.
-- Label-completeness audit of every `relevant_people` set; **then** gate
-  the B thresholds (person recall@k ≥ 0.90, MRR ≥ 0.90, judge ≥ 4.5,
-  per-case recall > 0, no-match refusal rate 100%).
-- Tests: metric logic (deterministic, no LLM); bar-check with the B
-  thresholds; no-match short-circuit counted correctly.
+- Goal: get every B row of the bar to clear on a full sweep, then set
+  `QualityBar.gate_expertise = True` (and update `evals/QUALITY_BAR.md`).
+  Currently person recall 0.89 vs 0.90; `ql019` 0.40, `ql041` 0.80,
+  `ql042` 0.80.
+- Root cause to address: retrieval doesn't weigh **role** ("led …") or
+  query-conditional seniority. Role-seniority weighting of project
+  evidence is the obvious candidate but was tried and did not fix `ql019`
+  alone — look at *query-conditioned* handling ("led/lead/owned" →
+  lead-level roles; "recently" → recency) rather than a global weight.
+  Guard against fitting 9 labelled cases: prefer a principled change, run
+  the retrieval-only diagnostic (`evals/diagnose_expertise.py`) over the
+  whole B set plus the pharma-pricing acceptance test, and keep the
+  document path untouched.
+- Also decide whether a place or practice in the query ("… in London")
+  should become a `where` filter. Unwired; no scored B case needs it.
+  It matters because self-reported-only matches only surface in small
+  (filtered) pools — with 600 people and k=5 the top five are always
+  evidenced, so the flagging path is unit-tested but unobserved live.
+- Touches `retrieval/expertise.py`: needs a fresh `tessera eval --check`
+  in the PR. Sweeps currently need the pacing approach (see Notes) — a
+  small repo-side fix (backoff in `NvidiaClient`, progress output in the
+  harness) would pay for itself first.
 
-**Acceptance (plan §5 P3-5, verbatim):** `tessera eval --check` reports
-A/C **and** B metric blocks plus the no-match refusal rate; a full sweep
-is recorded in `checkpoint.md`; every `relevant_people` id resolves to a
-real record; B thresholds gated after the audit; A/C thresholds
-unchanged and still passing.
-
-**Carry-ins from P3-3 / P3-4:**
-- The existing B `ideal_answer` text (`placeholder.yaml` q003/q004 and
-  `query_log.yaml`) still says "returns the not-yet-supported message" —
-  stale since P3-4; rewritten as part of the case rewrite above.
-- The B scoring constants (`retrieval/expertise.py`) and the two
-  generation floors (`generation/expertise.py`) are calibrated on probe
-  queries, not the labelled set. Re-check them against P3-5's cases
-  (retrieval-only first, like `evals/tune_retrieval.py`), before gating.
-- A place or practice named in the query ("… in London") is not turned
-  into a `where` filter. Decide whether any B case needs it; if so, that
-  wiring lands here.
-- Include a case where the best available match is self-reported-only, to
-  exercise the flagging live (unobserved so far).
-
-This task touches `evals/cases/` and the bar, so the PR needs a fresh
-`tessera eval --check` pasted in. Then P3-6 (exit, tag `v0.3.0`).
+**Then P3-6 — Phase 3 exit** (`docs/Tessera_Phase3_Plan.md` §5):
+README (B moves from "in progress" to built; phase table, architecture
+diagram, quality-bar section), a final clean full sweep against the
+extended (A/C/B) bar recorded here, confirm the Phase 1 exit criteria,
+tag **`v0.3.0`**. **Acceptance:** a clean full sweep passes the extended
+bar; `v0.3.0` tagged and pushed.
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1319,10 +1366,25 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-2 — `ExpertiseStore` port + local Chroma impl~~ — done (#42)
 - ~~P3-3 — expertise retrieval path (`retrieval/expertise.py`)~~ — done (#44)
 - ~~P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI~~ — done (#46)
-- **P3-5 — eval harness B metrics + bar extension + no-match set  ← next**
+- ~~P3-5 — eval harness B metrics + bar extension + no-match set~~ — done (#48); B bar provisional
+- **B-retrieval improvement pass, then flip `gate_expertise`  ← next**
 - P3-6 — Phase 3 exit, tag `v0.3.0`
 
 ## Notes / open flags
+
+- **NVIDIA NIM throttled far below its documented 40 rpm on 2026-09-29
+  and a plain `tessera eval` is not reliable at the moment.** Three
+  unpaced sweeps (P3-5) cascaded: a few early 503s, then instant 429s for
+  every remaining case (a single probe call also 429'd, with no rate-limit
+  headers; it cleared after ~3 min, but the next unpaced sweep tripped it
+  again after ~7 calls). What worked: the **same harness** driven by a
+  scratchpad wrapper that spaces LLM calls ≥3 s apart and backs off on
+  429 (45 s) / 503 (15 s), up to 8 attempts per call — 55/55 clean, 191
+  calls, 48 retries, ~1.5 h. Neither pacing nor backoff exists in the
+  repo (`NvidiaClient` has none, the openai SDK's 2 fast retries aren't
+  enough, and the harness prints nothing until the end). Worth a small
+  repo fix before the next sweep-heavy task. When probing for a cooldown,
+  send one tiny call every few minutes — hammering makes it worse.
 
 - **The expertise dataset is generated, and its committed output must
   stay in sync with `data/expertise/generate.py`.** Any change to the
