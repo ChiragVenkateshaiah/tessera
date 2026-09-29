@@ -28,8 +28,16 @@ query path reads the people index yet.
 `find_experts()` (candidate pool of 50 → evidence-strength re-rank →
 top 5 with per-person `Evidence`), structured `Evidence` on `PersonMatch`,
 and `evals/diagnose_expertise.py`. Bar check `=> PASS` (50/50, zero
-errors; matches P2-5 baseline). **Next: P3-4** — B generation +
-router/pipeline/CLI wiring.
+errors; matches P2-5 baseline).
+
+**P3-4 done** (PR #46, 2026-09-29): archetype B now answers end to end.
+`generation/expertise.py` (two evidence floors; nobody qualifying →
+fixed message, zero LLM calls), `EXPERTISE_ANSWER_SYSTEM_PROMPT`, B no
+longer terminal in the router (`NOT_YET_SUPPORTED_MESSAGE` retired),
+`pipeline.answer_query()` B branch with an optional `expertise_store`,
+`tessera query` prints a People section. Bar check `=> PASS` (50/50, zero
+errors). B answers are **not yet scored** by the harness. **Next: P3-5**
+— eval harness B metrics + bar extension + no-match set.
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1111,49 +1119,116 @@ same change and stays ungated (`QUALITY_BAR.md`).
       => PASS (gated thresholds)
       ```
 
+- [x] **P3-4 — B generation + router/pipeline/CLI wiring** (2026-09-29,
+      PR #46 merged). `docs/Tessera_Phase3_Plan.md` §5.
+
+      - `generation/expertise.py`: `generate_expertise_answer(result,
+        llm)` + `filter_qualified()`. **Two floors** on retrieval's
+        `evidence_score`, calibrated on 19 probe queries against the real
+        dataset/embedder: `EXPERTISE_QUERY_FLOOR = 1.0` (the *best* match
+        must reach it or the answer is `NO_EXPERT_MESSAGE` with **zero
+        LLM calls**) and `EXPERTISE_PERSON_FLOOR = 0.05` (drops people
+        with no topical backing but keeps weak self-reported-only people
+        so the answer can show them flagged). Probe results: present
+        topics best match 2.09–4.36 (weakest top-5 ≥ 1.37); absent topics
+        0.00; adjacent-but-absent 0.66 ("HR compensation design") and
+        0.19 ("legal contracts") — spurious partial-topic hits, both
+        below the gate.
+      - `prompts.py`: `EXPERTISE_ANSWER_SYSTEM_PROMPT` +
+        `build_expertise_user_prompt()` (evidence lines, `Basis:
+        EVIDENCED` / `SELF-REPORTED ONLY`, per-person profile date).
+      - Router: only D is terminal now; `NOT_YET_SUPPORTED_MESSAGE`
+        removed.
+      - `pipeline.answer_query(..., expertise_store=None)`: B branch
+        `find_experts` → `generate_expertise_answer`; without a store a B
+        query gets `EXPERTISE_UNAVAILABLE_MESSAGE`. `AnswerResult` and
+        `GeneratedAnswer` gain a defaulted `experts` field (citations stay
+        empty for B). `retrieve()` still raises for B.
+      - `tessera query`: prints "People:" with a `[self-reported only]`
+        flag; passes no expertise store when the people index is empty,
+        so A/C/D work without `index-people`.
+      - Harness: B cases stay **routing-only** (`EXPERTISE_NOT_SCORED_NOTE`)
+        until P3-5; otherwise B would fall through to `retrieve()` and
+        error.
+      - README: B bullet and phase-table row updated (full README pass is
+        P3-6).
+      - 11 new tests (`test_expertise_generation.py`) plus updated
+        pipeline / router / harness / CLI tests. Full suite **202 passed,
+        8 skipped**.
+
+      **Acceptance check — met.** Live NVIDIA NIM `tessera query`:
+      "pharma pricing" and "supply chain network optimization" → five
+      named people each with concrete project / authorship / skill
+      evidence, a dated-snapshot caveat, and a People list; "quantum
+      computing" and "medieval poetry" → the no-match message, no
+      generation call; A, C and D queries unchanged. Unit tests prove the
+      zero-LLM no-match, self-reported flagging in the prompt, and that a
+      B query never touches the document store.
+
+      **Not exercised live:** no live query produced a self-reported-only
+      match, so the model's actual wording for that flag is unobserved
+      (prompt content is unit-tested). Worth including such a case in
+      P3-5's set. Also seen live: the model orders people by its own
+      judgement, so the answer's `[n]` order can differ from the People
+      list order (numbers still match the right person).
+
+      **Quality-bar sweep** (`tessera eval --check`, 2026-09-29, 50/50,
+      zero errors; all 10 B cases route B):
+      ```
+      Routing 100.0%   Retrieval (A/C): recall 0.95  precision 0.42  MRR 0.97
+      Generation: groundedness 4.77  relevance 4.69
+      => PASS (gated thresholds)
+      ```
+
 ## Next task to pick up
 
-**P3-4 — B generation + router/pipeline/CLI wiring**
-(`docs/Tessera_Phase3_Plan.md` §5). Fourth Phase 3 task.
+**P3-5 — Eval harness + bar extension** (`docs/Tessera_Phase3_Plan.md`
+§5). Fifth Phase 3 task.
 
-- New `generation/expertise.py`: `EXPERTISE_ANSWER_SYSTEM_PROMPT` (in
-  `prompts.py`) + `generate_expertise_answer(result, llm)` with a
-  **zero-LLM-call no-match fallback** when nobody clears a relevance
-  floor. Shared helpers (e.g. fence-tolerant JSON parse) lifted to a
-  common location, not duplicated from `answer.py`.
-- `router.terminal_response_for()`: B no longer terminal; the fixed
-  no-match message replaces `NOT_YET_SUPPORTED_MESSAGE`'s role.
-- `pipeline.answer_query()`: B branch (`route` → `find_experts` →
-  `generate_expertise_answer`), same `AnswerResult` shape.
-- `cli.py`: `tessera query` handles B; no-match path verified.
-- Tests: fake-LLM unit tests for evidence citation, self-reported
-  flagging, no-match short-circuit; a real-dataset test proving B never
-  touches the document retriever.
-- Live spot-check: 3–4 B queries against real NVIDIA NIM; all four
-  archetypes still route correctly.
+- `evals/metrics.py`: person recall@k / MRR; a B-answer judge (person +
+  evidence groundedness, fit + self-reported-flagging relevance).
+- `evals/harness.py`: B cases run the real B path (`find_experts` →
+  `generate_expertise_answer`; needs an `ExpertiseStore` threaded through
+  `run_case` / `run_harness` / `tessera eval`) and produce metrics;
+  `format_report()` and the bar-check handle B aggregates and the
+  no-match set's correct-refusal rate. **Replace the
+  `EXPERTISE_NOT_SCORED_NOTE` routing-only stub** P3-4 left in
+  `run_case`.
+- `evals/cases/`: rewrite the 10 B cases with `relevant_people` (labelled
+  via `evals/diagnose_expertise.py` — read the top ~15–20, mark who
+  belongs) + `ideal_answer`; new `evals/cases/expertise_nomatch.yaml`
+  (~5–6 cases); `relevant_people` added to the case schema +
+  `evals/README.md`.
+- `evals/QUALITY_BAR.md`: B section per plan §4.2, thresholds
+  **provisional** for the first sweep.
+- Label-completeness audit of every `relevant_people` set; **then** gate
+  the B thresholds (person recall@k ≥ 0.90, MRR ≥ 0.90, judge ≥ 4.5,
+  per-case recall > 0, no-match refusal rate 100%).
+- Tests: metric logic (deterministic, no LLM); bar-check with the B
+  thresholds; no-match short-circuit counted correctly.
 
-**Acceptance (plan §5 P3-4, verbatim):** `tessera query "who at the firm
-knows about <topic>"` returns named people with cited evidence and
-self-reported-only matches flagged; a query for absent expertise returns
-the no-match message with zero LLM calls; A/C/D behaviour unchanged.
+**Acceptance (plan §5 P3-5, verbatim):** `tessera eval --check` reports
+A/C **and** B metric blocks plus the no-match refusal rate; a full sweep
+is recorded in `checkpoint.md`; every `relevant_people` id resolves to a
+real record; B thresholds gated after the audit; A/C thresholds
+unchanged and still passing.
 
-**Carry-ins from P3-3:**
-- The relevance floor needs a signal. `PersonMatch.score` is raw
-  semantic cosine and `evidence_score` is the re-rank total; calibrate
-  the floor against real queries (present topic vs absent, e.g. the
-  "parental leave"-style adjacent-but-absent probe) the way
-  `RELEVANCE_THRESHOLD` was for documents.
-- A place or practice named in the query ("… in London") is **not** yet
-  turned into a `where` filter. `find_experts(where=...)` and the store
-  support it; deciding how the pipeline derives it is P3-4's call (or
-  explicitly defer to P3-5).
-- Scoring constants in `retrieval/expertise.py` are plan rules + spot
-  checks, not grid-searched. P3-5's labelled cases are the point to
-  tune them.
+**Carry-ins from P3-3 / P3-4:**
+- The existing B `ideal_answer` text (`placeholder.yaml` q003/q004 and
+  `query_log.yaml`) still says "returns the not-yet-supported message" —
+  stale since P3-4; rewritten as part of the case rewrite above.
+- The B scoring constants (`retrieval/expertise.py`) and the two
+  generation floors (`generation/expertise.py`) are calibrated on probe
+  queries, not the labelled set. Re-check them against P3-5's cases
+  (retrieval-only first, like `evals/tune_retrieval.py`), before gating.
+- A place or practice named in the query ("… in London") is not turned
+  into a `where` filter. Decide whether any B case needs it; if so, that
+  wiring lands here.
+- Include a case where the best available match is self-reported-only, to
+  exercise the flagging live (unobserved so far).
 
-This task touches `generation/` (incl. a prompt) and the router, so the
-PR needs a fresh `tessera eval --check` pasted in. Then P3-5 … P3-6
-(exit, tag `v0.3.0`).
+This task touches `evals/cases/` and the bar, so the PR needs a fresh
+`tessera eval --check` pasted in. Then P3-6 (exit, tag `v0.3.0`).
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1243,8 +1318,8 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-1 — expertise dataset + seeded generator + schema~~ — done (#40)
 - ~~P3-2 — `ExpertiseStore` port + local Chroma impl~~ — done (#42)
 - ~~P3-3 — expertise retrieval path (`retrieval/expertise.py`)~~ — done (#44)
-- **P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI  ← next**
-- P3-5 — eval harness B metrics + bar extension + no-match set
+- ~~P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI~~ — done (#46)
+- **P3-5 — eval harness B metrics + bar extension + no-match set  ← next**
 - P3-6 — Phase 3 exit, tag `v0.3.0`
 
 ## Notes / open flags
