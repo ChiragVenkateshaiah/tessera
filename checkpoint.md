@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-09-07
+Last updated: 2026-09-29
 
 ## Status
 
@@ -15,8 +15,15 @@ deterministic generator (`generate.py`, `SEED=20260907`) + its committed
 (`README.md`), and the loader `src/tessera/ingestion/expertise_loader.py`
 (`Person`/`Skill`/`ProjectEntry`, `load_expertise`). Dataset is inert so
 far — nothing in the query path reads it yet; the P3-1 verification sweep
-matched the P2-5 baseline (`=> PASS`). **Next: P3-2** — `ExpertiseStore`
-port + local Chroma implementation.
+matched the P2-5 baseline (`=> PASS`).
+
+**P3-2 done** (PR #42, 2026-09-29): `ExpertiseStore` port +
+`PersonMatch` (`store/base.py`), `ChromaExpertiseStore`
+(`store/chroma_expertise.py`, separate `tessera_people` collection),
+`profile_summary_text()` (`expertise_loader.py`), `tessera index-people`,
+`TESSERA_EXPERTISE_DIR` setting. All 600 people indexed. Nothing in the
+query path reads the people index yet. **Next: P3-3** — expertise
+retrieval path (`retrieval/expertise.py`).
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1018,38 +1025,73 @@ same change and stays ungated (`QUALITY_BAR.md`).
       architect` / `quality-engineer` not invoked — gated by convention
       to build-plan Tasks 6/7/8; this is Phase 3.
 
+- [x] **P3-2 — `ExpertiseStore` port + local Chroma implementation**
+      (2026-09-29, PR #42 merged). `docs/Tessera_Phase3_Plan.md` §5.
+
+      - `store/base.py`: `ExpertiseStore` ABC (`add` / `search` /
+        `count`) + `PersonMatch(person, score, evidence=())`. Score is
+        cosine similarity, higher = better (same contract as
+        `SearchResult`). `evidence` is left empty by the store; P3-3
+        fills it.
+      - `store/chroma_expertise.py`: `ChromaExpertiseStore`, its own
+        `tessera_people` collection (cosine) in the same persist dir as
+        the document index. The full `Person` is stored as JSON in
+        metadata so `search` rebuilds it without re-reading the YAML.
+        `where` filters: `practice` / `office` / `title` exact match, and
+        a `topic:<name>` boolean flag per evidenced topic
+        (`topic_filter_key()`).
+      - `expertise_loader.profile_summary_text()`: the text embedded per
+        person (title, practice, office, skills with level + basis,
+        project topics with industries; no name). Uses the existing
+        `Embedder` port.
+      - `tessera index-people` (zero LLM calls); `Settings.expertise_dir`
+        / `TESSERA_EXPERTISE_DIR`.
+      - 8 new tests (`test_expertise_store.py` +7, `test_cli.py` +1).
+        Full suite **178 passed, 8 skipped**.
+
+      **Acceptance check — met.** `tessera index-people` → 600 people
+      indexed; manual queries ("who knows about pricing in retail",
+      "procurement savings expert in London") return plausible people;
+      the same index/search function runs unchanged against a fake store
+      and Chroma. No `eval --check` sweep run: the PR touched none of the
+      bar-gated paths and nothing in the query path reads the people
+      index yet.
+
+      **Observed for P3-3:** pure semantic search is loose on industry
+      (the "retail" query's top hits were pricing people but not mostly
+      retail projects) and doesn't separate evidenced from self-reported
+      skills, which is exactly the evidence-strength re-rank's job.
+
 ## Next task to pick up
 
-**P3-2 — `ExpertiseStore` port + local implementation**
-(`docs/Tessera_Phase3_Plan.md` §5). Second Phase 3 task.
+**P3-3 — Expertise retrieval path** (`docs/Tessera_Phase3_Plan.md` §5).
+Third Phase 3 task.
 
-- `ExpertiseStore` interface (`store/base.py` or a new module) +
-  `PersonMatch` dataclass. `Person` already exists in
-  `src/tessera/ingestion/expertise_loader.py` (P3-1) — reuse it.
-  Interface shape (plan §3.1): `add(people, embeddings)`,
-  `search(embedding, k, where=None) -> list[PersonMatch]`, `count()`.
-  `PersonMatch` carries the `Person`, a similarity `score`, and (filled
-  by the retrieval layer in P3-3, not the store) matched evidence.
-- Local Chroma implementation — a **separate collection** from the
-  document store (not the same `tessera_chunks` collection).
-- Profile-summary text generation from a `Person` record (the people
-  analogue of `chunker.chunk_embedding_text()`), embedded with the
-  **existing `Embedder` port** — no new embedding dependency. Structured
-  fields (`practice`, `office`, `title`, evidenced topics) go in as
-  Chroma metadata for `where` filtering.
-- `tessera index-people` CLI command (or `ingest --people`) — load →
-  summarize → embed → persist, zero LLM calls.
-- Tests: the interface-swap acceptance proven against a fake
-  `ExpertiseStore`, same pattern as `test_indexing.py` (the same
-  index/query function runs unchanged against the real Chroma impl and a
-  fake).
+- `retrieval/expertise.py`: `find_experts()` — semantic candidate pool
+  from `ExpertiseStore.search` → evidence-strength re-rank → top-`k`
+  (k = 5) with per-person evidence attached. Pure per constraint #6
+  (injected `Embedder` / `ExpertiseStore`, returns data).
+- `where` pre-filtering on `practice` / `office` (store already supports
+  it).
+- A retrieval-only diagnostic script (zero LLM), the P3 analogue of
+  `evals/tune_retrieval.py`, for hand-checking rank quality and for
+  labelling `relevant_people` in P3-5.
+- Tests against fake `Embedder` / `ExpertiseStore`: ranking prefers
+  evidenced over claimed; `where` passes through; evidence is attached.
 
-**Acceptance (plan §5 P3-2, verbatim):** all ~600 people indexed; a
-manual query returns plausible people; swapping the implementation needs
-no change outside the store module.
+**Acceptance (plan §5 P3-3, verbatim):** for a hand-checked query ("who
+knows pharma pricing"), the people with real pharma-pricing project
+history and/or authored docs rank above people who only self-tagged the
+skill.
 
-Then P3-3 (`retrieval/expertise.py` — semantic pool → evidence-strength
-re-rank) … P3-6 (exit, tag `v0.3.0`). Full sequence in plan §5.
+**Watch out:** `Person.evidenced_topics` currently derives from
+`project_history` only, although its docstring says "project or authored
+document". Authored docs aren't mapped to topics there. Decide in P3-3
+whether the re-rank should also credit `authored` (via corpus topics) or
+the docstring should be corrected.
+
+This task touches `retrieval/expertise.py`, so the PR needs a fresh
+`tessera eval --check` pasted in. Then P3-4 … P3-6 (exit, tag `v0.3.0`).
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1137,8 +1179,8 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 **Phase 3 (`docs/Tessera_Phase3_Plan.md` §5)** — adopted 2026-09-07
 (#38/#39):
 - ~~P3-1 — expertise dataset + seeded generator + schema~~ — done (#40)
-- **P3-2 — `ExpertiseStore` port + local Chroma impl  ← next**
-- P3-3 — expertise retrieval path (`retrieval/expertise.py`)
+- ~~P3-2 — `ExpertiseStore` port + local Chroma impl~~ — done (#42)
+- **P3-3 — expertise retrieval path (`retrieval/expertise.py`)  ← next**
 - P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI
 - P3-5 — eval harness B metrics + bar extension + no-match set
 - P3-6 — Phase 3 exit, tag `v0.3.0`
