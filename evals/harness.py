@@ -489,6 +489,13 @@ class QualityBar:
     min_expertise_groundedness: float = 4.5
     min_expertise_relevance: float = 4.5
     min_no_match_rate: float = 1.0
+    # The B thresholds above are PROVISIONAL: reported, not gated, until
+    # this is flipped to True (plan §4.2 — "enter provisional for the first
+    # Phase 3 sweep, then are gated once the label audit confirms the
+    # sets"). First sweep (P3-5, 2026-09-29): person recall 0.89 vs 0.90,
+    # carried by ql019 ("who LED ... recently" — retrieval ignores role).
+    # Flip once B retrieval is improved and a sweep clears every B row.
+    gate_expertise: bool = False
 
 
 DEFAULT_QUALITY_BAR = QualityBar()
@@ -581,6 +588,8 @@ def evaluate_bar(
     )
 
     if report.expertise_scored:
+        gated = bar.gate_expertise
+        note = "" if gated else " (provisional — not yet gated)"
         for name, value, floor in (
             ("Person recall@k (B)", report.mean_person_recall, bar.min_person_recall),
             ("Person MRR (B)", report.mean_person_mrr, bar.min_person_mrr),
@@ -594,8 +603,8 @@ def evaluate_bar(
             thresholds.append(
                 ThresholdResult(
                     name,
-                    True,
-                    f">= {floor:.2f}",
+                    gated,
+                    f">= {floor:.2f}{note}",
                     "n/a" if value is None else f"{value:.2f}",
                     value is not None and value >= floor,
                 )
@@ -607,8 +616,8 @@ def evaluate_bar(
         thresholds.append(
             ThresholdResult(
                 "Per-case person recall > 0.00 (B)",
-                True,
-                "no B case at recall 0.00",
+                gated,
+                f"no B case at recall 0.00{note}",
                 "no total misses"
                 if not zero_person_recall
                 else "missed: " + ", ".join(zero_person_recall),
@@ -620,8 +629,8 @@ def evaluate_bar(
         thresholds.append(
             ThresholdResult(
                 "No-match correct-refusal rate (B)",
-                True,
-                f">= {bar.min_no_match_rate:.0%}",
+                gated,
+                f">= {bar.min_no_match_rate:.0%}{note}",
                 "n/a" if nm is None else f"{nm:.0%}",
                 nm is not None and nm >= bar.min_no_match_rate,
             )

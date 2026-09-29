@@ -231,8 +231,11 @@ def _b_report(**overrides) -> EvalReport:
     return EvalReport(**d)
 
 
+GATED_B = QualityBar(gate_expertise=True)
+
+
 def test_bar_includes_b_rows_and_passes_when_all_clear() -> None:
-    result = evaluate_bar(_b_report())
+    result = evaluate_bar(_b_report(), GATED_B)
     names = [t.name for t in result.thresholds]
     for expected in (
         "Person recall@k (B)", "Person MRR (B)", "B groundedness", "B relevance",
@@ -241,6 +244,9 @@ def test_bar_includes_b_rows_and_passes_when_all_clear() -> None:
     ):
         assert expected in names
     assert result.passed
+    assert all(
+        t.gated for t in result.thresholds if "(B)" in t.name and "precision" not in t.name
+    )
     assert not next(t for t in result.thresholds if t.name == "Person precision@k (B)").gated
 
 
@@ -261,9 +267,30 @@ def test_bar_includes_b_rows_and_passes_when_all_clear() -> None:
     ],
 )
 def test_bar_fails_on_each_b_threshold(override, failing) -> None:
-    result = evaluate_bar(_b_report(**override))
+    result = evaluate_bar(_b_report(**override), GATED_B)
     assert not result.passed
     assert failing in [t.name for t in result.gated_failures]
+
+
+def test_b_thresholds_are_provisional_by_default() -> None:
+    """A failing B metric is shown but does not fail the bar until
+    gate_expertise is flipped (plan §4.2 staging)."""
+    assert QualityBar().gate_expertise is False
+    report = _b_report(mean_person_recall=0.85, no_match_rate=0.8)
+
+    result = evaluate_bar(report)
+
+    assert result.passed
+    recall = next(t for t in result.thresholds if t.name == "Person recall@k (B)")
+    assert not recall.gated and not recall.passed  # still reported honestly
+    assert "provisional" in recall.requirement
+    assert "[----] Person recall@k (B): 0.85" in format_report(report)
+
+
+def test_ac_failures_still_fail_the_bar_while_b_is_provisional() -> None:
+    result = evaluate_bar(_b_report(mean_recall=0.5))
+    assert not result.passed
+    assert "Mean recall@k (A/C)" in [t.name for t in result.gated_failures]
 
 
 def test_bar_omits_b_rows_when_no_expertise_store_was_used() -> None:
@@ -280,9 +307,9 @@ def test_quality_bar_b_defaults_match_the_plan() -> None:
 
 def test_format_report_shows_b_block_and_no_match_rate() -> None:
     text = format_report(_b_report())
+    assert "[----] Person recall@k (B): 0.95" in text  # provisional by default
     assert "Mean person recall@k: 0.95" in text
     assert "No-match refusal rate (B): 100%" in text
-    assert "[PASS] Person recall@k (B)" in text
 
 
 # --- the real case files ---
