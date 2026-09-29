@@ -141,6 +141,41 @@ class Person:
         return frozenset(topics)
 
 
+def profile_summary_text(person: Person) -> str:
+    """Text embedded for a person — the people analogue of
+    ``chunker.chunk_embedding_text()``.
+
+    Built from the structured record only (title, practice, office, skills
+    with level and basis, project topics with industries). Names are
+    deliberately left out: they carry no topical signal and would only add
+    noise to the embedding.
+    """
+    lines = [f"{person.title}, {person.practice} practice, {person.office} office."]
+    if person.skills:
+        lines.append(
+            "Skills: "
+            + "; ".join(
+                f"{s.topic} (level {s.level}, {s.basis.replace('_', '-')})"
+                for s in person.skills
+            )
+            + "."
+        )
+    if person.project_history:
+        by_topic: dict[str, list[str]] = {}
+        for p in person.project_history:
+            industries = by_topic.setdefault(p.topic, [])
+            if p.industry not in industries:
+                industries.append(p.industry)
+        lines.append(
+            "Project experience: "
+            + "; ".join(f"{t} in {', '.join(i)}" for t, i in by_topic.items())
+            + "."
+        )
+    if person.authored:
+        lines.append(f"Authored {len(person.authored)} firm document(s).")
+    return "\n".join(lines)
+
+
 def _require_str(record_id: str, field: str, value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ExpertiseError(f"{record_id}: {field} is missing or empty")
