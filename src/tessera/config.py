@@ -29,3 +29,6 @@ class Settings(BaseSettings):
     vectorstore_dir: Path = Field(
         default=Path("data/vectorstore"), validation_alias="TESSERA_VECTORSTORE_DIR"
     )
+    expertise_dir: Path = Field(
+        default=Path("data/expertise/people"), validation_alias="TESSERA_EXPERTISE_DIR"
+    )

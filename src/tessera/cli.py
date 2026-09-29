@@ -12,9 +12,11 @@ from tessera.config import Settings
 from tessera.embedding.local import LocalEmbedder
 from tessera.generation.nvidia import NvidiaClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
+from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.loader import load_corpus
 from tessera.pipeline import answer_query
 from tessera.store.chroma import ChromaVectorStore
+from tessera.store.chroma_expertise import ChromaExpertiseStore
 
 # evals/ sits alongside src/, not inside it, so it isn't shipped as part
 # of the installed tessera package or resolvable from the console-script
@@ -70,6 +72,24 @@ def ingest() -> None:
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
     store.add(chunks, embeddings)
     typer.echo(f"Indexed {store.count()} chunks at {settings.vectorstore_dir}.")
+
+
+@app.command(name="index-people")
+def index_people() -> None:
+    """Load the expertise dataset, embed each profile, and persist the
+    people index (a separate collection from the document index).
+    """
+    settings = _load_settings()
+
+    people = load_expertise(settings.expertise_dir, corpus_dir=settings.corpus_dir)
+    typer.echo(f"Loaded {len(people)} people.")
+
+    embedder = LocalEmbedder()
+    embeddings = embedder.embed_documents([profile_summary_text(p) for p in people])
+
+    store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
+    store.add(people, embeddings)
+    typer.echo(f"Indexed {store.count()} people at {settings.vectorstore_dir}.")
 
 
 @app.command()

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from tessera.ingestion.chunker import Chunk
+from tessera.ingestion.expertise_loader import Person
 
 
 @dataclass(frozen=True)
@@ -64,3 +65,52 @@ class VectorStore(ABC):
     @abstractmethod
     def count(self) -> int:
         """Number of chunks currently indexed."""
+
+
+@dataclass(frozen=True)
+class PersonMatch:
+    """One person returned by an ExpertiseStore search.
+
+    score: higher is better (cosine similarity), same direction contract
+    as SearchResult.score. ``evidence`` is empty as returned by a store —
+    the retrieval layer (P3-3) fills in which skills/projects/authored
+    documents actually matched the query; the store only knows the
+    embedded profile, not why it matched.
+    """
+
+    person: Person
+    score: float
+    evidence: tuple[str, ...] = ()
+
+
+class ExpertiseStore(ABC):
+    """Persists embedded people profiles and answers similarity queries.
+
+    Sibling of VectorStore for archetype B (Phase 3). Phase 4 swaps the
+    local Chroma implementation for a real people-index behind this port.
+    """
+
+    @abstractmethod
+    def add(self, people: list[Person], embeddings: list[list[float]]) -> None:
+        """Index a batch of people with their pre-computed profile
+        embeddings. people and embeddings must be the same length and
+        index-aligned; re-adding a person_id replaces that person.
+        """
+
+    @abstractmethod
+    def search(
+        self,
+        embedding: list[float],
+        k: int,
+        where: dict[str, object] | None = None,
+    ) -> list[PersonMatch]:
+        """Return the k nearest people to embedding, best match first.
+
+        where filters on structured fields: ``practice``, ``office`` and
+        ``title`` (exact match), plus per-topic evidenced flags via the
+        implementation's own convention — see ChromaExpertiseStore.
+        """
+
+    @abstractmethod
+    def count(self) -> int:
+        """Number of people currently indexed."""

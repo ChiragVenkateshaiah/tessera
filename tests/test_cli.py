@@ -273,3 +273,51 @@ def test_eval_without_check_flag_ignores_bar_result(
     result = runner.invoke(cli.app, ["eval"])
 
     assert result.exit_code == 0
+
+
+def test_index_people_wires_loader_summary_embedder_and_expertise_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    fake_people = ["p1", "p2", "p3"]
+
+    monkeypatch.setattr(
+        cli,
+        "load_expertise",
+        lambda people_dir, corpus_dir=None: (calls.append("load_expertise"), fake_people)[1],
+    )
+    monkeypatch.setattr(cli, "profile_summary_text", lambda p: f"summary {p}")
+
+    class FakeEmbedder:
+        def __init__(self) -> None:
+            calls.append("LocalEmbedder")
+
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            calls.append("embed_documents")
+            assert texts == ["summary p1", "summary p2", "summary p3"]
+            return [[0.0] for _ in texts]
+
+    class FakeStore:
+        def __init__(self, persist_dir: Path) -> None:
+            calls.append("ChromaExpertiseStore")
+
+        def add(self, people: object, embeddings: object) -> None:
+            calls.append("add")
+
+        def count(self) -> int:
+            return len(fake_people)
+
+    monkeypatch.setattr(cli, "LocalEmbedder", FakeEmbedder)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", FakeStore)
+
+    result = runner.invoke(cli.app, ["index-people"])
+
+    assert result.exit_code == 0
+    assert calls == [
+        "load_expertise",
+        "LocalEmbedder",
+        "embed_documents",
+        "ChromaExpertiseStore",
+        "add",
+    ]
+    assert "Indexed 3 people" in result.output
