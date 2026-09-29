@@ -20,9 +20,32 @@ and paste the result into the PR (see "Regression discipline" below).
 | Per-case recall — A/C | > 0.00 (no total misses) | **yes** |
 | Mean precision@k — A/C | tracked and reported | no |
 
+### Archetype B (Phase 3)
+
+Added with P3-5 (`docs/Tessera_Phase3_Plan.md` §4.2). Applies whenever
+the harness is given an expertise store (`tessera eval` always is —
+it requires `tessera index-people`).
+
+| Metric | Threshold | Gated? |
+|---|---|---|
+| Mean person recall@k — B cases with `relevant_people` | ≥ 0.90 | **yes** |
+| Mean person MRR — B | ≥ 0.90 | **yes** |
+| B groundedness (LLM-judge, 1–5) | ≥ 4.5 | **yes** |
+| B relevance (LLM-judge, 1–5) | ≥ 4.5 | **yes** |
+| Per-case person recall — B | > 0.00 (no total misses) | **yes** |
+| No-match set — correct-refusal rate | 100% | **yes** |
+| Mean person precision@k — B | tracked and reported | no |
+
+Person recall is stricter than A/C's 0.80: a missed expert sends the user
+to the wrong person entirely. It is scored against `min(|relevant|, k)`
+(see `evals/README.md`) so a case with more genuine experts than
+shortlist slots can still reach 1.0. B judge scores are kept apart from
+the A/C means, as are all person metrics. "Correct refusal" means the
+fixed no-match message with zero generation LLM calls.
+
 `k` is `evals.harness.DEFAULT_K` (5). "A/C cases" are cases whose
-`relevant_sources` is non-empty; B/D cases never reach retrieval and are
-excluded from every retrieval metric.
+`relevant_sources` is non-empty; B/D cases are excluded from every
+document-retrieval metric (B has its own person metrics, below).
 
 A gated metric with **no value** (e.g. `mean_recall` is `n/a` because the
 eval set had no A/C cases) counts as a **failure**, not a skip — a sweep

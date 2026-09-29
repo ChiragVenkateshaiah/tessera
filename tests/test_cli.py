@@ -187,15 +187,19 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
             return 1
 
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
     monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
 
     fake_harness = type(sys)("evals.harness")
     fake_harness.load_cases = lambda cases_dir: (calls.append("load_cases"), [])[1]
-    fake_harness.run_harness = lambda cases, llm, embedder, store, corpus_dir: (
-        calls.append("run_harness"),
-        "report-object",
-    )[1]
+
+    def fake_run_harness(cases, llm, embedder, store, corpus_dir, expertise_store=None):
+        calls.append("run_harness")
+        assert expertise_store is not None  # B must be scored by `tessera eval`
+        return "report-object"
+
+    fake_harness.run_harness = fake_run_harness
     fake_harness.format_report = lambda report: (calls.append("format_report"), "REPORT TEXT")[1]
 
     fake_evals_pkg = type(sys)("evals")
@@ -221,6 +225,7 @@ def _stub_harness_for_check(
             return 1
 
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
     monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
 
@@ -387,3 +392,32 @@ def test_query_passes_no_expertise_store_when_people_index_is_empty(
 
     assert result.exit_code == 0
     assert seen["expertise_store"] is None
+
+
+def test_eval_requires_a_people_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Store:
+        def __init__(self, persist_dir: Path, empty: bool = False) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    class EmptyPeople(Store):
+        def count(self) -> int:
+            return 0
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", Store)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", EmptyPeople)
+    fake_harness = type(sys)("evals.harness")
+    fake_harness.load_cases = lambda d: []
+    fake_harness.run_harness = lambda *a, **k: pytest.fail("must not run without people")
+    fake_harness.format_report = lambda r: ""
+    fake_evals_pkg = type(sys)("evals")
+    fake_evals_pkg.harness = fake_harness
+    monkeypatch.setitem(sys.modules, "evals", fake_evals_pkg)
+    monkeypatch.setitem(sys.modules, "evals.harness", fake_harness)
+
+    result = runner.invoke(cli.app, ["eval"])
+
+    assert result.exit_code == 1
+    assert "index-people" in result.output

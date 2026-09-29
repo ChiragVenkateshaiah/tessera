@@ -74,24 +74,29 @@ Each record ends with a basis line. Recommend people whose basis is EVIDENCED fi
 Each record shows when the profile was last updated. Mention that expertise data is a dated snapshot (give the most recent date shown) and may be out of date, so the user should confirm availability and current focus before reaching out. If none of the records genuinely fits the question, say plainly that we don't have an obvious expert on that — do not stretch a weak match to fill the answer. Keep it concise."""
 
 
+def format_person_record(index: int, m: PersonMatch) -> str:
+    """One numbered person record, exactly as the model sees it. Public so
+    the eval judge can be shown the same records the answer was built from.
+    """
+    p = m.person
+    lines = [
+        f"[{index}] {p.name} — {p.title}, {p.practice} practice, {p.office} office "
+        f"(profile last updated {p.last_updated.isoformat()})"
+    ]
+    lines.extend(f"  - {e.kind}: {e.description}" for e in m.evidence)
+    basis = (
+        "EVIDENCED"
+        if m.is_evidenced
+        else "SELF-REPORTED ONLY — no project or authored document behind it"
+    )
+    lines.append(f"  Basis: {basis}")
+    return "\n".join(lines)
+
+
 def build_expertise_user_prompt(query: str, matches: list[PersonMatch]) -> str:
     """Format ranked people as numbered records the model can cite by
     number. Evidence lines come from the retrieval layer, so the model is
     only ever shown (and can only cite) what actually surfaced the person.
     """
-    blocks = []
-    for i, m in enumerate(matches, start=1):
-        p = m.person
-        lines = [
-            f"[{i}] {p.name} — {p.title}, {p.practice} practice, {p.office} office "
-            f"(profile last updated {p.last_updated.isoformat()})"
-        ]
-        lines.extend(f"  - {e.kind}: {e.description}" for e in m.evidence)
-        basis = (
-            "EVIDENCED"
-            if m.is_evidenced
-            else "SELF-REPORTED ONLY — no project or authored document behind it"
-        )
-        lines.append(f"  Basis: {basis}")
-        blocks.append("\n".join(lines))
+    blocks = [format_person_record(i, m) for i, m in enumerate(matches, start=1)]
     return f"Question: {query}\n\nPerson records:\n\n" + "\n\n".join(blocks)

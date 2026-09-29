@@ -259,37 +259,66 @@
   query: "Who at the firm knows about decarbonization economics for industrials?"
   archetype: B
   relevant_sources: []
+  # relevant_people (13): everyone in data/expertise/ with decarbonization projects in industrials, or authored decarbonization documents.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0558, c0562, c0565, c0566, c0568, c0574, c0587, c0588, c0589,
+    c0593, c0595, c0597, c0600
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message — expertise-finding needs
-    staffing/HR data this system doesn't have access to in Phase 1.
+    Names people with decarbonization project experience in
+    industrials, or who authored the firm's decarbonization documents,
+    citing that evidence.
 
 - id: ql019
   query: "Who's led our M&A integration engagements recently?"
   archetype: B
   relevant_sources: []
+  # relevant_people (5): everyone in data/expertise/ with lead-level roles (engagement lead/partner/manager, workstream lead) on ma-integration projects since 2023.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0049, c0142, c0167, c0171, c0189
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
+    Names people who LED M&A integration engagements recently (lead-
+    level roles, 2023 or later) and does not present analysts,
+    workstream members or advisors as leads.
 
 - id: ql020
   query: "Who's our expert on open banking and payments?"
   archetype: B
   relevant_sources: []
+  # relevant_people (24): everyone in data/expertise/ with core-banking projects or authored docs — the nearest real expertise; nobody has open-banking or payments evidence.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0129, c0317, c0324, c0326, c0337, c0338, c0340, c0343, c0344,
+    c0345, c0346, c0353, c0357, c0358, c0359, c0360, c0364, c0365,
+    c0369, c0371, c0374, c0376, c0379, c0387
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
+    Says nobody has open-banking or payments evidence specifically.
+    May name people with core-banking modernization experience only as
+    the closest adjacent expertise, clearly labelled as such.
 
 - id: ql021
   query: "Who should I loop in on a zero-based budgeting engagement?"
   archetype: B
   relevant_sources: []
+  # relevant_people (20): everyone in data/expertise/ with zero-based-budgeting projects or authored docs.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0076, c0078, c0082, c0083, c0089, c0092, c0097, c0098, c0103,
+    c0105, c0107, c0108, c0110, c0112, c0115, c0117, c0119, c0120,
+    c0126, c0128
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
-
-- id: ql022
-  query: "Who's done clinical trial site selection work before?"
-  archetype: B
-  relevant_sources: []
-  ideal_answer: >
-    Returns the not-yet-supported message.
+    Names people with zero-based-budgeting project history or who
+    authored the firm's zero-based budgeting methodology, citing that
+    evidence.
 
 - id: ql023
   query: "How did we approach digital transformation for Client Y compared to our standard roadmap?"
@@ -495,20 +524,47 @@
   query: "Who's our go-to expert on pricing strategy?"
   archetype: B
   relevant_sources: []
+  # relevant_people (22): everyone in data/expertise/ with pricing-strategy projects or authored docs.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0003, c0006, c0007, c0008, c0009, c0013, c0015, c0020, c0021,
+    c0022, c0023, c0030, c0035, c0039, c0046, c0048, c0049, c0061,
+    c0066, c0068, c0158, c0167
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message — expertise-finding needs
-    staffing/HR data this system doesn't have access to in Phase 1.
+    Names people with pricing-strategy project history or who authored
+    the firm's pricing strategy documents, citing that evidence.
 
 - id: ql041
   query: "Who has deep scenario planning experience with industrials clients?"
   archetype: B
   relevant_sources: []
+  # relevant_people (6): everyone in data/expertise/ with scenario-planning projects in industrials.
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0397, c0404, c0407, c0409, c0580, c0586
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
+    Names people with scenario-planning project experience
+    specifically in industrials, citing that evidence; people whose
+    scenario planning was in other industries are weaker fits.
 
 - id: ql042
   query: "Who's worked on reshoring and supply chain network moves for us?"
   archetype: B
   relevant_sources: []
+  # relevant_people (30): everyone in data/expertise/ with reshoring or network-optimization projects or authored docs (the query names both).
+  # Derived mechanically from the raw records, then audited against the
+  # retrieval top-20 (P3-5). Recall is scored against min(|set|, k).
+  relevant_people: [
+    c0019, c0263, c0361, c0441, c0443, c0445, c0448, c0449, c0450,
+    c0453, c0454, c0455, c0460, c0461, c0463, c0464, c0469, c0470,
+    c0473, c0474, c0475, c0476, c0477, c0478, c0481, c0483, c0484,
+    c0485, c0493, c0494
+  ]
   ideal_answer: >
-    Returns the not-yet-supported message.
+    Names people with reshoring or supply chain network optimization
+    project history, or who authored the firm's related documents,
+    citing that evidence.

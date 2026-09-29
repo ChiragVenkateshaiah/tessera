@@ -21,25 +21,30 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
 from evals.metrics import (
+    EXPERTISE_JUDGE_SYSTEM_PROMPT,
     JudgeScore,
     judge_answer,
     mean,
     precision_at_k,
     reciprocal_rank,
     recall_at_k,
+    shortlist_recall_at_k,
 )
 from tessera.embedding.base import Embedder
 from tessera.generation.answer import NO_RESULTS_MESSAGE, filter_relevant, generate_answer
 from tessera.generation.base import LLMClient
+from tessera.generation.expertise import NO_EXPERT_MESSAGE, generate_expertise_answer
+from tessera.generation.prompts import format_person_record
+from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.router import Archetype, route, terminal_response_for
-from tessera.store.base import SearchResult, VectorStore
+from tessera.store.base import ExpertiseStore, SearchResult, VectorStore
 
 DEFAULT_K = 5
 
@@ -57,6 +62,13 @@ class EvalCase:
     archetype: Archetype
     relevant_sources: list[str]
     ideal_answer: str
+    # Archetype B: person_ids (from data/expertise/) who belong in the
+    # shortlist. Empty for A/C/D and for no-match cases.
+    relevant_people: list[str] = field(default_factory=list)
+    # Archetype B no-match set: the query asks for expertise the firm
+    # doesn't have; the correct outcome is the fixed no-match message with
+    # zero generation LLM calls (evals/cases/expertise_nomatch.yaml).
+    expect_no_match: bool = False
 
 
 def load_cases(cases_dir: Path) -> list[EvalCase]:
@@ -78,6 +90,8 @@ def load_cases(cases_dir: Path) -> list[EvalCase]:
                     archetype=Archetype(entry["archetype"]),
                     relevant_sources=entry.get("relevant_sources") or [],
                     ideal_answer=entry.get("ideal_answer") or "",
+                    relevant_people=entry.get("relevant_people") or [],
+                    expect_no_match=bool(entry.get("expect_no_match", False)),
                 )
             )
     return cases
@@ -121,12 +135,103 @@ class CaseResult:
     judge: JudgeScore | None
     latency_seconds: float
     error: str | None = None
+    # Archetype B (kept apart from the document fields above so A/C means
+    # are never blended with B).
+    retrieved_people: list[str] = field(default_factory=list)
+    person_recall: float | None = None
+    person_precision: float | None = None
+    person_reciprocal_rank: float | None = None
+    expertise_judge: JudgeScore | None = None
+    # No-match set only: True iff the fixed no-match message came back with
+    # zero generation LLM calls. False also when the case misrouted.
+    no_match_correct: bool | None = None
 
 
 EXPERTISE_NOT_SCORED_NOTE = (
-    "(archetype B: routing checked only — expertise answers are not scored "
-    "by this harness yet)"
+    "(archetype B: routing checked only — no expertise store was supplied "
+    "to the harness, so the answer was not generated or scored)"
 )
+
+
+class _CountingLLM(LLMClient):
+    """Delegates to the real client and counts calls — how the no-match
+    set proves 'zero LLM calls' rather than assuming it.
+    """
+
+    def __init__(self, inner: LLMClient) -> None:
+        self._inner = inner
+        self.calls = 0
+
+    def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+        self.calls += 1
+        return self._inner.complete(system=system, user=user, temperature=temperature)
+
+
+def _run_expertise_case(
+    case: EvalCase,
+    decision_archetype: Archetype,
+    routing_correct: bool,
+    llm: LLMClient,
+    embedder: Embedder,
+    expertise_store: ExpertiseStore,
+    k: int,
+    start: float,
+) -> CaseResult:
+    """Archetype B: find_experts -> generate_expertise_answer (the same
+    two functions pipeline.answer_query() composes), scored on the people
+    the answer actually presents.
+    """
+    result = find_experts(case.query, embedder, expertise_store, k=k)
+    counting = _CountingLLM(llm)
+    generated = generate_expertise_answer(result, counting)
+    latency = time.perf_counter() - start
+
+    presented = generated.experts
+    retrieved_people = [m.person.person_id for m in presented]
+
+    person_recall = person_precision = person_rr = None
+    if case.relevant_people:
+        relevant = set(case.relevant_people)
+        person_recall = shortlist_recall_at_k(retrieved_people, relevant, k)
+        person_precision = precision_at_k(retrieved_people, relevant, k)
+        person_rr = reciprocal_rank(retrieved_people, relevant)
+
+    no_match_correct = None
+    if case.expect_no_match:
+        no_match_correct = generated.answer == NO_EXPERT_MESSAGE and counting.calls == 0
+
+    judge = None
+    if case.ideal_answer and not case.expect_no_match and presented:
+        records = [format_person_record(i, m) for i, m in enumerate(presented, start=1)]
+        judge = judge_answer(
+            case.query,
+            case.ideal_answer,
+            records,
+            generated.answer,
+            llm,
+            system=EXPERTISE_JUDGE_SYSTEM_PROMPT,
+        )
+
+    return CaseResult(
+        case_id=case.id,
+        query=case.query,
+        expected_archetype=case.archetype,
+        actual_archetype=decision_archetype,
+        routing_correct=routing_correct,
+        retrieved_documents=[],
+        recall=None,
+        precision=None,
+        reciprocal_rank_score=None,
+        answer=generated.answer,
+        judge=None,
+        latency_seconds=latency,
+        retrieved_people=retrieved_people,
+        person_recall=person_recall,
+        person_precision=person_precision,
+        person_reciprocal_rank=person_rr,
+        expertise_judge=judge,
+        no_match_correct=no_match_correct,
+    )
 
 
 def run_case(
@@ -136,19 +241,30 @@ def run_case(
     store: VectorStore,
     corpus_dir: Path,
     k: int = DEFAULT_K,
+    expertise_store: ExpertiseStore | None = None,
 ) -> CaseResult:
-    """Run one eval case through routing, then retrieval + generation
-    unless the routed archetype is terminal (B/D).
+    """Run one eval case through routing, then the archetype's path: D is
+    terminal, B runs expertise retrieval + generation (needs
+    expertise_store; without one a B case is scored on routing only), and
+    A/C run document retrieval + generation.
     """
     start = time.perf_counter()
     decision = route(case.query, llm)
     routing_correct = decision.archetype is case.archetype
 
-    # Archetype B is routed but not yet scored: its metrics (person
-    # recall@k, no-match handling) arrive with P3-5. Until then a B case
-    # checks routing only, exactly as it did when B was terminal.
     terminal = terminal_response_for(decision.archetype)
     if decision.archetype is Archetype.EXPERTISE:
+        if expertise_store is not None:
+            return _run_expertise_case(
+                case,
+                decision.archetype,
+                routing_correct,
+                llm,
+                embedder,
+                expertise_store,
+                k,
+                start,
+            )
         terminal = EXPERTISE_NOT_SCORED_NOTE
     if terminal is not None:
         return CaseResult(
@@ -164,6 +280,7 @@ def run_case(
             answer=terminal,
             judge=None,
             latency_seconds=time.perf_counter() - start,
+            no_match_correct=False if case.expect_no_match else None,
         )
 
     retrieval = retrieve(case.query, decision.archetype, embedder, store)
@@ -201,6 +318,7 @@ def run_case(
         answer=generated.answer,
         judge=judge,
         latency_seconds=latency,
+        no_match_correct=False if case.expect_no_match else None,
     )
 
 
@@ -214,6 +332,17 @@ class EvalReport:
     mean_groundedness: float | None
     mean_relevance: float | None
     mean_latency_by_archetype: dict[Archetype, float]
+    # Archetype B (Phase 3). `expertise_scored` is True iff the run had an
+    # expertise store, i.e. B was actually attempted; the B rows of the
+    # quality bar only apply then (a run with no people index has not
+    # tried B, as opposed to a run that tried and got no value).
+    expertise_scored: bool = False
+    mean_person_recall: float | None = None
+    mean_person_precision: float | None = None
+    mean_person_mrr: float | None = None
+    mean_expertise_groundedness: float | None = None
+    mean_expertise_relevance: float | None = None
+    no_match_rate: float | None = None
 
 
 def run_harness(
@@ -223,6 +352,7 @@ def run_harness(
     store: VectorStore,
     corpus_dir: Path,
     k: int = DEFAULT_K,
+    expertise_store: ExpertiseStore | None = None,
 ) -> EvalReport:
     """Run every case and aggregate metrics across all of them.
 
@@ -238,7 +368,9 @@ def run_harness(
     case_results: list[CaseResult] = []
     for case in cases:
         try:
-            case_results.append(run_case(case, llm, embedder, store, corpus_dir, k))
+            case_results.append(
+                run_case(case, llm, embedder, store, corpus_dir, k, expertise_store)
+            )
         except Exception as exc:
             case_results.append(
                 CaseResult(
@@ -276,6 +408,29 @@ def run_harness(
         float(r.judge.relevance) for r in case_results if r.judge is not None
     ]
 
+    person_recalls = [r.person_recall for r in case_results if r.person_recall is not None]
+    person_precisions = [
+        r.person_precision for r in case_results if r.person_precision is not None
+    ]
+    person_rrs = [
+        r.person_reciprocal_rank
+        for r in case_results
+        if r.person_reciprocal_rank is not None
+    ]
+    expertise_groundedness = [
+        float(r.expertise_judge.groundedness)
+        for r in case_results
+        if r.expertise_judge is not None
+    ]
+    expertise_relevance = [
+        float(r.expertise_judge.relevance)
+        for r in case_results
+        if r.expertise_judge is not None
+    ]
+    no_match_flags = [
+        r.no_match_correct for r in case_results if r.no_match_correct is not None
+    ]
+
     latency_by_archetype: dict[Archetype, list[float]] = defaultdict(list)
     for r in case_results:
         if r.error is None:
@@ -293,6 +448,19 @@ def run_harness(
             archetype: mean(values)
             for archetype, values in latency_by_archetype.items()
         },
+        expertise_scored=expertise_store is not None,
+        mean_person_recall=mean(person_recalls) if person_recalls else None,
+        mean_person_precision=mean(person_precisions) if person_precisions else None,
+        mean_person_mrr=mean(person_rrs) if person_rrs else None,
+        mean_expertise_groundedness=(
+            mean(expertise_groundedness) if expertise_groundedness else None
+        ),
+        mean_expertise_relevance=(
+            mean(expertise_relevance) if expertise_relevance else None
+        ),
+        no_match_rate=(
+            mean([1.0 if f else 0.0 for f in no_match_flags]) if no_match_flags else None
+        ),
     )
 
 
@@ -313,6 +481,14 @@ class QualityBar:
     min_mean_reciprocal_rank: float = 0.90
     min_mean_groundedness: float = 4.5
     min_mean_relevance: float = 4.5
+    # Archetype B (Phase 3, docs/Tessera_Phase3_Plan.md §4.2). Person
+    # recall is stricter than A/C's 0.80: a wrong shortlist sends the user
+    # to the wrong person entirely.
+    min_person_recall: float = 0.90
+    min_person_mrr: float = 0.90
+    min_expertise_groundedness: float = 4.5
+    min_expertise_relevance: float = 4.5
+    min_no_match_rate: float = 1.0
 
 
 DEFAULT_QUALITY_BAR = QualityBar()
@@ -404,6 +580,64 @@ def evaluate_bar(
         )
     )
 
+    if report.expertise_scored:
+        for name, value, floor in (
+            ("Person recall@k (B)", report.mean_person_recall, bar.min_person_recall),
+            ("Person MRR (B)", report.mean_person_mrr, bar.min_person_mrr),
+            (
+                "B groundedness",
+                report.mean_expertise_groundedness,
+                bar.min_expertise_groundedness,
+            ),
+            ("B relevance", report.mean_expertise_relevance, bar.min_expertise_relevance),
+        ):
+            thresholds.append(
+                ThresholdResult(
+                    name,
+                    True,
+                    f">= {floor:.2f}",
+                    "n/a" if value is None else f"{value:.2f}",
+                    value is not None and value >= floor,
+                )
+            )
+
+        zero_person_recall = sorted(
+            r.case_id for r in report.case_results if r.person_recall == 0.0
+        )
+        thresholds.append(
+            ThresholdResult(
+                "Per-case person recall > 0.00 (B)",
+                True,
+                "no B case at recall 0.00",
+                "no total misses"
+                if not zero_person_recall
+                else "missed: " + ", ".join(zero_person_recall),
+                not zero_person_recall,
+            )
+        )
+
+        nm = report.no_match_rate
+        thresholds.append(
+            ThresholdResult(
+                "No-match correct-refusal rate (B)",
+                True,
+                f">= {bar.min_no_match_rate:.0%}",
+                "n/a" if nm is None else f"{nm:.0%}",
+                nm is not None and nm >= bar.min_no_match_rate,
+            )
+        )
+
+        pprec = report.mean_person_precision
+        thresholds.append(
+            ThresholdResult(
+                "Person precision@k (B)",
+                False,
+                "reported, not gated (labeling confound)",
+                "n/a" if pprec is None else f"{pprec:.2f}",
+                True,
+            )
+        )
+
     return BarResult(
         thresholds=thresholds,
         passed=all(t.passed for t in thresholds if t.gated),
@@ -440,6 +674,22 @@ def format_report(report: EvalReport) -> str:
             "",
         ]
 
+    if report.expertise_scored and report.mean_person_recall is not None:
+        lines += [
+            "Expertise (archetype B, cases with relevant_people):",
+            f"  Mean person recall@k: {report.mean_person_recall:.2f}",
+            f"  Mean person precision: {report.mean_person_precision:.2f}",
+            f"  Mean person MRR:      {report.mean_person_mrr:.2f}",
+        ]
+        if report.mean_expertise_groundedness is not None:
+            lines += [
+                f"  Mean groundedness:    {report.mean_expertise_groundedness:.2f}",
+                f"  Mean relevance:       {report.mean_expertise_relevance:.2f}",
+            ]
+        lines.append("")
+    if report.no_match_rate is not None:
+        lines += [f"No-match refusal rate (B): {report.no_match_rate:.0%}", ""]
+
     bar = evaluate_bar(report)
     lines.append("Quality bar (evals/QUALITY_BAR.md):")
     for t in bar.thresholds:
@@ -473,9 +723,22 @@ def format_report(report: EvalReport) -> str:
                 f"recall={r.recall:.2f} precision={r.precision:.2f} "
                 f"rr={r.reciprocal_rank_score:.2f}"
             )
+        if r.person_recall is not None:
+            parts.append(
+                f"person_recall={r.person_recall:.2f} "
+                f"person_precision={r.person_precision:.2f} "
+                f"person_rr={r.person_reciprocal_rank:.2f}"
+            )
+        if r.no_match_correct is not None:
+            parts.append(f"no_match={'OK' if r.no_match_correct else 'WRONG'}")
         if r.judge is not None:
             parts.append(
                 f"groundedness={r.judge.groundedness} relevance={r.judge.relevance}"
+            )
+        if r.expertise_judge is not None:
+            parts.append(
+                f"groundedness={r.expertise_judge.groundedness} "
+                f"relevance={r.expertise_judge.relevance}"
             )
         parts.append(f"latency={r.latency_seconds:.2f}s")
         lines.append("  " + " ".join(parts))
@@ -506,10 +769,13 @@ def main() -> None:
     from tessera.embedding.local import LocalEmbedder
     from tessera.generation.nvidia import NvidiaClient
     from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
+    from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
     from tessera.ingestion.loader import load_corpus
     from tessera.store.chroma import ChromaVectorStore
+    from tessera.store.chroma_expertise import ChromaExpertiseStore
 
     corpus_dir = Path(os.environ.get("TESSERA_CORPUS_DIR", "data/corpus"))
+    expertise_dir = Path(os.environ.get("TESSERA_EXPERTISE_DIR", "data/expertise/people"))
     cases_dir = Path(__file__).parent / "cases"
     api_key = os.environ["NVIDIA_API_KEY"]
     model = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
@@ -522,10 +788,17 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as persist_dir:
         store = ChromaVectorStore(persist_dir=Path(persist_dir))
         store.add(chunks, embeddings)
+        people = load_expertise(expertise_dir, corpus_dir=corpus_dir)
+        expertise_store = ChromaExpertiseStore(persist_dir=Path(persist_dir))
+        expertise_store.add(
+            people, embedder.embed_documents([profile_summary_text(p) for p in people])
+        )
         llm = NvidiaClient(api_key=api_key, model=model)
 
         cases = load_cases(cases_dir)
-        report = run_harness(cases, llm, embedder, store, corpus_dir)
+        report = run_harness(
+            cases, llm, embedder, store, corpus_dir, expertise_store=expertise_store
+        )
         print(format_report(report))
 
 
