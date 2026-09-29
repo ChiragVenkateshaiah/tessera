@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -353,8 +354,13 @@ def run_harness(
     corpus_dir: Path,
     k: int = DEFAULT_K,
     expertise_store: ExpertiseStore | None = None,
+    on_case_complete: Callable[[int, int, CaseResult], None] | None = None,
 ) -> EvalReport:
     """Run every case and aggregate metrics across all of them.
+
+    on_case_complete(done, total, result) is called after each case
+    (errored ones included) so a long sweep can report progress; this
+    function stays pure and never prints itself.
 
     One case failing (a malformed LLM response mid-sweep, most likely
     from the judge — see JudgeError/RoutingError) does not abort the
@@ -366,7 +372,7 @@ def run_harness(
     aggregate below, rather than silently corrupting them.
     """
     case_results: list[CaseResult] = []
-    for case in cases:
+    for done, case in enumerate(cases, start=1):
         try:
             case_results.append(
                 run_case(case, llm, embedder, store, corpus_dir, k, expertise_store)
@@ -389,6 +395,8 @@ def run_harness(
                     error=str(exc),
                 )
             )
+        if on_case_complete is not None:
+            on_case_complete(done, len(cases), case_results[-1])
 
     routing_flags = [
         r.routing_correct for r in case_results if r.routing_correct is not None
@@ -777,6 +785,7 @@ def main() -> None:
 
     from tessera.embedding.local import LocalEmbedder
     from tessera.generation.nvidia import NvidiaClient
+    from tessera.generation.resilient import RetryingLLMClient
     from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
     from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
     from tessera.ingestion.loader import load_corpus
@@ -802,7 +811,10 @@ def main() -> None:
         expertise_store.add(
             people, embedder.embed_documents([profile_summary_text(p) for p in people])
         )
-        llm = NvidiaClient(api_key=api_key, model=model)
+        llm = RetryingLLMClient(
+            NvidiaClient(api_key=api_key, model=model, sdk_max_retries=0),
+            min_interval=3.0,
+        )
 
         cases = load_cases(cases_dir)
         report = run_harness(

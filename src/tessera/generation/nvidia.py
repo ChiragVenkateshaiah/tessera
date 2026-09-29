@@ -30,8 +30,15 @@ class NvidiaClient(LLMClient):
         api_key: str,
         model: str = DEFAULT_MODEL,
         base_url: str = DEFAULT_BASE_URL,
+        sdk_max_retries: int = 2,
     ) -> None:
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        # sdk_max_retries is the openai SDK's own fast retry count. A
+        # composition root that wraps this client in RetryingLLMClient
+        # should pass 0 so the two don't multiply — the SDK's retries come
+        # back within seconds, which is exactly wrong for a 429.
+        self._client = OpenAI(
+            api_key=api_key, base_url=base_url, max_retries=sdk_max_retries
+        )
         self._model = model
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:

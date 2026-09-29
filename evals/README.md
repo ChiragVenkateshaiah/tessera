@@ -29,7 +29,13 @@ scored B case costs 3 (route, generate, judge); a B no-match case costs
 just 1, because the no-match path makes no generation call.
 NVIDIA NIM's free tier allows up to 40 requests/minute and 10,000
 requests/day, so a full sweep — even against a real query log of a few
-dozen cases — fits comfortably without special pacing.
+dozen cases — fits on paper. In practice NIM throttled far below that
+on 2026-09-29, so `tessera eval` wraps the LLM in `RetryingLLMClient`
+(calls ≥3 s apart; 429/5xx retried with 15–120 s exponential backoff,
+`Retry-After` honoured, up to 6 attempts) and prints `[n/total] case ok`
+progress and any "retrying in Ns" notices to stderr — the report itself
+stays on stdout. A 55-case sweep can still take 1–1.5 hours when NIM is
+unhealthy; that is the backoff working, not a hang.
 
 ## Case schema
 
