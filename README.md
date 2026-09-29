@@ -16,7 +16,7 @@ pilot are still ahead — see the phase table below.
 |---|---|---|
 | **Phase 1** | ✅ Complete (`v0.1.0`) | Local ingestion + retrieval core over a synthetic corpus. Archetypes A (lookup) and C (synthesis) only. Grounded generation with citations. Eval harness runnable end-to-end via `tessera eval`. |
 | **Phase 2** | ✅ Complete (`v0.2.0`, this repo) | Eval set populated to 50 cases against the synthetic corpus and retrieval/generation tuned against it; a documented internal quality bar (`evals/QUALITY_BAR.md`) enforced via `tessera eval --check` on every retrieval/prompt PR. The consultant query log Discovery described is fictional and will never arrive — `evals/cases/query_log.yaml` is a deliberately, transparently synthesized stand-in. |
-| Phase 3 | Designed, not built | Archetype B (expertise-finding), once HR data source/structure is known. |
+| Phase 3 | In progress | Archetype B (expertise-finding) over a synthesized expertise dataset (HR data is fictional, like the corpus). |
 | Phase 4 | Documented, not built | Move off local: Bedrock, OpenSearch Serverless, S3, Lambda. |
 | Phase 5 | Documented, not built | MLOps: Terraform, CI/CD with eval gate, monitoring. |
 
@@ -96,7 +96,7 @@ flowchart TB
 - **A (lookup)** — narrow k, one chunk per source document so a document
   family surfaces its members rather than one member's chunks filling
   every slot; precision-oriented.
-- **B (expertise)** — not built; router returns "not yet supported."
+- **B (expertise)** — Phase 3, in progress: people ranked by evidence (projects, authored documents, evidenced vs. self-reported skills) over a synthesized firm expertise dataset; run `tessera index-people` first. Answers name people with their evidence, flag self-reported-only matches, and say "no obvious expert" when nobody clears the evidence floor.
 - **C (synthesis)** — broad k, multi-source retrieval, synthesis prompt.
 - **D (comparative)** — not attempted; router returns a confidentiality
   refusal.

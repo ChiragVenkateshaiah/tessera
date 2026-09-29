@@ -22,12 +22,6 @@ class Archetype(str, Enum):
     COMPARATIVE = "D"
 
 
-NOT_YET_SUPPORTED_MESSAGE = (
-    "Expertise-finding isn't supported yet — that needs staffing/HR data "
-    "this system doesn't have access to. I can help you find existing "
-    "documents or get up to speed on a topic instead."
-)
-
 COMPARATIVE_REFUSAL_MESSAGE = (
     "I can't compare approaches across specific client engagements — "
     "that risks pulling from restricted or confidentiality-sensitive "
@@ -39,11 +33,10 @@ COMPARATIVE_REFUSAL_MESSAGE = (
 def terminal_response_for(archetype: Archetype) -> str | None:
     """A fixed response for archetypes that never reach retrieval.
 
-    Returns None for A/C, meaning "proceed to retrieval" — the caller
-    (pipeline.py, Task 5/6) checks this before doing any retrieval work.
+    Only D is terminal. Returns None for A/C (document retrieval) and B
+    (expertise retrieval, Phase 3) — the caller (pipeline.py) checks this
+    before doing any retrieval work.
     """
-    if archetype is Archetype.EXPERTISE:
-        return NOT_YET_SUPPORTED_MESSAGE
     if archetype is Archetype.COMPARATIVE:
         return COMPARATIVE_REFUSAL_MESSAGE
     return None

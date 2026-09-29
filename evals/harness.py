@@ -123,6 +123,12 @@ class CaseResult:
     error: str | None = None
 
 
+EXPERTISE_NOT_SCORED_NOTE = (
+    "(archetype B: routing checked only — expertise answers are not scored "
+    "by this harness yet)"
+)
+
+
 def run_case(
     case: EvalCase,
     llm: LLMClient,
@@ -138,7 +144,12 @@ def run_case(
     decision = route(case.query, llm)
     routing_correct = decision.archetype is case.archetype
 
+    # Archetype B is routed but not yet scored: its metrics (person
+    # recall@k, no-match handling) arrive with P3-5. Until then a B case
+    # checks routing only, exactly as it did when B was terminal.
     terminal = terminal_response_for(decision.archetype)
+    if decision.archetype is Archetype.EXPERTISE:
+        terminal = EXPERTISE_NOT_SCORED_NOTE
     if terminal is not None:
         return CaseResult(
             case_id=case.id,

@@ -99,12 +99,27 @@ def query(text: str) -> None:
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
     _require_index(store)
 
+    expertise_store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
+    if expertise_store.count() == 0:
+        # Not fatal: only archetype B needs it, and the pipeline answers a
+        # B query with a plain "index not built" message.
+        expertise_store = None
+
     embedder = LocalEmbedder()
     llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
 
-    result = answer_query(text, llm, embedder, store)
+    result = answer_query(text, llm, embedder, store, expertise_store)
 
     typer.echo(f"\n[{result.archetype.value}] {result.answer}\n")
+    if result.experts:
+        typer.echo("People:")
+        for i, m in enumerate(result.experts, start=1):
+            p = m.person
+            flag = "" if m.is_evidenced else "  [self-reported only]"
+            typer.echo(
+                f"  [{i}] {p.name} — {p.title}, {p.practice}, {p.office} "
+                f"(updated {p.last_updated.isoformat()}){flag}"
+            )
     if result.citations:
         typer.echo("Sources:")
         for citation in result.citations:

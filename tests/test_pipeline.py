@@ -9,10 +9,9 @@ from tessera.embedding.base import Embedder
 from tessera.generation.answer import NO_RESULTS_MESSAGE, RELEVANCE_THRESHOLD
 from tessera.generation.base import LLMClient
 from tessera.generation.prompts import ROUTER_SYSTEM_PROMPT
-from tessera.pipeline import AnswerResult, answer_query
+from tessera.pipeline import EXPERTISE_UNAVAILABLE_MESSAGE, AnswerResult, answer_query
 from tessera.retrieval.router import (
     COMPARATIVE_REFUSAL_MESSAGE,
-    NOT_YET_SUPPORTED_MESSAGE,
     Archetype,
 )
 from tessera.store.base import SearchResult, VectorStore
@@ -45,6 +44,16 @@ class FakeEmbedder(Embedder):
 
     def embed_query(self, text: str) -> list[float]:
         return [0.0]
+
+
+class PricingEmbedder(FakeEmbedder):
+    """One-dimension embedder where 'pricing' text is similar to itself."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0 if "pricing" in t else 0.0] for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return [1.0 if "pricing" in text else 0.0]
 
 
 def _result(document_path: str, score: float) -> SearchResult:
@@ -121,16 +130,74 @@ def test_synthesis_query_returns_generated_answer() -> None:
     assert result.answer == "Here's a briefing [1][2]."
 
 
-def test_expertise_query_short_circuits_before_retrieval_or_generation() -> None:
-    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("B")})
-    store = FakeVectorStore([_result("a.md", 0.9)])
+class ExplodingVectorStore(FakeVectorStore):
+    """Proves the document retriever is never reached for archetype B."""
 
-    result = answer_query("who knows about pricing?", llm, FakeEmbedder(), store)
+    def query(self, embedding, k, where=None):  # type: ignore[override]
+        raise AssertionError("document store queried for an archetype B query")
+
+
+def test_expertise_query_uses_people_path_and_never_touches_document_store() -> None:
+    from tessera.generation.prompts import EXPERTISE_ANSWER_SYSTEM_PROMPT
+    from tests.test_expertise_generation import (
+        ScoredExpertiseStore,
+        make_person,
+        make_project,
+    )
+
+    expert = make_person(
+        "c1", projects=[make_project("pricing"), make_project("pricing", 2026)]
+    )
+    llm = ScriptedLLMClient(
+        {
+            ROUTER_SYSTEM_PROMPT: _router_response("B"),
+            EXPERTISE_ANSWER_SYSTEM_PROMPT: "Ask Person c1 [1].",
+        }
+    )
+
+    result = answer_query(
+        "who knows about pricing?",
+        llm,
+        PricingEmbedder(),
+        ExplodingVectorStore([]),
+        ScoredExpertiseStore([(expert, 0.6)]),
+    )
 
     assert result.archetype is Archetype.EXPERTISE
-    assert result.answer == NOT_YET_SUPPORTED_MESSAGE
+    assert result.answer == "Ask Person c1 [1]."
     assert result.citations == []
-    # only the router call happened — generation never ran
+    assert [m.person.person_id for m in result.experts] == ["c1"]
+    assert len(llm.calls) == 2  # route + generate
+
+
+def test_expertise_query_with_no_qualifying_expert_skips_generation() -> None:
+    from tessera.generation.expertise import NO_EXPERT_MESSAGE
+    from tests.test_expertise_generation import ScoredExpertiseStore, make_person
+
+    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("B")})
+    nobody = make_person("c1")  # no evidence on any topic
+
+    result = answer_query(
+        "who knows about pricing?",
+        llm,
+        PricingEmbedder(),
+        ExplodingVectorStore([]),
+        ScoredExpertiseStore([(nobody, 0.3)]),
+    )
+
+    assert result.answer == NO_EXPERT_MESSAGE
+    assert result.experts == []
+    assert len(llm.calls) == 1  # router only — zero generation calls
+
+
+def test_expertise_query_without_people_index_reports_unavailable() -> None:
+    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("B")})
+
+    result = answer_query(
+        "who knows about pricing?", llm, FakeEmbedder(), ExplodingVectorStore([])
+    )
+
+    assert result.answer == EXPERTISE_UNAVAILABLE_MESSAGE
     assert len(llm.calls) == 1
 
 
