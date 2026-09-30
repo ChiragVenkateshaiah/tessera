@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-09-29
+Last updated: 2026-09-30
 
 ## Status
 
@@ -40,10 +40,25 @@ errors).
 
 **P3-5 done** (PR #48, 2026-09-29): archetype B is now measured — person
 recall / precision / MRR, a B judge, a 6-case no-match set, B rows in the
-bar. **B thresholds are provisional** (reported, not gated; user decision
-2026-09-29, plan §4.2 staging) because the first sweep missed person
-recall by 0.01 (0.89 vs 0.90). **Next: a B-retrieval improvement pass,
-then flip `QualityBar.gate_expertise`, then P3-6** (exit, `v0.3.0`).
+bar. B thresholds entered **provisional** (user decision 2026-09-29, plan
+§4.2 staging) because the first sweep missed person recall by 0.01
+(0.89 vs 0.90).
+
+**LLM retry/backoff + eval progress** (PR #50, 2026-09-29):
+`RetryingLLMClient` (`generation/resilient.py`) decorates the `LLMClient`
+port — 429/5xx retried with 45 s / 15 s exponential backoff (cap 120 s,
+`Retry-After` honoured, 6 attempts), optional call spacing; `tessera eval`
+paces calls 3 s apart and prints `[n/total]` progress and retry notices to
+stderr. Motivated by NVIDIA NIM throttling far below its documented rate.
+
+**B-retrieval pass** (PR #51, 2026-09-30): `parse_intent` reads "led/ran/
+managed" and "recently/latest" from the query; `PersonMatch.rank_score`
+orders the shortlist while `evidence_score` stays intent-independent (a
+first version that discounted `evidence_score` pushed `ql019` under the
+generation floor — caught by the gated sweep). Person recall **0.89 →
+0.91**; **the B bar is now GATED** (`QualityBar.gate_expertise` default
+`True`). Gated `tessera eval --check` → `=> PASS`. **Next: P3-6** — Phase 3
+exit (README, final clean sweep, tag `v0.3.0`).
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1241,41 +1256,110 @@ same change and stays ungated (`QUALITY_BAR.md`).
       did **not** fix it (still 2/5; it did lift `ql042`), so it was
       reverted rather than shipped to fit an 8-case set.
 
+- [x] **LLM retry/backoff, call pacing, eval progress** (2026-09-29, PR #50
+      merged). Not a numbered plan task; done first because sweeps had
+      become unreliable and opaque (see Notes).
+
+      - `generation/resilient.py`: `RetryingLLMClient(inner, max_attempts=6,
+        min_interval, on_retry, sleep, clock)` — a decorator over the
+        port, provider-agnostic so the Phase 4 Bedrock client reuses it.
+        429 base 45 s, 5xx base 15 s, doubling, cap 120 s, `Retry-After`
+        honoured; non-transient errors (400/401, parse errors, no status)
+        raised immediately. Clock/sleep injected; never prints (progress via
+        callback).
+      - `NvidiaClient(sdk_max_retries=)` — composition roots pass 0 so the
+        SDK's fast retries don't multiply with ours.
+      - `run_harness(on_case_complete=)`; `tessera eval` = retry + 3 s
+        pacing + progress on stderr; `tessera query` = retry.
+      - 18 new tests; suite **246 passed, 8 skipped**.
+      - Stock `tessera eval --check` (no wrapper), 55/55, zero errors, 83
+        retries absorbed, ~1.5 h, `=> PASS` (B still provisional): groundedness
+        4.77, relevance **4.57** (thin — see Notes).
+
+- [x] **B-retrieval pass: lead/recency intent; gate the B bar**
+      (2026-09-30, PR #51 merged).
+
+      - `retrieval/expertise.py`: `parse_intent(query)` → `QueryIntent(lead,
+        recent)` from a closed lexicon (lexical on purpose: transparent,
+        free, testable; a query with no cue words scores exactly as before —
+        test-enforced). Lead intent: only `LEAD_ROLES` (engagement
+        partner/lead/manager, workstream lead) count in full; other project
+        roles, authored docs and skills ×0.25. Recent intent: recency
+        half-life 5 y → 1.5 y.
+      - `PersonMatch.rank_score` (new) orders the shortlist;
+        `evidence_score` stays intent-independent because the generation
+        floors (`EXPERTISE_QUERY_FLOOR = 1.0`, `EXPERTISE_PERSON_FLOOR =
+        0.05`) were calibrated on that scale.
+      - **The bug:** version 1 discounted `evidence_score` itself.
+        Retrieval-only checks looked better (`ql019` 2/5 → 3/5) but the first
+        gated sweep scored `ql019` **0.00** — every score fell under the
+        floor, so the answer was "no obvious expert" for a query with real
+        experts. Lesson: retrieval-only checks cannot see interactions with
+        generation floors; only an end-to-end sweep did. Guarded now by
+        real-data tests (the `ql019` query must clear the floor with ≥3
+        people).
+      - Held-out validation (retrieval-only, 8 "led … (recently)" queries on
+        other topics, checked against raw records): lead-role hits in the
+        top 5 **15/40 → 24/40**; no-cue queries return identical top 5.
+      - `QualityBar.gate_expertise` default → `True`; `evals/QUALITY_BAR.md`
+        B section updated (history + gated). 262 passed, 8 skipped.
+
+      **Sweep** (`tessera eval --check`, 2026-09-30, B rows gated, exit 0):
+      ```
+      Routing 100.0%   A/C: recall 0.95  precision 0.43  MRR 0.97
+      Generation (A/C): groundedness 4.74  relevance 4.61
+      B: person recall 0.91  precision 0.91  MRR 1.00
+         groundedness 5.00  relevance 4.89   No-match refusal 100%
+      => PASS (gated thresholds)
+      ```
+      Four A/C cases (`ql032`–`ql035`) were ERROR rows (NVIDIA degraded
+      again; all 6 attempts exhausted, excluded from A/C means by the
+      harness). Re-run on their own afterwards: all ok — recall 1.0 / 1.0 /
+      0.75 / 1.0, judge 5/5. All B cases completed in the sweep itself.
+
+      **Limits, stated plainly:** `ql019` is **0.60, not fixed** — of its 5
+      gold people one (`c0049`, a pricing-practice profile with a single
+      M&A engagement) never enters the 50-person semantic candidate pool
+      (pre-existing pool starvation; `CANDIDATE_K` is an untried lever) and
+      one (`c0189`, a 2023 lead) decays to rank 14 under "recently". The
+      label counts core `ma-integration` only; `integration-management` (an
+      adjacent co-tag) leads would widen the set to 7 and the top-5 hit rate
+      would read 4/5 — the stricter label was kept deliberately. Person
+      recall clears the bar by **0.01** on 9 cases; `ql041`/`ql042` (0.80
+      each) unchanged.
+
 ## Next task to pick up
 
-**B-retrieval improvement pass → flip `gate_expertise` → then P3-6.**
-(Not a numbered plan task: it is the cleanup P3-5's provisional B bar
-calls for, before the Phase 3 exit.)
+**P3-6 — Phase 3 exit** (`docs/Tessera_Phase3_Plan.md` §5). Last Phase 3
+task.
 
-- Goal: get every B row of the bar to clear on a full sweep, then set
-  `QualityBar.gate_expertise = True` (and update `evals/QUALITY_BAR.md`).
-  Currently person recall 0.89 vs 0.90; `ql019` 0.40, `ql041` 0.80,
-  `ql042` 0.80.
-- Root cause to address: retrieval doesn't weigh **role** ("led …") or
-  query-conditional seniority. Role-seniority weighting of project
-  evidence is the obvious candidate but was tried and did not fix `ql019`
-  alone — look at *query-conditioned* handling ("led/lead/owned" →
-  lead-level roles; "recently" → recency) rather than a global weight.
-  Guard against fitting 9 labelled cases: prefer a principled change, run
-  the retrieval-only diagnostic (`evals/diagnose_expertise.py`) over the
-  whole B set plus the pharma-pricing acceptance test, and keep the
-  document path untouched.
-- Also decide whether a place or practice in the query ("… in London")
-  should become a `where` filter. Unwired; no scored B case needs it.
-  It matters because self-reported-only matches only surface in small
-  (filtered) pools — with 600 people and k=5 the top five are always
-  evidenced, so the flagging path is unit-tested but unobserved live.
-- Touches `retrieval/expertise.py`: needs a fresh `tessera eval --check`
-  in the PR. Sweeps currently need the pacing approach (see Notes) — a
-  small repo-side fix (backoff in `NvidiaClient`, progress output in the
-  harness) would pay for itself first.
+- `README.md`: archetype B moves from "in progress" to built — phase table,
+  architecture diagram, the archetype-handling bullets, the quality-bar
+  section (the README still describes B as Phase 3 "in progress").
+- A final clean full `tessera eval --check` sweep against the extended
+  (A/C/B) bar, recorded here as the Phase 3 exit sweep. Sweeps now take
+  ~1–1.5 h and NVIDIA has been flaky both days (see Notes): expect retries,
+  and re-run any ERROR rows individually if a few exhaust their attempts —
+  but for the *exit* sweep prefer a run with zero ERROR rows.
+- Confirm Phase 1 exit criteria still hold and record the Phase 3 close
+  entry (mirror the P2-5 close).
+- Tag **`v0.3.0`** once merged to `main`.
 
-**Then P3-6 — Phase 3 exit** (`docs/Tessera_Phase3_Plan.md` §5):
-README (B moves from "in progress" to built; phase table, architecture
-diagram, quality-bar section), a final clean full sweep against the
-extended (A/C/B) bar recorded here, confirm the Phase 1 exit criteria,
-tag **`v0.3.0`**. **Acceptance:** a clean full sweep passes the extended
-bar; `v0.3.0` tagged and pushed.
+**Acceptance (plan §5 P3-6, verbatim):** a clean full sweep passes the
+extended bar; `v0.3.0` tagged and pushed.
+
+**Watch before/at the exit sweep:**
+- A/C mean relevance is thin and noisy: 4.57 (PR #50 sweep), 4.61 (PR #51),
+  vs the 4.5 gate; range across recent sweeps 4.57–4.75. If it dips under
+  4.5 the exit sweep fails for a reason unrelated to Phase 3 — the
+  carried-forward narrow-A margin below is then no longer deferrable.
+- B person recall is 0.91 vs 0.90 on 9 labelled cases — a thin margin.
+  Untried, principled levers if it slips: `CANDIDATE_K` (pool starvation,
+  e.g. `c0049`), a `where` filter derived from a place/practice named in
+  the query. Neither is wired; no scored B case needs the latter.
+- Self-reported-only matches only surface in small (filtered) pools; with
+  600 people and k=5 the top five are always evidenced, so the flagging
+  path is unit-tested but has never been seen live.
 
 **Deferred, not dropped:** the narrow-archetype-A relevance margin from
 P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
@@ -1366,25 +1450,34 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-2 — `ExpertiseStore` port + local Chroma impl~~ — done (#42)
 - ~~P3-3 — expertise retrieval path (`retrieval/expertise.py`)~~ — done (#44)
 - ~~P3-4 — B generation (`generation/expertise.py`) + router/pipeline/CLI~~ — done (#46)
-- ~~P3-5 — eval harness B metrics + bar extension + no-match set~~ — done (#48); B bar provisional
-- **B-retrieval improvement pass, then flip `gate_expertise`  ← next**
-- P3-6 — Phase 3 exit, tag `v0.3.0`
+- ~~P3-5 — eval harness B metrics + bar extension + no-match set~~ — done (#48)
+- ~~LLM retry/backoff + eval progress~~ — done (#50, not a plan task)
+- ~~B-retrieval pass (lead/recency intent) + gate the B bar~~ — done (#51, not a plan task)
+- **P3-6 — Phase 3 exit, tag `v0.3.0`  ← next**
 
 ## Notes / open flags
 
-- **NVIDIA NIM throttled far below its documented 40 rpm on 2026-09-29
-  and a plain `tessera eval` is not reliable at the moment.** Three
-  unpaced sweeps (P3-5) cascaded: a few early 503s, then instant 429s for
-  every remaining case (a single probe call also 429'd, with no rate-limit
-  headers; it cleared after ~3 min, but the next unpaced sweep tripped it
-  again after ~7 calls). What worked: the **same harness** driven by a
-  scratchpad wrapper that spaces LLM calls ≥3 s apart and backs off on
-  429 (45 s) / 503 (15 s), up to 8 attempts per call — 55/55 clean, 191
-  calls, 48 retries, ~1.5 h. Neither pacing nor backoff exists in the
-  repo (`NvidiaClient` has none, the openai SDK's 2 fast retries aren't
-  enough, and the harness prints nothing until the end). Worth a small
-  repo fix before the next sweep-heavy task. When probing for a cooldown,
-  send one tiny call every few minutes — hammering makes it worse.
+- **NVIDIA NIM throttles far below its documented 40 rpm and stays flaky
+  (2026-09-29, again 2026-09-30) — MITIGATED by PR #50, not gone.** On
+  09-29 three unpaced sweeps cascaded into instant 429s (a single probe
+  also 429'd; it cleared after ~3 min, then tripped again after ~7
+  calls). Since #50, `tessera eval` retries with backoff and paces 3 s
+  apart, and prints progress, so a plain `tessera eval --check` now
+  completes — but a 55-case sweep still takes **~1–1.5 h**, and on
+  09-30 four cases exhausted all 6 attempts (503/504/429) and came back as
+  ERROR rows (excluded from the means; re-run individually afterwards).
+  When probing for a cooldown, send one tiny call every few minutes —
+  hammering makes it worse. A retry-exhausted case is the harness's
+  per-case isolation working, not a bug. A resumable sweep (persist
+  per-case results, skip completed on re-run) is the natural next
+  improvement if ERROR rows keep costing re-runs.
+- **Retrieval-only checks can't see interactions with generation floors.**
+  `evidence_score` is the scale `EXPERTISE_QUERY_FLOOR` / `PERSON_FLOOR`
+  were calibrated on; any retrieval change that shifts it (an intent
+  discount, a weight change) can silently turn "experts found" into "no
+  obvious expert". Keep `evidence_score` intent-independent and change
+  ordering through `rank_score`; re-check the floors (probe present vs
+  absent topics) if the scale ever moves, and run an end-to-end sweep.
 
 - **The expertise dataset is generated, and its committed output must
   stay in sync with `data/expertise/generate.py`.** Any change to the
