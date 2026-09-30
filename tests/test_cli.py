@@ -126,7 +126,7 @@ def test_query_prints_answer_and_citations(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
 
     from tessera.generation.answer import Citation
 
@@ -189,12 +189,14 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
 
     fake_harness = type(sys)("evals.harness")
     fake_harness.load_cases = lambda cases_dir: (calls.append("load_cases"), [])[1]
 
-    def fake_run_harness(cases, llm, embedder, store, corpus_dir, expertise_store=None):
+    def fake_run_harness(
+        cases, llm, embedder, store, corpus_dir, expertise_store=None, on_case_complete=None
+    ):
         calls.append("run_harness")
         assert expertise_store is not None  # B must be scored by `tessera eval`
         return "report-object"
@@ -227,7 +229,7 @@ def _stub_harness_for_check(
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
 
     bar_result = type(
         "BarResult",
@@ -346,7 +348,7 @@ def _patch_query_deps(monkeypatch: pytest.MonkeyPatch, expertise_count: int, see
     monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
     monkeypatch.setattr(cli, "ChromaExpertiseStore", FakeExpertiseStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
-    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
 
     def fake_answer(text, llm, embedder, store, expertise_store=None):
         seen["expertise_store"] = expertise_store
@@ -421,3 +423,53 @@ def test_eval_requires_a_people_index(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 1
     assert "index-people" in result.output
+
+
+def test_eval_prints_progress_and_wraps_the_llm_with_retry_and_pacing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tessera.generation.resilient import RetryingLLMClient
+
+    captured: dict = {}
+
+    class Store:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", Store)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", Store)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+
+    def fake_nvidia(api_key, model, **kw):
+        captured["sdk_max_retries"] = kw.get("sdk_max_retries")
+        return object()
+
+    monkeypatch.setattr(cli, "NvidiaClient", fake_nvidia)
+
+    fake_harness = type(sys)("evals.harness")
+    fake_harness.load_cases = lambda d: []
+
+    def fake_run_harness(cases, llm, embedder, store, corpus_dir, **kw):
+        captured["llm"] = llm
+        cb = kw["on_case_complete"]
+        cb(1, 2, type("R", (), {"case_id": "q1", "error": None})())
+        cb(2, 2, type("R", (), {"case_id": "q2", "error": "boom"})())
+        return "report"
+
+    fake_harness.run_harness = fake_run_harness
+    fake_harness.format_report = lambda r: "REPORT TEXT"
+    fake_evals_pkg = type(sys)("evals")
+    fake_evals_pkg.harness = fake_harness
+    monkeypatch.setitem(sys.modules, "evals", fake_evals_pkg)
+    monkeypatch.setitem(sys.modules, "evals.harness", fake_harness)
+
+    result = runner.invoke(cli.app, ["eval"])
+
+    assert result.exit_code == 0
+    assert "[1/2] q1 ok" in result.output and "[2/2] q2 ERROR" in result.output
+    assert isinstance(captured["llm"], RetryingLLMClient)
+    assert captured["llm"]._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert captured["sdk_max_retries"] == 0  # SDK fast retries off; ours take over

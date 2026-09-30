@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from tessera.config import Settings
 from tessera.embedding.local import LocalEmbedder
 from tessera.generation.nvidia import NvidiaClient
+from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.loader import load_corpus
@@ -30,6 +31,12 @@ from tessera.store.chroma_expertise import ChromaExpertiseStore
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 
+# `tessera eval` runs 100+ LLM calls; NVIDIA NIM throttled far below its
+# documented limit on 2026-09-29 (checkpoint.md Notes), so a sweep spaces
+# its calls out. Interactive `tessera query` doesn't need spacing, only the
+# retry/backoff.
+EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
+
 app = typer.Typer(help="Tessera — internal knowledge assistant (Phase 1 CLI).")
 
 
@@ -47,6 +54,26 @@ def _load_settings() -> Settings:
         )
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
+
+
+def _build_llm(settings: Settings, *, min_interval: float = 0.0) -> RetryingLLMClient:
+    """NVIDIA NIM behind retry/backoff. The SDK's own fast retries are
+    turned off so they don't multiply with ours.
+    """
+
+    def announce(attempt: int, delay: float, error: BaseException) -> None:
+        code = getattr(error, "status_code", "error")
+        typer.echo(
+            f"  LLM returned {code}; retrying in {delay:.0f}s (attempt {attempt})",
+            err=True,
+        )
+
+    inner = NvidiaClient(
+        api_key=settings.nvidia_api_key,
+        model=settings.nvidia_model,
+        sdk_max_retries=0,
+    )
+    return RetryingLLMClient(inner, min_interval=min_interval, on_retry=announce)
 
 
 def _require_index(store: ChromaVectorStore) -> None:
@@ -106,7 +133,7 @@ def query(text: str) -> None:
         expertise_store = None
 
     embedder = LocalEmbedder()
-    llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
+    llm = _build_llm(settings)
 
     result = answer_query(text, llm, embedder, store, expertise_store)
 
@@ -168,11 +195,22 @@ def eval_command(
         raise typer.Exit(code=1)
 
     embedder = LocalEmbedder()
-    llm = NvidiaClient(api_key=settings.nvidia_api_key, model=settings.nvidia_model)
+    llm = _build_llm(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+
+    def show_progress(done: int, total: int, result: object) -> None:
+        error = getattr(result, "error", None)
+        status = "ERROR" if error else "ok"
+        typer.echo(f"  [{done}/{total}] {getattr(result, 'case_id', '?')} {status}", err=True)
 
     cases = load_cases(EVAL_CASES_DIR)
     report = run_harness(
-        cases, llm, embedder, store, settings.corpus_dir, expertise_store=expertise_store
+        cases,
+        llm,
+        embedder,
+        store,
+        settings.corpus_dir,
+        expertise_store=expertise_store,
+        on_case_complete=show_progress,
     )
 
     typer.echo(format_report(report))

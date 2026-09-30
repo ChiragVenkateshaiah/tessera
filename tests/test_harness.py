@@ -596,3 +596,38 @@ def test_format_report_quality_bar_block_shows_failure() -> None:
 
     assert "[FAIL] Mean relevance" in text
     assert "=> FAIL (gated thresholds)" in text
+
+
+def test_run_harness_reports_progress_for_every_case_including_errors() -> None:
+    llm = ScriptedLLMClient(
+        {
+            ROUTER_SYSTEM_PROMPT: _router_response("D"),
+        }
+    )
+
+    class Boom(ScriptedLLMClient):
+        def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+            if "explode" in user:
+                raise RuntimeError("boom")
+            return super().complete(system, user, temperature)
+
+    boom = Boom({ROUTER_SYSTEM_PROMPT: _router_response("D")})
+    cases = [
+        EvalCase("c1", "compare X vs Y", Archetype.COMPARATIVE, [], ""),
+        EvalCase("c2", "explode please", Archetype.COMPARATIVE, [], ""),
+        EvalCase("c3", "compare A vs B", Archetype.COMPARATIVE, [], ""),
+    ]
+    seen: list[tuple[int, int, str, bool]] = []
+
+    run_harness(
+        cases,
+        boom,
+        FakeEmbedder(),
+        FakeVectorStore([]),
+        CORPUS_DIR,
+        on_case_complete=lambda done, total, r: seen.append(
+            (done, total, r.case_id, r.error is not None)
+        ),
+    )
+
+    assert seen == [(1, 3, "c1", False), (2, 3, "c2", True), (3, 3, "c3", False)]
