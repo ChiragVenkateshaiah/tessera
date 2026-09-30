@@ -25,6 +25,7 @@ the result is plain data.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -66,6 +67,50 @@ RECENCY_HALF_LIFE = 5.0
 # The dataset snapshot year; recency is measured against it, passed in
 # rather than read from the clock so results are reproducible.
 DATASET_REFERENCE_YEAR = 2026
+
+
+# --- Query intent -----------------------------------------------------------
+#
+# "Who knows X" and "who LED X recently" are different questions. The
+# first is served by topical evidence of any kind; the second is not
+# served by someone who merely authored a document or supported an
+# engagement, nor by a lead role from a decade ago. Two intents are read
+# from the query with a small closed lexicon — deliberately lexical (not
+# an LLM or embedding call) so it is transparent, free and testable, and
+# so a query without these words scores exactly as it always did.
+LEAD_CUES = frozenset(
+    {"led", "lead", "leads", "leading", "ran", "run", "runs", "managed", "headed", "owned"}
+)
+RECENT_CUES = frozenset({"recent", "recently", "lately", "latest", "currently", "newest"})
+
+# Roles that count as having led an engagement (dataset vocabulary,
+# ingestion/expertise_loader.PROJECT_ROLES). Advisors and members
+# supported one; they did not lead it.
+LEAD_ROLES = frozenset(
+    {"engagement partner", "engagement lead", "engagement manager", "workstream lead"}
+)
+# With lead intent, evidence that is not "leading" is discounted, not
+# dropped: an author or a supporting-role holder is still relevant, just
+# not what was asked for.
+NON_LEAD_PROJECT_FACTOR = 0.25
+NON_PROJECT_FACTOR = 0.25  # authored docs and skills under lead intent
+# With recent intent, projects lose half their weight every 1.5 years
+# instead of every RECENCY_HALF_LIFE.
+RECENT_HALF_LIFE = 1.5
+
+
+@dataclass(frozen=True)
+class QueryIntent:
+    """Modifiers the query asks for beyond the topic itself."""
+
+    lead: bool = False
+    recent: bool = False
+
+
+def parse_intent(query: str) -> QueryIntent:
+    """Read lead / recency intent from a query's words. Pure and cheap."""
+    words = set(re.findall(r"[a-z]+", query.lower()))
+    return QueryIntent(lead=bool(words & LEAD_CUES), recent=bool(words & RECENT_CUES))
 
 
 @dataclass(frozen=True)
@@ -141,14 +186,19 @@ def _gather_evidence(
     industry_rel: dict[str, float],
     doc_rel: dict[str, float],
     reference_year: int,
+    intent: QueryIntent = QueryIntent(),
 ) -> list[Evidence]:
     found: list[Evidence] = []
+    non_project = NON_PROJECT_FACTOR if intent.lead else 1.0
+    half_life = RECENT_HALF_LIFE if intent.recent else RECENCY_HALF_LIFE
 
     for path in person.authored:
         rel = doc_rel.get(path, 0.0)
         if rel > 0:
             found.append(
-                Evidence("authored", f"authored {path}", AUTHORED_WEIGHT * rel)
+                Evidence(
+                    "authored", f"authored {path}", AUTHORED_WEIGHT * rel * non_project
+                )
             )
 
     for entry in person.project_history:
@@ -156,14 +206,19 @@ def _gather_evidence(
         if rel <= 0:
             continue
         age = max(0, reference_year - entry.year)
-        recency = 0.5 ** (age / RECENCY_HALF_LIFE)
+        recency = 0.5 ** (age / half_life)
         boost = 1.0 + INDUSTRY_BONUS * industry_rel.get(entry.industry, 0.0)
+        role = (
+            NON_LEAD_PROJECT_FACTOR
+            if intent.lead and entry.role not in LEAD_ROLES
+            else 1.0
+        )
         found.append(
             Evidence(
                 "project",
                 f"{entry.topic} project in {entry.industry}, "
                 f"{entry.year} ({entry.role})",
-                PROJECT_WEIGHT * rel * recency * boost,
+                PROJECT_WEIGHT * rel * recency * boost * role,
             )
         )
 
@@ -178,7 +233,7 @@ def _gather_evidence(
             Evidence(
                 "skill",
                 f"{skill.topic} skill, level {skill.level} ({label})",
-                SKILL_WEIGHT * (skill.level / 5) * rel * factor,
+                SKILL_WEIGHT * (skill.level / 5) * rel * factor * non_project,
                 self_reported=self_reported,
             )
         )
@@ -199,8 +254,15 @@ def find_experts(
     supports (practice, office, title) — the B-path analogue of A's
     metadata filtering, for queries that name a practice or location.
     Each match carries the specific Evidence that surfaced it and an
-    evidence_score; ``score`` stays the raw semantic similarity.
+    evidence_score (topical strength, intent-independent) and rank_score
+    (what ordered them); ``score`` stays the raw semantic similarity.
+
+    The query's words can shift the re-rank (parse_intent): "led/ran/
+    managed" discounts everything that is not a lead-level role, and
+    "recently/latest" makes recency decay faster. A query with none of
+    those words is scored exactly as before.
     """
+    intent = parse_intent(query)
     query_embedding = embedder.embed_query(query)
     candidates = store.search(query_embedding, CANDIDATE_K, where=where)
     if not candidates:
@@ -211,20 +273,39 @@ def find_experts(
     )
 
     ranked: list[tuple[float, PersonMatch]] = []
+    neutral = QueryIntent()
     for cand in candidates:
         evidence = sorted(
-            _gather_evidence(cand.person, topic_rel, industry_rel, doc_rel, reference_year),
+            _gather_evidence(
+                cand.person, topic_rel, industry_rel, doc_rel, reference_year, intent
+            ),
             key=lambda e: e.strength,
             reverse=True,
         )
-        evidence_score = sum(e.strength for e in evidence)
+        rank_evidence = sum(e.strength for e in evidence)
+        # The intent-adjusted total orders the shortlist, but "is there
+        # expertise here at all" must not depend on how the question is
+        # phrased: discounting for "led" shrinks every score, and the
+        # generation floors were calibrated on the un-discounted scale.
+        topical = (
+            rank_evidence
+            if intent == neutral
+            else sum(
+                e.strength
+                for e in _gather_evidence(
+                    cand.person, topic_rel, industry_rel, doc_rel, reference_year, neutral
+                )
+            )
+        )
+        rank_score = rank_evidence + SEMANTIC_WEIGHT * cand.score
         match = PersonMatch(
             person=cand.person,
             score=cand.score,
             evidence=tuple(evidence[:MAX_EVIDENCE_PER_PERSON]),
-            evidence_score=evidence_score,
+            evidence_score=topical,
+            rank_score=rank_score,
         )
-        ranked.append((evidence_score + SEMANTIC_WEIGHT * cand.score, match))
+        ranked.append((rank_score, match))
 
     ranked.sort(key=lambda r: (-r[0], r[1].person.person_id))
     return ExpertiseResult(query=query, matches=[m for _, m in ranked[:k]])

@@ -89,16 +89,23 @@ class PersonMatch:
     """One person returned by an ExpertiseStore search.
 
     score: higher is better (cosine similarity between query and profile),
-    same direction contract as SearchResult.score. ``evidence`` and
-    ``evidence_score`` are empty/zero as returned by a store — the
-    retrieval layer (retrieval/expertise.py) fills them in; the store only
-    knows the embedded profile, not why it matched.
+    same direction contract as SearchResult.score. ``evidence``,
+    ``evidence_score`` and ``rank_score`` are empty/zero as returned by a
+    store — the retrieval layer (retrieval/expertise.py) fills them in; the
+    store only knows the embedded profile, not why it matched.
+
+    evidence_score is how much topical evidence backs the person,
+    independent of how the query is phrased — the scale the generation
+    floors were calibrated on. rank_score is what orders the shortlist: the
+    same evidence re-weighted for query intent ("led", "recently"), plus
+    semantic similarity. They are equal for a query with no such intent.
     """
 
     person: Person
     score: float
     evidence: tuple[Evidence, ...] = ()
     evidence_score: float = 0.0
+    rank_score: float = 0.0
 
     @property
     def is_evidenced(self) -> bool:

@@ -497,13 +497,13 @@ class QualityBar:
     min_expertise_groundedness: float = 4.5
     min_expertise_relevance: float = 4.5
     min_no_match_rate: float = 1.0
-    # The B thresholds above are PROVISIONAL: reported, not gated, until
-    # this is flipped to True (plan §4.2 — "enter provisional for the first
-    # Phase 3 sweep, then are gated once the label audit confirms the
-    # sets"). First sweep (P3-5, 2026-09-29): person recall 0.89 vs 0.90,
-    # carried by ql019 ("who LED ... recently" — retrieval ignores role).
-    # Flip once B retrieval is improved and a sweep clears every B row.
-    gate_expertise: bool = False
+    # The B thresholds above are GATED. They entered provisional (reported,
+    # not gated) for the first Phase 3 sweep (plan §4.2): person recall was
+    # 0.89 vs 0.90, carried by ql019 ("who LED ... recently"). The
+    # lead/recency-intent pass in retrieval/expertise.py lifted it, and this
+    # switch was flipped in the same change. Set False to fall back to
+    # report-only.
+    gate_expertise: bool = True
 
 
 DEFAULT_QUALITY_BAR = QualityBar()
