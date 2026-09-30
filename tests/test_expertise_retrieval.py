@@ -8,6 +8,8 @@ real dataset with the real embedder.
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from tessera.embedding.base import Embedder
 from tessera.embedding.local import LocalEmbedder
 from tessera.ingestion.expertise_loader import (
@@ -17,7 +19,13 @@ from tessera.ingestion.expertise_loader import (
     load_expertise,
     profile_summary_text,
 )
-from tessera.retrieval.expertise import CANDIDATE_K, find_experts
+from tessera.retrieval.expertise import (
+    CANDIDATE_K,
+    LEAD_ROLES,
+    QueryIntent,
+    find_experts,
+    parse_intent,
+)
 from tessera.store.base import ExpertiseStore, PersonMatch
 from tessera.store.chroma_expertise import ChromaExpertiseStore
 
@@ -83,8 +91,10 @@ def person(
     )
 
 
-def proj(topic: str, year: int = 2025, industry: str = "energy") -> ProjectEntry:
-    return ProjectEntry(industry=industry, topic=topic, role="workstream lead", year=year)
+def proj(
+    topic: str, year: int = 2025, industry: str = "energy", role: str = "workstream lead"
+) -> ProjectEntry:
+    return ProjectEntry(industry=industry, topic=topic, role=role, year=year)
 
 
 def rank(people_scores: list[tuple[Person, float]], query: str = "pharma pricing", **kw):
@@ -187,14 +197,19 @@ def test_candidate_pool_is_wider_than_top_k() -> None:
     assert CANDIDATE_K > 5
 
 
-def test_acceptance_pharma_pricing_evidenced_people_outrank_self_taggers(
-    tmp_path: Path,
-) -> None:
-    """Plan §5 P3-3 acceptance, on the real dataset and embedder."""
+@pytest.fixture(scope="module")
+def real_index(tmp_path_factory: pytest.TempPathFactory):
+    """The real 600-person dataset, indexed once with the real embedder."""
     people = load_expertise(ROOT / "data/expertise/people", ROOT / "data/corpus")
     embedder = LocalEmbedder()
-    store = ChromaExpertiseStore(tmp_path / "vs")
+    store = ChromaExpertiseStore(tmp_path_factory.mktemp("people-index"))
     store.add(people, embedder.embed_documents([profile_summary_text(p) for p in people]))
+    return people, embedder, store
+
+
+def test_acceptance_pharma_pricing_evidenced_people_outrank_self_taggers(real_index) -> None:
+    """Plan §5 P3-3 acceptance, on the real dataset and embedder."""
+    people, embedder, store = real_index
 
     topic = "pharma-pricing"
 
@@ -216,3 +231,140 @@ def test_acceptance_pharma_pricing_evidenced_people_outrank_self_taggers(
     self_only_pos = [i for i, m in enumerate(result.matches) if not m.is_evidenced]
     assert real_pos and self_only_pos, "pool should contain both kinds of person"
     assert min(self_only_pos) > max(real_pos)
+
+
+# --- query intent: "led" and "recently" ---
+
+
+@pytest.mark.parametrize(
+    "query,lead,recent",
+    [
+        ("Who's led our M&A integration engagements recently?", True, True),
+        ("who ran the latest ZBB engagement", True, True),
+        ("Who is our lead on pricing?", True, False),
+        ("Who has managed decarbonization programs?", True, False),
+        ("Who has been working recently on pricing", False, True),
+        ("who knows about pharma pricing", False, False),
+        ("Who has deep scenario planning experience?", False, False),
+    ],
+)
+def test_parse_intent_reads_lead_and_recent_cues(query, lead, recent) -> None:
+    assert parse_intent(query) == QueryIntent(lead=lead, recent=recent)
+
+
+def test_lead_intent_prefers_a_lead_role_over_an_author_with_more_raw_evidence() -> None:
+    author = person(
+        "author",
+        authored=["methodology/pricing-guide.md"],
+        projects=[proj("pricing", role="workstream member")],
+    )
+    leader = person("leader", projects=[proj("pricing", role="engagement lead")])
+
+    neutral, _, _ = rank([(author, 0.6), (leader, 0.6)], query="who knows about pricing")
+    led, _, _ = rank([(author, 0.6), (leader, 0.6)], query="who led pricing")
+
+    assert neutral[0] == "author"  # authorship + a project outweighs one lead project
+    assert led[0] == "leader"  # ...until the question is specifically who LED
+
+
+def test_lead_intent_lowers_rank_but_not_the_topical_evidence_score() -> None:
+    """The generation floors compare evidence_score, so phrasing a question
+    as "who LED" must not shrink it — that made the system answer "no
+    obvious expert" for a query it had good experts for (P3 sweep,
+    2026-09-30)."""
+    author = person("author", authored=["methodology/pricing-guide.md"])
+    _, led, _ = rank([(author, 0.6)], query="who led pricing")
+    _, neutral, _ = rank([(author, 0.6)], query="who knows pricing")
+
+    assert led.matches[0].evidence_score == neutral.matches[0].evidence_score > 0
+    assert 0 < led.matches[0].rank_score < neutral.matches[0].rank_score
+
+
+def test_a_lead_query_still_clears_the_generation_floor_when_experts_exist() -> None:
+    from tessera.generation.expertise import filter_qualified
+
+    leader = person(
+        "leader",
+        projects=[
+            proj("pricing", year=2026, role="engagement lead"),
+            proj("pricing", year=2025, role="engagement lead"),
+        ],
+    )
+    _, result, _ = rank([(leader, 0.6)], query="who led pricing recently")
+
+    assert [m.person.person_id for m in filter_qualified(result.matches)] == ["leader"]
+
+
+def test_recent_intent_makes_old_projects_count_much_less() -> None:
+    old = person("old", projects=[proj("pricing", year=2021, role="engagement lead")])
+    new = person("new", projects=[proj("pricing", year=2026, role="engagement lead")])
+
+    def old_share(query: str) -> float:
+        _, result, _ = rank([(old, 0.6), (new, 0.6)], query=query)
+        # rank_score = intent-adjusted evidence + semantic similarity; strip
+        # the semantic part to compare the evidence that recency reshapes.
+        scores = {m.person.person_id: m.rank_score - m.score for m in result.matches}
+        return scores["old"] / scores["new"]
+
+    assert old_share("who knows pricing") > old_share("who worked on pricing recently") * 3
+
+
+def test_queries_without_cues_are_scored_exactly_as_before() -> None:
+    p = person(
+        "a",
+        authored=["methodology/pricing-guide.md"],
+        skills=[Skill("pricing", 4, "evidenced")],
+        projects=[proj("pricing", year=2019, role="analyst")],
+    )
+    _, plain, _ = rank([(p, 0.6)], query="who knows about pricing")
+    from tessera.retrieval import expertise as mod
+
+    # The same query with the intent forced to neutral is identical.
+    original = mod.parse_intent
+    mod.parse_intent = lambda q: QueryIntent()
+    try:
+        _, forced, _ = rank([(p, 0.6)], query="who knows about pricing")
+    finally:
+        mod.parse_intent = original
+    assert plain.matches[0].evidence_score == forced.matches[0].evidence_score
+
+
+def test_lead_roles_are_the_engagement_owning_roles() -> None:
+    assert LEAD_ROLES == {
+        "engagement partner", "engagement lead", "engagement manager", "workstream lead"
+    }
+    assert "advisor" not in LEAD_ROLES and "analyst" not in LEAD_ROLES
+
+
+def test_real_data_lead_recent_queries_surface_recent_leads(real_index) -> None:
+    """Held-out regression on the real dataset: before intent handling the
+    top 5 for these had 0-1 recent lead-role project holders on the topic;
+    now most do. Checked against the raw records, not eval labels.
+    """
+    people, embedder, store = real_index
+    by_id = {p.person_id: p for p in people}
+
+    def recent_leads(query: str, topics: set[str]) -> int:
+        top = find_experts(query, embedder, store, k=5).matches
+        return sum(
+            any(
+                e.topic in topics and e.role in LEAD_ROLES and e.year >= 2023
+                for e in by_id[m.person.person_id].project_history
+            )
+            for m in top
+        )
+
+    assert recent_leads("Who has led pricing strategy engagements recently?", {"pricing-strategy"}) >= 2
+    assert recent_leads("Who has managed decarbonization programs recently?", {"decarbonization"}) >= 2
+    assert recent_leads("Who's led our M&A integration engagements recently?", {"ma-integration"}) >= 3
+
+
+def test_real_data_lead_query_is_not_gated_out_by_the_generation_floor(real_index) -> None:
+    """The bug the sweep found: intent discounts pushed every score under
+    EXPERTISE_QUERY_FLOOR, so the answer was "no obvious expert"."""
+    from tessera.generation.expertise import filter_qualified
+
+    _, embedder, store = real_index
+    result = find_experts("Who's led our M&A integration engagements recently?", embedder, store)
+
+    assert len(filter_qualified(result.matches)) >= 3

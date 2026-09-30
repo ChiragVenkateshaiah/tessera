@@ -29,7 +29,7 @@ def format_result(result: ExpertiseResult) -> str:
         flag = "" if m.is_evidenced else "  [SELF-REPORTED ONLY]"
         lines.append(
             f"  {rank}. {p.name} ({p.person_id}) — {p.title}, {p.practice}, "
-            f"{p.office}  sem={m.score:.2f} evidence={m.evidence_score:.2f}{flag}"
+            f"{p.office}  sem={m.score:.2f} evidence={m.evidence_score:.2f} rank={m.rank_score:.2f}{flag}"
         )
         for e in m.evidence:
             lines.append(f"       - [{e.kind}] {e.description} (+{e.strength:.2f})")

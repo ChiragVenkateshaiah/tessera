@@ -272,23 +272,28 @@ def test_bar_fails_on_each_b_threshold(override, failing) -> None:
     assert failing in [t.name for t in result.gated_failures]
 
 
-def test_b_thresholds_are_provisional_by_default() -> None:
-    """A failing B metric is shown but does not fail the bar until
-    gate_expertise is flipped (plan §4.2 staging)."""
-    assert QualityBar().gate_expertise is False
+def test_b_thresholds_are_gated_by_default() -> None:
+    assert QualityBar().gate_expertise is True
+    result = evaluate_bar(_b_report(mean_person_recall=0.85))
+    assert not result.passed
+    assert "Person recall@k (B)" in [t.name for t in result.gated_failures]
+
+
+def test_b_thresholds_can_be_provisional() -> None:
+    """With gate_expertise=False a failing B metric is shown but does not
+    fail the bar (plan §4.2's first-sweep staging)."""
     report = _b_report(mean_person_recall=0.85, no_match_rate=0.8)
 
-    result = evaluate_bar(report)
+    result = evaluate_bar(report, QualityBar(gate_expertise=False))
 
     assert result.passed
     recall = next(t for t in result.thresholds if t.name == "Person recall@k (B)")
     assert not recall.gated and not recall.passed  # still reported honestly
     assert "provisional" in recall.requirement
-    assert "[----] Person recall@k (B): 0.85" in format_report(report)
 
 
 def test_ac_failures_still_fail_the_bar_while_b_is_provisional() -> None:
-    result = evaluate_bar(_b_report(mean_recall=0.5))
+    result = evaluate_bar(_b_report(mean_recall=0.5), QualityBar(gate_expertise=False))
     assert not result.passed
     assert "Mean recall@k (A/C)" in [t.name for t in result.gated_failures]
 
@@ -307,7 +312,7 @@ def test_quality_bar_b_defaults_match_the_plan() -> None:
 
 def test_format_report_shows_b_block_and_no_match_rate() -> None:
     text = format_report(_b_report())
-    assert "[----] Person recall@k (B): 0.95" in text  # provisional by default
+    assert "[PASS] Person recall@k (B): 0.95" in text
     assert "Mean person recall@k: 0.95" in text
     assert "No-match refusal rate (B): 100%" in text
 
