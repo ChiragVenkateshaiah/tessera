@@ -1,0 +1,153 @@
+"""HTTP transport over the pipeline — `POST /api/ask`, `GET /api/health`,
+and `GET /` for the chat page (P4-2).
+
+A composition-root-side adapter, like `cli.py` (CLAUDE.md constraint #6):
+`create_app()` receives already-built dependencies (LLM client, embedder,
+stores) and only translates between HTTP and `answer_query()`. It never
+reads config itself — `tessera serve` builds the dependencies and hands
+them over — so tests drive it with fakes and the query path stays pure.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field, field_validator
+
+from tessera.embedding.base import Embedder
+from tessera.generation.base import LLMClient
+from tessera.labels import ARCHETYPE_LABELS
+from tessera.pipeline import AnswerResult, answer_query
+from tessera.store.base import ExpertiseStore, VectorStore
+
+logger = logging.getLogger(__name__)
+
+MAX_QUESTION_CHARS = 2000
+
+ANSWER_FAILED_MESSAGE = (
+    "Couldn't answer that question — the language model call failed. "
+    "Try again in a moment."
+)
+
+# Until P4-2 replaces it with the chat page.
+PLACEHOLDER_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tessera</title></head>
+<body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem;">
+<h1>Tessera</h1>
+<p>The API is running. The chat page arrives in P4-2.</p>
+<p>Ask a question with <code>POST /api/ask</code> and a JSON body
+<code>{"question": "..."}</code>, or try it from <a href="/docs">/docs</a>.</p>
+</body></html>
+"""
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+    @field_validator("question")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("question must not be blank")
+        return stripped
+
+
+def answer_to_dict(result: AnswerResult, latency_s: float) -> dict[str, Any]:
+    """The JSON shape of one answer: everything `tessera query` prints,
+    as data, plus the evidence behind each named person.
+    """
+    return {
+        "question": result.query,
+        "archetype": result.archetype.value,
+        "archetype_label": ARCHETYPE_LABELS[result.archetype],
+        "answer": result.answer,
+        "citations": [
+            {
+                "marker": c.marker,
+                "title": c.document_title,
+                "heading_path": list(c.heading_path),
+                "document_path": c.document_path,
+            }
+            for c in result.citations
+        ],
+        "experts": [
+            {
+                "rank": i,
+                "person_id": m.person.person_id,
+                "name": m.person.name,
+                "title": m.person.title,
+                "practice": m.person.practice,
+                "office": m.person.office,
+                "last_updated": m.person.last_updated.isoformat(),
+                "evidenced": m.is_evidenced,
+                "evidence": [
+                    {
+                        "kind": e.kind,
+                        "description": e.description,
+                        "self_reported": e.self_reported,
+                    }
+                    for e in m.evidence
+                ],
+            }
+            for i, m in enumerate(result.experts, start=1)
+        ],
+        "latency_s": round(latency_s, 2),
+    }
+
+
+def create_app(
+    llm: LLMClient,
+    embedder: Embedder,
+    store: VectorStore,
+    expertise_store: ExpertiseStore | None,
+    *,
+    llm_name: str,
+) -> FastAPI:
+    """Build the HTTP app around already-constructed dependencies.
+
+    llm_name is reported by /api/health so a demo can show which model is
+    answering; it must not contain secrets.
+    """
+    app = FastAPI(
+        title="Tessera",
+        summary="Internal knowledge assistant — grounded answers with citations.",
+    )
+    # One question at a time. The embedder and the LLM rate limits are the
+    # bottleneck either way, and a single-user demo gains nothing from
+    # concurrent pipeline runs; on Lambda each instance serves one request.
+    pipeline_lock = threading.Lock()
+
+    @app.post("/api/ask")
+    def ask(request: AskRequest) -> JSONResponse:
+        start = time.perf_counter()
+        try:
+            with pipeline_lock:
+                result = answer_query(
+                    request.question, llm, embedder, store, expertise_store
+                )
+        except Exception:  # the client gets a message, the log gets the trace
+            logger.exception("answer_query failed for an /api/ask request")
+            return JSONResponse(status_code=502, content={"error": ANSWER_FAILED_MESSAGE})
+        return JSONResponse(answer_to_dict(result, time.perf_counter() - start))
+
+    @app.get("/api/health")
+    def health() -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "document_chunks": store.count(),
+            "people": expertise_store.count() if expertise_store is not None else 0,
+            "people_search": expertise_store is not None,
+            "llm": llm_name,
+        }
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        return PLACEHOLDER_PAGE
+
+    return app

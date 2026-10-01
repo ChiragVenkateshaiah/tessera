@@ -265,6 +265,21 @@ answered independently — earlier questions aren't used as context
 A question that fails (e.g. an LLM error after retries) is reported and
 the session carries on; `exit` or Ctrl-D leaves.
 
+```sh
+uv run tessera serve                 # http://127.0.0.1:8000
+uv run tessera serve --port 8080
+```
+
+Serves the same pipeline over HTTP (Phase 4): `POST /api/ask` with
+`{"question": "..."}` returns the answer as JSON — `archetype` and
+`archetype_label`, `answer`, `citations` (marker, title, heading path,
+document path), `experts` (name, title, practice, office, snapshot date,
+`evidenced`, and the evidence lines behind each person) and `latency_s`.
+`GET /api/health` reports the index sizes and which LLM is answering;
+`GET /docs` is FastAPI's interactive explorer. Questions are answered one
+at a time; a failed LLM call returns a JSON `502` with a plain message,
+never a stack trace. The chat page arrives at `/` with P4-2.
+
 Each archetype-A/B/C query costs 2 NVIDIA NIM calls (route + generate),
 or 1 when nothing clears the relevance/evidence floor; D costs 1 (route
 only). The free tier allows up to 40

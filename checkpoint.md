@@ -9,7 +9,8 @@ CLAUDE.md updated per its §7). Phase 4 = a local chat UI (FastAPI + static
 page) → Claude on Bedrock behind `LLMClient` (eval judge stays on
 Nemotron) → one container image → an **ephemeral** Terraform-managed AWS
 stack (one Lambda + Function URL) deployed for a LinkedIn demo recording,
-then destroyed and verified gone. Six tasks, P4-1…P4-6. **Next: P4-1.**
+then destroyed and verified gone. Six tasks, P4-1…P4-6. **P4-1 done**
+(HTTP API + `tessera serve`). **Next: P4-2** (local chat UI).
 The user wants AWS work done AI-assisted end to end; `apply`/`destroy`
 still need their explicit go-ahead per run (CLAUDE.md Git workflow).
 
@@ -1426,19 +1427,57 @@ same change and stays ungated (`QUALITY_BAR.md`).
       probe result recorded under "Next task to pick up". Purpose: the
       user's 20-question manual test and a LinkedIn demo recording.
 
+- [x] **P4-1 — HTTP API + `tessera serve`** (2026-10-01).
+      `src/tessera/api.py`: `create_app(llm, embedder, store,
+      expertise_store, *, llm_name)` — receives built dependencies, never
+      reads config (composition-root adapter, constraint #6).
+      `POST /api/ask` → JSON (`archetype`, `archetype_label`, `answer`,
+      `citations`, `experts` with evidence, `latency_s`); blank/oversized
+      questions → 422; a pipeline exception → `502 {"error": …}` with the
+      trace only in the server log; one question at a time (a lock).
+      `GET /api/health` (index counts, people search on/off, LLM name);
+      `GET /` placeholder page until P4-2. `tessera serve [--host]
+      [--port]` builds the deps once, as `chat` does. Archetype labels
+      moved to `tessera/labels.py` (shared by CLI + API). Deps: `fastapi`,
+      `uvicorn`; dev: `httpx` (TestClient); lockfile still has zero
+      `nvidia-*` packages. 12 new tests (`tests/test_api.py`) → 279
+      passed, 8 skipped.
+
+      **Acceptance — met.** Live `tessera serve` + `curl`: A ("red-flag
+      severity rubric") → 5 citations led by the rubric, 40.6 s; B
+      ("digital capability assessments") → 5 evidenced experts, 59.3 s;
+      D ("Acme vs Globex") → refusal, 5.8 s; blank question → 422. NIM
+      latency was high again; server log clean.
+      Gotcha: `pkill -f 'tessera serve …'` killed its own shell (the
+      pattern matched the command line) — use `pkill -f '[t]essera serve'`.
+
 ## Next task to pick up
 
-**P4-1 — HTTP API + `tessera serve`** (`docs/Tessera_Phase4_Plan.md` §5,
-§3.1). `src/tessera/api.py` (FastAPI): `POST /api/ask`, `GET
-/api/health`, `GET /` placeholder for P4-2's page; dependencies built
-once at startup; JSON errors, no stack traces. `tessera serve`.
+**P4-2 — Local chat UI** (`docs/Tessera_Phase4_Plan.md` §5, §3.2).
+`src/tessera/web/` (`index.html`, `app.js`, `styles.css`) shipped as
+package data and served at `/` by `api.py` (replacing P4-1's placeholder
+page). Calls `POST /api/ask`; shows the question history, an archetype
+badge, the answer with citation markers, a Sources list or People cards
+(evidence lines, self-reported flags, snapshot date) and latency; a
+visible "each question is answered on its own" note; works at phone
+width; model output rendered without raw-HTML injection.
 
-**Acceptance (plan §5 P4-1, verbatim):** `pytest` green; `curl` against a
-local `tessera serve` returns a correct A, B and D answer as JSON.
+**Acceptance (plan §5 P4-2, verbatim):** the user's 20-question manual
+test runs through the browser locally; answers, citations and people
+match what `tessera chat` prints for the same questions; page usable at
+phone width.
 
-Then P4-2 (local chat UI — the user's 20-question manual test runs
-through it). P4-3 needs AWS CLI credentials + Bedrock model access on
-this machine (plan §9).
+Note for the UI: in B answers the LLM's prose may name people in a
+different order from the ranked `experts` list (seen live in P4-1:
+prose led with rank 2). The People cards should follow the ranked list
+and keep the `[n]` markers, so the mismatch reads as the model's
+emphasis, not a bug.
+
+Then P4-3 (Claude on Bedrock) — needs AWS credentials + Bedrock model
+access on this machine (plan §9). AWS CLI v2.37.7 is installed in
+`~/.local` (2026-10-01) but not yet connected to a Tessera profile; the
+user has other projects' profiles in `~/.aws` — don't reuse them without
+asking.
 
 ---
 
@@ -1601,8 +1640,8 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-6 — Phase 3 exit, tag `v0.3.0`~~ — done (#53, 2026-10-01)
 
 **Phase 4 (`docs/Tessera_Phase4_Plan.md` §5)** — adopted 2026-10-01 (#55):
-- **P4-1 — HTTP API + `tessera serve`  ← next**
-- P4-2 — local chat UI
+- ~~P4-1 — HTTP API + `tessera serve`~~ — done (2026-10-01)
+- **P4-2 — local chat UI  ← next**
 - P4-3 — Claude on Bedrock + fixed (Nemotron) judge; bar check
 - P4-4 — container image
 - P4-5 — Terraform (`plan` only, reviewed)
