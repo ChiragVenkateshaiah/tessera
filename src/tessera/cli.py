@@ -1,4 +1,4 @@
-"""`tessera ingest` / `index-people` / `query` / `chat` / `eval`."""
+"""`tessera ingest` / `index-people` / `query` / `chat` / `serve` / `eval`."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.loader import load_corpus
+from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
-from tessera.retrieval.router import Archetype
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
 
@@ -39,13 +39,6 @@ EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 # its calls out. Interactive `tessera query` doesn't need spacing, only the
 # retry/backoff.
 EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
-
-ARCHETYPE_LABELS = {
-    Archetype.LOOKUP: "lookup",
-    Archetype.EXPERTISE: "expertise",
-    Archetype.SYNTHESIS: "synthesis",
-    Archetype.COMPARATIVE: "comparative — declined",
-}
 
 CHAT_EXIT_WORDS = frozenset({"exit", "quit", ":q"})
 
@@ -258,6 +251,35 @@ def chat(
     typer.echo(f"Answered {asked} question{'s' if asked != 1 else ''}.")
     if transcript is not None and asked:
         typer.echo(f"Transcript: {transcript}")
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Interface to listen on."),
+    port: int = typer.Option(8000, help="Port to listen on."),
+) -> None:
+    """Serve the HTTP API (and, from P4-2, the chat page) locally.
+
+    Builds the same dependencies `chat` does, once, then hands them to
+    `tessera.api.create_app` — the API never reads config itself.
+    """
+    # Imported here so the other commands don't pay for loading the web stack.
+    import uvicorn
+
+    from tessera.api import create_app
+
+    settings = _load_settings()
+    store, expertise_store = _open_stores(settings)
+
+    typer.echo("Loading the embedding model…")
+    embedder = LocalEmbedder()
+    llm = _build_llm(settings)
+
+    api = create_app(
+        llm, embedder, store, expertise_store, llm_name=f"nvidia:{settings.nvidia_model}"
+    )
+    typer.echo(f"Tessera on http://{host}:{port}  (Ctrl-C to stop)")
+    uvicorn.run(api, host=host, port=port)
 
 
 @app.command(name="eval")
