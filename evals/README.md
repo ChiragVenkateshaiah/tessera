@@ -207,6 +207,23 @@ post-Phase-2 tuning item — see `checkpoint.md` "Notes / open flags"
 (candidate lever: adaptive `k` for A). Precision fell 0.72 → 0.42 with
 the same change and stays ungated (`QUALITY_BAR.md`).
 
+**Phase 3 (archetype B, P3-5 → P3-6):** P3-5 added the B metrics
+(person recall/precision/MRR against `relevant_people`, a separate B
+judge, the 6-case `expertise_nomatch.yaml` refusal set) and the B bar
+rows, provisional at first because person recall scored 0.89. A
+retrieval pass (PR #51) read "led/ran" and "recently" from the query,
+lifted person recall to 0.91, and gated the B rows. Use
+`python -m evals.diagnose_expertise` to inspect B ranking without LLM
+calls.
+
+**P3-6 / Phase 3 exit sweep (55 cases, 2026-10-01, clean 55/55):**
+routing 100%; A/C recall 0.95, precision 0.42, MRR 0.97, groundedness
+4.83, relevance 4.60; B person recall 0.91, precision 0.91, MRR 1.00,
+groundedness 5.00, relevance 4.89, no-match refusal 100% —
+`tessera eval --check` → `=> PASS (gated thresholds)`. Thin margins:
+A/C relevance (+0.10, same narrow-A cause as P2-5) and B person recall
+(+0.01; `ql019` 0.60, `ql041`/`ql042` 0.80). See `QUALITY_BAR.md`.
+
 ## What's in here
 
 - `harness.py` — loads cases, runs each through `route()` → `retrieve()`
@@ -222,4 +239,8 @@ the same change and stays ungated (`QUALITY_BAR.md`).
   scorer (only its response-parsing is unit-tested — see
   `tests/test_metrics.py` and CLAUDE.md's "do not over-test LLM
   outputs" convention).
+- `diagnose_expertise.py` — retrieval-only view of archetype-B ranking
+  (candidates, evidence, scores) for a query; no LLM calls.
+- `tune_retrieval.py` — retrieval-only grid search over the A/C
+  retrieval constants (P2-3); no LLM calls.
 - `cases/` — the YAML case files described above.
