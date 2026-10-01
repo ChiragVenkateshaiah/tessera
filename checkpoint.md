@@ -4,15 +4,20 @@ Last updated: 2026-10-01
 
 ## Status
 
-**Phase 4 adopted 2026-10-01** (`docs/Tessera_Phase4_Plan.md`, PR #55;
-CLAUDE.md updated per its §7). Phase 4 = a local chat UI (FastAPI + static
-page) → Claude on Bedrock behind `LLMClient` (eval judge stays on
-Nemotron) → one container image → an **ephemeral** Terraform-managed AWS
-stack (one Lambda + Function URL) deployed for a LinkedIn demo recording,
-then destroyed and verified gone. Six tasks, P4-1…P4-6. **P4-1 done**
-(HTTP API + `tessera serve`). **Next: P4-2** (local chat UI).
-The user wants AWS work done AI-assisted end to end; `apply`/`destroy`
-still need their explicit go-ahead per run (CLAUDE.md Git workflow).
+**Phase 4 replanned and adopted 2026-10-01** (`docs/Tessera_Phase4_Plan.md`,
+PR #57; supersedes the PR #55 version adopted earlier that day; CLAUDE.md
+updated per its §10). Phase 4 = four production-readiness features
+aimed at the documented reasons GenAI projects stall after proof of
+concept (Gartner: data quality, risk controls, cost, value; MIT: the
+learning gap): P4-2 Claude on Bedrock + model routing + cost per answer
+· P4-3 traces + feedback-to-eval loop · P4-4 freshness + data-quality
+report · P4-5/P4-6 restricted tier + permission-aware retrieval with a
+gated leakage eval · P4-7 exit (`v0.4.0`). **P4-1 done** (HTTP API +
+`tessera serve`, PR #56 — carried over). **Next: P4-2.** The ephemeral
+AWS deployment is now **Phase 5**; CI/CD + monitoring are Phase 6. The
+chat UI is a **pending decision** to put to the user right after P4-2
+(plan §7). The user wants AWS work done AI-assisted end to end;
+`apply`/`destroy` still need their explicit go-ahead per run.
 
 **Phase 3 complete** (`v0.3.0`, P3-6 PR, 2026-10-01). All six plan tasks
 plus two unplanned passes merged; the Phase 3 exit sweep — full clean
@@ -1453,31 +1458,39 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
-**P4-2 — Local chat UI** (`docs/Tessera_Phase4_Plan.md` §5, §3.2).
-`src/tessera/web/` (`index.html`, `app.js`, `styles.css`) shipped as
-package data and served at `/` by `api.py` (replacing P4-1's placeholder
-page). Calls `POST /api/ask`; shows the question history, an archetype
-badge, the answer with citation markers, a Sources list or People cards
-(evidence lines, self-reported flags, snapshot date) and latency; a
-visible "each question is answered on its own" note; works at phone
-width; model output rendered without raw-HTML injection.
+**P4-2 — Claude on Bedrock, model routing, cost accounting**
+(`docs/Tessera_Phase4_Plan.md` §5, §3.1). `generation/bedrock.py`
+(`BedrockClient` via the Anthropic SDK's `AnthropicBedrockMantle`),
+`TESSERA_LLM_PROVIDER=nvidia|bedrock`, `BEDROCK_ROUTER_MODEL` (default
+`anthropic.claude-haiku-4-5`) / `BEDROCK_ANSWER_MODEL` (default
+`anthropic.claude-opus-5-5`); an optional separate router client in the
+pipeline; a `UsageRecorder` + price table → `AnswerResult.usage`, API
+`cost_usd`, cost by archetype in the eval report (provisional bar row);
+`judge_llm` in the harness so the judge stays on Nemotron.
 
-**Acceptance (plan §5 P4-2, verbatim):** the user's 20-question manual
-test runs through the browser locally; answers, citations and people
-match what `tessera chat` prints for the same questions; page usable at
-phone width.
+**Acceptance (plan §5 P4-2, verbatim):** a full `tessera eval --check`
+with answers on Bedrock, judge on Nemotron, passes every existing gated
+row; the report shows cost per answer by archetype; the provisional cost
+row is reported. Then **stop for the UI decision** (§7).
 
-Note for the UI: in B answers the LLM's prose may name people in a
-different order from the ranked `experts` list (seen live in P4-1:
-prose led with rank 2). The People cards should follow the ranked list
-and keep the `[n]` markers, so the mismatch reads as the model's
-emphasis, not a bug.
+**Blocked on the user (plan §8) before any live Bedrock call:**
+1. A dedicated `tessera` AWS profile on this machine — ideally an IAM
+   user/role limited to `bedrock:InvokeModel*` on the two models. AWS
+   CLI v2.37.7 is installed in `~/.local` (2026-10-01) but not
+   connected; `~/.aws` holds other projects' profiles (`novapay`,
+   `cerberus*`) — **don't reuse them**. Also flagged to the user:
+   `~/.aws/credentials` is mode 775 (`chmod 600` advised).
+2. Bedrock model access for Haiku 4.5 + Opus 5.5 in one region.
+3. A per-sweep budget (estimate: single-digit dollars at first-party
+   rates; Bedrock pricing applies — check it).
+The code, tests and price table can be written before credentials exist;
+only the live sweep needs them.
 
-Then P4-3 (Claude on Bedrock) — needs AWS credentials + Bedrock model
-access on this machine (plan §9). AWS CLI v2.37.7 is installed in
-`~/.local` (2026-10-01) but not yet connected to a Tessera profile; the
-user has other projects' profiles in `~/.aws` — don't reuse them without
-asking.
+**After P4-2: ask the user the UI question** (plan §7) — recorded note:
+"a persona switcher showing access control would be the strongest demo
+shot". From P4-1: in B answers the prose may order people differently
+from the ranked `experts` list; any UI should follow the ranking and
+keep the `[n]` markers.
 
 ---
 
@@ -1639,13 +1652,22 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~B-retrieval pass (lead/recency intent) + gate the B bar~~ — done (#51, not a plan task)
 - ~~P3-6 — Phase 3 exit, tag `v0.3.0`~~ — done (#53, 2026-10-01)
 
-**Phase 4 (`docs/Tessera_Phase4_Plan.md` §5)** — adopted 2026-10-01 (#55):
-- ~~P4-1 — HTTP API + `tessera serve`~~ — done (2026-10-01)
-- **P4-2 — local chat UI  ← next**
-- P4-3 — Claude on Bedrock + fixed (Nemotron) judge; bar check
-- P4-4 — container image
-- P4-5 — Terraform (`plan` only, reviewed)
-- P4-6 — deploy → demo → destroy (verified) → tag `v0.4.0`
+**Phase 4 (`docs/Tessera_Phase4_Plan.md` §5)** — adopted 2026-10-01 (#55),
+replanned + re-adopted the same day (#57):
+- ~~P4-1 — HTTP API + `tessera serve`~~ — done (#56)
+- **P4-2 — Claude on Bedrock + model routing + cost accounting  ← next**
+  (then the pending UI decision, plan §7)
+- P4-3 — traces + feedback-to-eval loop
+- P4-4 — freshness + data-quality report
+- P4-5 — restricted tier: data, walls, review gate, eval sets (leakage
+  eval shown failing)
+- P4-6 — permission-aware retrieval (leaks 0, authorized recall ≥ 0.80,
+  injection 100%)
+- P4-7 — Phase 4 exit, tag `v0.4.0`
+
+**Phase 5** — ephemeral AWS deployment (plan §9; container image,
+Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
+the eval gate, monitoring.
 
 ## Notes / open flags
 

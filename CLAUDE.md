@@ -42,12 +42,17 @@ Full reasoning behind these constraints lives in `docs/`:
   (complete, tagged `v0.3.0`): archetype B (expertise-finding) built end
   to end over a synthesized firm expertise dataset.
 - `docs/Tessera_Phase4_Plan.md` — the authoritative brief for Phase 4 (the
-  current phase): a local chat UI over the pipeline, Claude on Bedrock
-  behind `LLMClient`, and an **ephemeral** AWS deployment (deploy → record
-  a demo → destroy, verified). §5 is the task sequence.
+  current phase, replanned 2026-10-01): four production-readiness
+  features aimed at the documented reasons GenAI projects stall after
+  proof of concept — Claude on Bedrock with cost accounting, request
+  traces + a feedback-to-eval loop, document freshness + a data-quality
+  report, and permission-aware retrieval with a gated leakage eval. §5 is
+  the task sequence. Phase 5 = an **ephemeral** AWS deployment (deploy →
+  record a demo → destroy, verified; plan §9); Phase 6 = CI/CD with the
+  eval gate + monitoring.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
   (e.g. the hybrid Go/Python production split). Documentation only; none
-  of it is built in Phases 1–3. Phase 4 builds the Solution Design's
+  of it is built in Phases 1–4. Phase 5 deploys the Solution Design's
   minimal "pilot footprint" (one Python Lambda), not the ADR 0002/0003
   Go edge + DynamoDB design.
 
@@ -67,28 +72,40 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 - Archetype D (comparative) — out of pilot scope by design (confidentiality).
   Implement only as a refusal guardrail — never actually attempt it.
 - Real HR-system integration (Workday, an SSO directory, an SFDC
-  people-index) — Phase 5+. Phase 3's `ExpertiseStore` is a local
+  people-index) — Phase 6+. Phase 3's `ExpertiseStore` is a local
   implementation behind the port, the same as `ChromaVectorStore` is for
   documents.
-- Expertise staleness / live-sync mechanism — Phase 5+. Phase 3 ships a
+- Expertise staleness / live-sync mechanism — Phase 6+. Phase 3 ships a
   dated static snapshot whose age the answer surfaces.
-- An **always-on** AWS deployment, CI/CD, or monitoring — Phase 5+.
-  Phase 4's AWS stack (Terraform, one Lambda, ECR, a Function URL) is
-  ephemeral by design: deployed for a demo recording, then destroyed and
-  the teardown verified. Never leave it running between sessions.
+- Any AWS deployment — Phase 5. Phase 4 calls Bedrock from the local
+  machine and provisions nothing. Phase 5's stack (Terraform, one Lambda,
+  ECR, a Function URL) is ephemeral by design: deployed for a demo
+  recording, then destroyed and the teardown verified — never left
+  running between sessions. An always-on deployment, CI/CD and
+  monitoring are Phase 6+.
 - The Go edge layer, DynamoDB session state, Kubernetes (ADRs
   0002–0004), OpenSearch Serverless, Bedrock Titan embeddings, an
-  S3-hosted corpus — documented direction, not built in Phase 4.
+  S3-hosted corpus — documented direction, not built in Phases 4–5.
 - Conversation memory / multi-turn context — each question is answered
   independently (CLI and UI alike).
 - PowerPoint/deck ingestion — not in the pilot corpus.
-- Access-control enforcement — pilot corpus and the expertise dataset are
-  low-sensitivity by construction; this sidesteps the confidentiality
-  problem, it doesn't solve it.
+- Real authentication / SSO / identity — Phase 6+. Phase 4's "ask as
+  person X" (`--as`, an API field) is a **demo identity**, and every place
+  that accepts it says so.
+- Automated detection of anonymized-but-identifiable content — Discovery
+  §4 says automated detection must not be presented as a solution.
+  Phase 4 gates such material behind a human review flag instead.
+- A chat UI — **decision pending** until after P4-2 (plan §7; the user
+  noted a persona switcher showing access control as the strongest demo
+  shot). Prompt the user for the decision before starting P4-3. P4-1's
+  HTTP API (`tessera serve`) is built.
 
-**A web UI** was on this list through Phase 3 ("CLI is sufficient"). Phase
-4 builds one — a FastAPI app plus a static chat page (no Node toolchain)
-— per `docs/Tessera_Phase4_Plan.md`.
+**Access-control enforcement** was on this list through Phase 3 (the
+pilot corpus was low-sensitivity by construction — "sidesteps the
+confidentiality problem, doesn't solve it"). Phase 4 builds
+permission-aware retrieval over a synthetic restricted tier: ethical
+walls per engagement, deny-by-default, filtered before ranking, proven by
+a gated leakage eval — `docs/Tessera_Phase4_Plan.md` §3.5.
 
 If a task seems to require something on this list, stop and flag it rather
 than building it.
@@ -103,7 +120,7 @@ pilot corpus and query log were.
 
 These are reasons, not preferences:
 
-1. **Swappable ports.** Phase 4 moves this to AWS (Bedrock, OpenSearch, S3).
+1. **Swappable ports.** Phases 4–5 start moving this to AWS (Bedrock now; OpenSearch, S3 later).
    Every external dependency — embedding model, vector store, LLM client,
    document source — sits behind a thin interface so the swap is a config
    change, not a rewrite. The single most important structural decision in
@@ -119,11 +136,12 @@ These are reasons, not preferences:
    a refusal.
 4. **Evals are infrastructure, not an afterthought.** The harness is built now
    even though real test cases arrive later, because it becomes the CI gate
-   in Phase 5.
+   in Phase 6.
 5. **Local-first.** Local stays the development and evaluation
    environment; the only cloud dependency on the query path is the LLM
    call (NVIDIA NIM by default, Claude on Bedrock when selected by
-   config). AWS is used only for Phase 4's ephemeral demo deployment.
+   config). AWS hosting is used only for Phase 5's ephemeral demo
+   deployment.
 6. **The query path stays transport-agnostic.** `router.py`, `retriever.py`,
    `generation/`, and `pipeline.py` — everything between "a query came in"
    and "here's a grounded answer" — must be pure with respect to
@@ -145,6 +163,10 @@ These are reasons, not preferences:
    for the composition roots, `cli.py` and (Phase 4) `api.py`: they may
    read config and speak a transport (terminal, HTTP), and they build the
    dependencies the core receives — the core never reaches for them.
+   Phase 4 holds the same line for identity and telemetry: the asking
+   person arrives as a typed `Principal` parameter (never read from a
+   session or global), and traces and token usage come back as data
+   that only the composition roots write out.
 
 ## Technology decisions
 
@@ -155,10 +177,12 @@ These are reasons, not preferences:
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
 | Expertise store (Phase 3) | Chroma collection, separate from documents | Real people-index / HR API | Behind `ExpertiseStore` interface; reuses the `Embedder` port |
-| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps). Phase 4 adds Claude on Bedrock as a config-selected provider; NIM stays the local default and the eval judge |
-| HTTP / UI (Phase 4) | FastAPI + static HTML/JS page, `tessera serve` | same, on Lambda | `api.py` is a composition root like `cli.py`; no Node toolchain |
-| Packaging (Phase 4) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Lambda via the Lambda Web Adapter |
-| IaC (Phase 4) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 5 | Tagged `project=tessera`, `ephemeral=true`; `terraform destroy` after every demo |
+| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps). Phase 4 adds Claude on Bedrock as a config-selected provider (Haiku for routing, a stronger model for answers) with token/cost accounting; NIM stays the eval judge |
+| HTTP / UI (Phase 4) | FastAPI, `tessera serve` (P4-1); a chat page only if chosen after P4-2 | same, on Lambda (Phase 5) | `api.py` is a composition root like `cli.py`; no Node toolchain |
+| Feedback (Phase 4) | `FeedbackStore` port, local JSONL | a managed store | Feedback becomes *candidate* eval cases for human labelling, never auto-added |
+| Access data (Phase 4) | `data/access/walls.yaml` (seeded generator, synthetic) | a real entitlement / ethical-wall system | Deny-by-default; filtered in the store query, before ranking |
+| Packaging (Phase 5) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Lambda via the Lambda Web Adapter |
+| IaC (Phase 5) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 6 | Tagged `project=tessera`, `ephemeral=true`; `terraform destroy` after every demo |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
@@ -184,9 +208,11 @@ These are reasons, not preferences:
   what the next task is.
 - **Quality-bar regression check (Phase 2+).** Any PR that touches
   `retrieval/` (`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
-  `generation/` (including any prompt string), the expertise dataset or its
-  generator (`data/expertise/`), or the eval set (`evals/cases/`) must run a
-  fresh `tessera eval --check` and paste the report — including its final
+  `generation/` (including any prompt string), `pipeline.py`, the corpus
+  (`data/corpus/`), the access data (`data/access/`), the expertise
+  dataset or its generator (`data/expertise/`), or the eval set
+  (`evals/cases/`) must run a fresh `tessera eval --check` and paste the
+  report — including its final
   `=> PASS/FAIL` line — into the PR body. A gated-threshold failure blocks
   the merge. The bar lives in `evals/QUALITY_BAR.md` /
   `evals.harness.QualityBar`.
@@ -209,15 +235,19 @@ Every change ships through a PR:
 criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
 exits. Not cut per-task; tasks are checkpoints, phases are releases.
 
-**CI/CD:** intentionally not set up in Phases 1–4 (do-not-build list). It
-earns its place at Phase 5, gated by the eval harness built in Task 7 —
+**CI/CD:** intentionally not set up in Phases 1–5 (do-not-build list). It
+earns its place at Phase 6, gated by the eval harness built in Task 7 —
 no change ships if retrieval/answer quality regresses (Solution
 Design §5). Until then, quality gating is manual: run `pytest` and
 `tessera eval --check` locally before opening a PR, and paste the
 bar-check result into the PR body for any retrieval/prompt change (see
 "Working conventions" above and `evals/QUALITY_BAR.md`).
 
-**AWS (Phase 4):** every AWS change goes through Terraform in `infra/`,
+**Bedrock spend (Phase 4+):** a sweep with answers on Bedrock costs real
+money — state the expected cost before starting one, and keep the judge
+on NIM (free) unless the user decides otherwise.
+
+**AWS (Phase 5):** every AWS change goes through Terraform in `infra/`,
 reviewed as a `terraform plan` before any `apply`. `apply` and `destroy`
 are run only with the user's explicit go-ahead for that specific run —
 they create and delete billed resources. After a demo, `terraform destroy`
