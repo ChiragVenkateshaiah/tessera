@@ -1,8 +1,16 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-09-30
+Last updated: 2026-10-01
 
 ## Status
+
+**Phase 3 complete** (`v0.3.0`, P3-6 PR, 2026-10-01). All six plan tasks
+plus two unplanned passes merged; the Phase 3 exit sweep — full clean
+`tessera eval --check`, **55/55 cases, zero ERROR rows** — passes every
+gated A/C and B threshold (`=> PASS`). All 5 Phase 1 exit criteria
+re-confirmed on a genuinely fresh clone (machine `y520`). Two thin
+margins carried forward (A/C relevance +0.10, B person recall +0.01) —
+see "Next task to pick up". There is no Phase 4 plan doc yet.
 
 **Phase 3 adopted 2026-09-07** (`docs/Tessera_Phase3_Plan.md`, PR #38 +
 #39; CLAUDE.md updated per its §7). Phase 3 = archetype B
@@ -57,8 +65,10 @@ orders the shortlist while `evidence_score` stays intent-independent (a
 first version that discounted `evidence_score` pushed `ql019` under the
 generation floor — caught by the gated sweep). Person recall **0.89 →
 0.91**; **the B bar is now GATED** (`QualityBar.gate_expertise` default
-`True`). Gated `tessera eval --check` → `=> PASS`. **Next: P3-6** — Phase 3
-exit (README, final clean sweep, tag `v0.3.0`).
+`True`). Gated `tessera eval --check` → `=> PASS`.
+
+**P3-6 done** (2026-10-01): README/QUALITY_BAR/evals README updated to
+Phase 3 built; exit sweep 55/55 clean, `=> PASS`; `v0.3.0` tagged.
 
 **Phase 2 complete** (`v0.2.0` tagged 2026-09-06, all 5 tasks merged,
 exit gate met). Phase 1 remains complete and tagged (`v0.1.0`); all 5
@@ -1328,42 +1338,118 @@ same change and stays ungated (`QUALITY_BAR.md`).
       recall clears the bar by **0.01** on 9 cases; `ql041`/`ql042` (0.80
       each) unchanged.
 
+- [x] **P3-6 — Phase 3 exit** (2026-10-01, P3-6 PR).
+      `docs/Tessera_Phase3_Plan.md` §5. Docs + verification + tag — no
+      code changed.
+
+      - **`README.md`** — status → Phase 3 complete (`v0.3.0`); phase
+        table (Phase 3 ✅ with what it delivered); "not in Phases 1–3"
+        gains real HR integration / live sync; architecture diagram gains
+        the expertise path (dataset → `expertise_loader` →
+        `ExpertiseStore`/`chroma_expertise` → `retrieval/expertise.py` →
+        generation); B bullet rewritten from "in progress"; setup/usage
+        cover `TESSERA_EXPERTISE_DIR`, `tessera index-people`, B query
+        output + call cost, the 55-case eval set, retry/pacing, and the
+        widened `--check` trigger list; "Phase 2 — the quality bar" →
+        "The quality bar" with A/C + B rows and the exit-sweep numbers.
+        Also fixed the stale `cerberus-platform` repo name → `cerberus`
+        (user request).
+      - **`evals/QUALITY_BAR.md`** — "Current standing" → the P3-6 exit
+        sweep with both thin margins explained; regression-discipline
+        list matches CLAUDE.md (now includes `expertise.py` and
+        `data/expertise/`).
+      - **`evals/README.md`** — Phase 3 + P3-6 sweep-history entries;
+        "What's in here" lists `diagnose_expertise.py` and
+        `tune_retrieval.py`.
+
+      **Acceptance check — met.** Full clean `tessera eval --check`
+      sweep, **2026-10-01, 55/55 cases, zero ERROR rows** (8 transient
+      NVIDIA 503s, all recovered by `RetryingLLMClient`; wall clock
+      22 min — far faster than the 1–1.5 h of 09-29/09-30). Run on a
+      fresh clone with freshly built indexes (336 chunks, 600 people),
+      Python 3.14.4:
+
+      ```
+      === Tessera Eval Report ===
+      Cases: 55
+      Routing accuracy: 100.0%
+      Retrieval (A/C):  recall 0.95  precision 0.42  MRR 0.97
+      Generation (A/C): groundedness 4.83  relevance 4.60
+      Expertise (B):    person recall 0.91  precision 0.91  MRR 1.00
+                        groundedness 5.00  relevance 4.89
+      No-match refusal rate (B): 100%
+      Quality bar:
+        [PASS] Routing accuracy: 100.0%              (>= 95%)
+        [PASS] Mean recall@k (A/C): 0.95             (>= 0.80)
+        [PASS] Mean MRR (A/C): 0.97                  (>= 0.90)
+        [PASS] Mean groundedness: 4.83               (>= 4.50)
+        [PASS] Mean relevance: 4.60                  (>= 4.50)
+        [PASS] Per-case recall > 0.00 (A/C): no total misses
+        [----] Mean precision@k (A/C): 0.42          (reported, not gated)
+        [PASS] Person recall@k (B): 0.91             (>= 0.90)
+        [PASS] Person MRR (B): 1.00                  (>= 0.90)
+        [PASS] B groundedness: 5.00                  (>= 4.50)
+        [PASS] B relevance: 4.89                     (>= 4.50)
+        [PASS] Per-case person recall > 0.00 (B): no total misses
+        [PASS] No-match correct-refusal rate (B): 100%
+        [----] Person precision@k (B): 0.91          (reported, not gated)
+        => PASS (gated thresholds)
+      Latency (mean s): A 19.3  B 16.1  C 31.4  D 4.2
+      ```
+
+      Lowest cases: A/C relevance 3 on `ql004`/`ql007`/`ql027`/`ql028`
+      (the same four narrow-A lookups as P2-5); A/C recall min 0.50
+      (`ql015`); B person recall `ql019` 0.60, `ql041`/`ql042` 0.80 — all
+      unchanged from PR #51.
+
+      **Phase 1 exit criteria re-confirmed (2026-10-01)** — see the end of
+      "Next task to pick up". `v0.3.0` tagged on the merge commit.
+
 ## Next task to pick up
 
-**P3-6 — Phase 3 exit** (`docs/Tessera_Phase3_Plan.md` §5). Last Phase 3
-task.
+**Phases 1–3 are complete** (`v0.1.0`, `v0.2.0`, `v0.3.0`). There is no
+Phase 4 plan doc yet, so the next step is a decision for the user, not a
+task to start:
 
-- `README.md`: archetype B moves from "in progress" to built — phase table,
-  architecture diagram, the archetype-handling bullets, the quality-bar
-  section (the README still describes B as Phase 3 "in progress").
-- A final clean full `tessera eval --check` sweep against the extended
-  (A/C/B) bar, recorded here as the Phase 3 exit sweep. Sweeps now take
-  ~1–1.5 h and NVIDIA has been flaky both days (see Notes): expect retries,
-  and re-run any ERROR rows individually if a few exhaust their attempts —
-  but for the *exit* sweep prefer a run with zero ERROR rows.
-- Confirm Phase 1 exit criteria still hold and record the Phase 3 close
-  entry (mirror the P2-5 close).
-- Tag **`v0.3.0`** once merged to `main`.
+1. **Write and adopt `docs/Tessera_Phase4_Plan.md`** — move off local
+   (Bedrock, OpenSearch Serverless, S3, Lambda) per Solution Design §4
+   and `docs/adr/0002-…`. Phases 2 and 3 each started with a plan doc
+   adopted via PR plus a CLAUDE.md update (§7 of each plan); Phase 4
+   should too. CLAUDE.md's do-not-build list ("Any AWS deployment,
+   Terraform, CI/CD…") would need revising as part of that adoption.
+2. **Or a small tuning task first** on one of the thin margins below,
+   if they should be widened before more infrastructure goes on top.
 
-**Acceptance (plan §5 P3-6, verbatim):** a clean full sweep passes the
-extended bar; `v0.3.0` tagged and pushed.
+**Carried forward from Phase 3 (not blocking — the exit sweep passed):**
+- **A/C mean relevance 4.60 vs 4.5** — the P2-5 narrow-A margin, still
+  the same four cases (`ql004`/`ql007`/`ql027`/`ql028` at 3). Lever:
+  adaptive `k` for archetype A (see Notes).
+- **B person recall 0.91 vs 0.90 on 9 labelled cases** — one more miss
+  fails the bar. Untried levers: `CANDIDATE_K` (pool starvation,
+  `c0049` in `ql019`), a `where` filter from a place/practice named in
+  the query.
+- **Self-reported-only matches** have never been seen live (with 600
+  people the top 5 are always evidenced); the flagging path is
+  unit-tested only.
+- **Resumable sweep** (persist per-case results, skip completed on
+  re-run) — still the natural next eval improvement if ERROR rows keep
+  costing re-runs. Not needed on 10-01's clean run.
 
-**Watch before/at the exit sweep:**
-- A/C mean relevance is thin and noisy: 4.57 (PR #50 sweep), 4.61 (PR #51),
-  vs the 4.5 gate; range across recent sweeps 4.57–4.75. If it dips under
-  4.5 the exit sweep fails for a reason unrelated to Phase 3 — the
-  carried-forward narrow-A margin below is then no longer deferrable.
-- B person recall is 0.91 vs 0.90 on 9 labelled cases — a thin margin.
-  Untried, principled levers if it slips: `CANDIDATE_K` (pool starvation,
-  e.g. `c0049`), a `where` filter derived from a place/practice named in
-  the query. Neither is wired; no scored B case needs the latter.
-- Self-reported-only matches only surface in small (filtered) pools; with
-  600 people and k=5 the top five are always evidenced, so the flagging
-  path is unit-tested but has never been seen live.
-
-**Deferred, not dropped:** the narrow-archetype-A relevance margin from
-P2-5 (adaptive-`k` lever, "Notes / open flags") — fold into a Phase 3
-sweep only if it becomes load-bearing.
+**Phase 1 exit criteria — re-confirmed 2026-10-01 at the Phase 3 close**,
+on a fresh clone of `main` on a machine that had never run Tessera
+(`y520`): (1) `uv sync --extra dev` → `.env` → `tessera ingest` (336
+chunks) + `tessera index-people` (600 people) → `tessera query` with
+citations — **met**, live; (2) archetypes observably different — an A
+query returned a 5-source cited answer, a B query returned 5 named,
+evidenced experts with the snapshot date, an off-corpus query returned
+the fixed refusal, and the sweep exercised A/B/C/D with 100% routing —
+**met** (B is now a real answer, not a non-answer, by design since
+P3-4); (3) the harness reports every metric category, A/C and B —
+**met**; (4) every external dependency is behind a port —
+`Embedder`/`VectorStore`/`LLMClient`/`ExpertiseStore`, plus the
+parameterized `load_corpus`/`load_expertise` — **met**; (5) README
+states Phase 3 as built and Phases 4–5 as documented-not-built —
+**met**.
 
 ---
 
@@ -1453,9 +1539,22 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-5 — eval harness B metrics + bar extension + no-match set~~ — done (#48)
 - ~~LLM retry/backoff + eval progress~~ — done (#50, not a plan task)
 - ~~B-retrieval pass (lead/recency intent) + gate the B bar~~ — done (#51, not a plan task)
-- **P3-6 — Phase 3 exit, tag `v0.3.0`  ← next**
+- ~~P3-6 — Phase 3 exit, tag `v0.3.0`~~ — done (2026-10-01)
 
 ## Notes / open flags
+
+- **A fresh clone needs both indexes before `eval`** (hit 2026-10-01 on
+  `y520`): `data/vectorstore/` is gitignored, so run `tessera ingest`
+  *and* `tessera index-people` (~20 s each, zero LLM calls) — `tessera
+  eval` exits if the people index is empty. `uv sync --extra dev` on a
+  cold machine took ~1m40s and resolved **Python 3.14.4** (suite and
+  sweep both clean on it; earlier sweeps' version wasn't recorded).
+- **The session scratchpad directory may not exist yet.** A backgrounded
+  `tessera eval > $SCRATCHPAD/x.out` failed instantly on 2026-10-01
+  because the redirect target's directory was missing — the background
+  task still reported exit 0 (the trailing `echo`/`date` succeeded), so
+  check the output file, not just the task status. `mkdir -p` it first.
+  No LLM calls were spent.
 
 - **NVIDIA NIM throttles far below its documented 40 rpm and stays flaky
   (2026-09-29, again 2026-09-30) — MITIGATED by PR #50, not gone.** On

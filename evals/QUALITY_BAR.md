@@ -70,35 +70,49 @@ and precision is still low, gating it is revisited then.
 
 ## Current standing
 
-Phase 2 exit sweep (P2-5) — full clean `tessera eval --check`,
-**2026-09-06, 50/50 cases, zero errors**:
+Phase 3 exit sweep (P3-6) — full clean `tessera eval --check`,
+**2026-10-01, 55/55 cases, zero errors** (8 transient NVIDIA 503s, all
+recovered by `RetryingLLMClient`):
 
 | Metric | Value | Bar |
 |---|---|---|
 | Routing accuracy | 100% | ✅ |
-| Mean recall@k | 0.95 | ✅ |
-| Mean MRR | 0.97 | ✅ |
-| Mean groundedness | 4.77 | ✅ |
-| Mean relevance | 4.60 | ✅ (thin — see below) |
-| Per-case recall > 0.00 | yes (min 0.50) | ✅ |
-| Mean precision@k | 0.42 | (not gated) |
+| Mean recall@k (A/C) | 0.95 | ✅ |
+| Mean MRR (A/C) | 0.97 | ✅ |
+| Mean groundedness (A/C) | 4.83 | ✅ |
+| Mean relevance (A/C) | 4.60 | ✅ (thin — see below) |
+| Per-case recall > 0.00 (A/C) | yes (min 0.50) | ✅ |
+| Mean precision@k (A/C) | 0.42 | (not gated) |
+| Person recall@k (B) | 0.91 | ✅ (thin — see below) |
+| Person MRR (B) | 1.00 | ✅ |
+| B groundedness | 5.00 | ✅ |
+| B relevance | 4.89 | ✅ |
+| Per-case person recall > 0.00 (B) | yes (min 0.60) | ✅ |
+| No-match correct-refusal rate (B) | 100% | ✅ |
+| Person precision@k (B) | 0.91 | (not gated) |
 
-`=> PASS (gated thresholds)`. Every gated threshold passes on a
-reproducible clean sweep — this is the Phase 2 exit gate (Solution
-Design §6), met.
+`=> PASS (gated thresholds)`. Every gated threshold, A/C and B, passes on
+a clean sweep — the Phase 3 exit gate (`docs/Tessera_Phase3_Plan.md` §5
+P3-6), met. The A/C rows match the Phase 2 exit sweep (P2-5, 2026-09-06,
+50/50) except groundedness, 4.77 → 4.83.
 
-**Relevance clears by only 0.10**, and it is the noisiest metric
-(4.60–4.75 across recent sweeps). The cause is the P2-4 A-path
+**A/C relevance clears by only 0.10**, and it is the noisiest metric
+(4.57–4.75 across recent sweeps). The cause is the P2-4 A-path
 diversification trade-off: narrow single-target lookups ("Do we have a
-framework for X?") now return 5 same-family documents where the query
+framework for X?") return 5 same-family documents where the query
 wanted one, and the judge marks a few of them down for breadth
-(`ql007`, `ql004`, `ql027`, `ql028`). Carried forward as the first
-post-Phase-2 tuning item — candidate lever: adaptive `k` for archetype A
-(fewer documents when the top hit dominates on score, all
-`LOOKUP_TOP_K` when the family scores are tight). See `checkpoint.md`
-"Notes / open flags".
+(`ql004`, `ql007`, `ql027`, `ql028` scored 3 again on the exit sweep).
+Carried forward — candidate lever: adaptive `k` for archetype A (fewer
+documents when the top hit dominates on score, all `LOOKUP_TOP_K` when
+the family scores are tight). See `checkpoint.md` "Notes / open flags".
 
-**Precision fell 0.72 → 0.42** with the same P2-4 change and stays
+**B person recall clears by only 0.01**, on 9 labelled cases: one more
+missed expert on any case fails the bar. Lowest cases on the exit sweep:
+`ql019` (0.60, "who **led** … recently"), `ql041`/`ql042` (0.80).
+Untried levers: a larger `CANDIDATE_K`, and a `where` filter derived from
+a place or practice named in the query.
+
+**Precision fell 0.72 → 0.42** with the P2-4 change and stays
 ungated — the label audit (P2-2) came back with only 4 under-labeled
 cases fixed, so the low score is the corpus's deliberate near-duplicate
 hard-negatives plus genuinely-relevant-but-unlabeled adjacent docs, not
@@ -106,9 +120,10 @@ a labeling gap worth gating against.
 
 ## Regression discipline
 
-Per `CLAUDE.md` "Working conventions": any PR that touches `retriever.py`,
-`router.py`, `chunker.py`, `generation/` (including any prompt), or the
-eval set must paste a fresh `tessera eval --check` result — the full
+Per `CLAUDE.md` "Working conventions": any PR that touches `retrieval/`
+(`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
+`generation/` (including any prompt), the expertise dataset or its
+generator (`data/expertise/`), or the eval set must paste a fresh `tessera eval --check` result — the full
 report plus its `=> PASS/FAIL` line — into the PR body. A gated failure
 blocks the merge.
 
