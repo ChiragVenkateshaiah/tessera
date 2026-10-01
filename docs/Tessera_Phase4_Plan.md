@@ -1,9 +1,8 @@
 # Tessera — Phase 4 Plan (Claude Code Brief)
 
-**Status: DRAFT (replan) 2026-10-01** — for review; supersedes the
-version adopted earlier the same day (PR #55: "local chat UI + ephemeral
-AWS deployment"). Until this replan is adopted, CLAUDE.md still reflects
-PR #55. What carries over from PR #55: P4-1 (HTTP API + `tessera serve`,
+**Status: ADOPTED 2026-10-01** (replan, PR #57; CLAUDE.md updated per
+§10). Supersedes the version adopted earlier the same day (PR #55:
+"local chat UI + ephemeral AWS deployment"). What carries over from PR #55: P4-1 (HTTP API + `tessera serve`,
 PR #56, done), the Bedrock design, the fixed-judge rule, and the whole
 ephemeral-AWS design, which moves to Phase 5 (§9).
 
