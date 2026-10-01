@@ -1,8 +1,10 @@
-"""`tessera ingest` / `tessera query` / `tessera eval`."""
+"""`tessera ingest` / `index-people` / `query` / `chat` / `eval`."""
 
 from __future__ import annotations
 
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -15,7 +17,8 @@ from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.loader import load_corpus
-from tessera.pipeline import answer_query
+from tessera.pipeline import AnswerResult, answer_query
+from tessera.retrieval.router import Archetype
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
 
@@ -37,7 +40,16 @@ EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 # retry/backoff.
 EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
 
-app = typer.Typer(help="Tessera — internal knowledge assistant (Phase 1 CLI).")
+ARCHETYPE_LABELS = {
+    Archetype.LOOKUP: "lookup",
+    Archetype.EXPERTISE: "expertise",
+    Archetype.SYNTHESIS: "synthesis",
+    Archetype.COMPARATIVE: "comparative — declined",
+}
+
+CHAT_EXIT_WORDS = frozenset({"exit", "quit", ":q"})
+
+app = typer.Typer(help="Tessera — internal knowledge assistant (local CLI).")
 
 
 def _load_settings() -> Settings:
@@ -119,42 +131,133 @@ def index_people() -> None:
     typer.echo(f"Indexed {store.count()} people at {settings.vectorstore_dir}.")
 
 
-@app.command()
-def query(text: str) -> None:
-    """Answer a query against the persisted index, with citations."""
-    settings = _load_settings()
+def _open_stores(
+    settings: Settings,
+) -> tuple[ChromaVectorStore, ChromaExpertiseStore | None]:
+    """The document index (required) and the people index (optional)."""
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
     _require_index(store)
 
-    expertise_store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
+    expertise_store: ChromaExpertiseStore | None = ChromaExpertiseStore(
+        persist_dir=settings.vectorstore_dir
+    )
     if expertise_store.count() == 0:
         # Not fatal: only archetype B needs it, and the pipeline answers a
         # B query with a plain "index not built" message.
         expertise_store = None
+    return store, expertise_store
+
+
+def render_answer(result: AnswerResult) -> str:
+    """The answer, then its People and/or Sources, as printed by `query`
+    and `chat` (and written to a chat transcript).
+    """
+    lines = [f"[{result.archetype.value}] {result.answer}", ""]
+    if result.experts:
+        lines.append("People:")
+        for i, m in enumerate(result.experts, start=1):
+            p = m.person
+            flag = "" if m.is_evidenced else "  [self-reported only]"
+            lines.append(
+                f"  [{i}] {p.name} — {p.title}, {p.practice}, {p.office} "
+                f"(updated {p.last_updated.isoformat()}){flag}"
+            )
+    if result.citations:
+        lines.append("Sources:")
+        for citation in result.citations:
+            heading = " > ".join(citation.heading_path)
+            lines.append(
+                f"  [{citation.marker}] {citation.document_title} — "
+                f"{heading} ({citation.document_path})"
+            )
+    return "\n".join(lines).rstrip()
+
+
+@app.command()
+def query(text: str) -> None:
+    """Answer a query against the persisted index, with citations."""
+    settings = _load_settings()
+    store, expertise_store = _open_stores(settings)
 
     embedder = LocalEmbedder()
     llm = _build_llm(settings)
 
     result = answer_query(text, llm, embedder, store, expertise_store)
 
-    typer.echo(f"\n[{result.archetype.value}] {result.answer}\n")
-    if result.experts:
-        typer.echo("People:")
-        for i, m in enumerate(result.experts, start=1):
-            p = m.person
-            flag = "" if m.is_evidenced else "  [self-reported only]"
-            typer.echo(
-                f"  [{i}] {p.name} — {p.title}, {p.practice}, {p.office} "
-                f"(updated {p.last_updated.isoformat()}){flag}"
-            )
-    if result.citations:
-        typer.echo("Sources:")
-        for citation in result.citations:
-            heading = " > ".join(citation.heading_path)
-            typer.echo(
-                f"  [{citation.marker}] {citation.document_title} — "
-                f"{heading} ({citation.document_path})"
-            )
+    typer.echo(f"\n{render_answer(result)}")
+
+
+@app.command()
+def chat(
+    transcript: Path | None = typer.Option(
+        None,
+        "--transcript",
+        help="Append every question and answer to this Markdown file.",
+    ),
+) -> None:
+    """Ask questions one after another in an interactive session.
+
+    Loads the indexes and embedding model once, then answers each question
+    the same way `tessera query` does. Each question is answered on its
+    own — earlier questions are not used as context. Type `exit` (or
+    Ctrl-D) to leave.
+    """
+    settings = _load_settings()
+    store, expertise_store = _open_stores(settings)
+
+    typer.echo("Loading the embedding model…")
+    embedder = LocalEmbedder()
+    llm = _build_llm(settings)
+
+    if transcript is not None:
+        with transcript.open("a", encoding="utf-8") as f:
+            f.write(f"# Tessera chat — {datetime.now():%Y-%m-%d %H:%M}\n\n")
+
+    people = "on" if expertise_store is not None else "off (run `tessera index-people`)"
+    typer.echo(
+        f"Tessera — {store.count()} document chunks indexed, people search {people}.\n"
+        "Ask a question, or type `exit` to leave."
+    )
+
+    asked = 0
+    while True:
+        try:
+            text = input("\ntessera> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            typer.echo("")
+            break
+        if not text:
+            continue
+        if text.lower() in CHAT_EXIT_WORDS:
+            break
+
+        start = time.perf_counter()
+        try:
+            result = answer_query(text, llm, embedder, store, expertise_store)
+        except KeyboardInterrupt:
+            typer.echo("  (cancelled)")
+            continue
+        except Exception as exc:  # one failed question shouldn't end the session
+            typer.echo(f"  Couldn't answer that: {exc}", err=True)
+            continue
+        elapsed = time.perf_counter() - start
+        asked += 1
+
+        label = ARCHETYPE_LABELS[result.archetype]
+        rendered = render_answer(result)
+        typer.echo(f"\n── {result.archetype.value} · {label} · {elapsed:.1f}s\n{rendered}")
+
+        if transcript is not None:
+            with transcript.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"## Q{asked}. {text}\n\n"
+                    f"*Archetype {result.archetype.value} ({label}), {elapsed:.1f}s*\n\n"
+                    f"```text\n{rendered}\n```\n\n"
+                )
+
+    typer.echo(f"Answered {asked} question{'s' if asked != 1 else ''}.")
+    if transcript is not None and asked:
+        typer.echo(f"Transcript: {transcript}")
 
 
 @app.command(name="eval")

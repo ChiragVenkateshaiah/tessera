@@ -473,3 +473,102 @@ def test_eval_prints_progress_and_wraps_the_llm_with_retry_and_pacing(
     assert isinstance(captured["llm"], RetryingLLMClient)
     assert captured["llm"]._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
     assert captured["sdk_max_retries"] == 0  # SDK fast retries off; ours take over
+
+
+def _patch_chat_deps(monkeypatch: pytest.MonkeyPatch, answer) -> list[str]:
+    """Fake stores/embedder/LLM; ``answer(text)`` stands in for answer_query.
+    Returns the list of questions the pipeline actually received.
+    """
+
+    class NonEmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 3
+
+    asked: list[str] = []
+
+    def fake_answer(text, llm, embedder, store, expertise_store=None):
+        asked.append(text)
+        return answer(text)
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
+    monkeypatch.setattr(cli, "answer_query", fake_answer)
+    return asked
+
+
+def _canned(text: str, archetype: Archetype = Archetype.LOOKUP) -> AnswerResult:
+    return AnswerResult(query=text, archetype=archetype, answer=f"answer to {text}", citations=[])
+
+
+def test_chat_answers_each_question_until_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked = _patch_chat_deps(monkeypatch, _canned)
+
+    result = runner.invoke(cli.app, ["chat"], input="first q\n\n   \nsecond q\nexit\nnever asked\n")
+
+    assert result.exit_code == 0
+    assert asked == ["first q", "second q"]
+    assert "[A] answer to first q" in result.output
+    assert "A · lookup" in result.output
+    assert "Answered 2 questions." in result.output
+
+
+def test_chat_ends_cleanly_at_end_of_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked = _patch_chat_deps(monkeypatch, _canned)
+
+    result = runner.invoke(cli.app, ["chat"], input="only q\n")
+
+    assert result.exit_code == 0
+    assert asked == ["only q"]
+    assert "Answered 1 question." in result.output
+
+
+def test_chat_keeps_going_after_a_failed_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    def answer(text: str) -> AnswerResult:
+        if text == "bad":
+            raise RuntimeError("LLM returned 503")
+        return _canned(text)
+
+    asked = _patch_chat_deps(monkeypatch, answer)
+
+    result = runner.invoke(cli.app, ["chat"], input="bad\ngood\nquit\n")
+
+    assert result.exit_code == 0
+    assert asked == ["bad", "good"]
+    assert "Couldn't answer that: LLM returned 503" in result.output
+    assert "[A] answer to good" in result.output
+    assert "Answered 1 question." in result.output
+
+
+def test_chat_writes_a_transcript(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_chat_deps(monkeypatch, lambda t: _canned(t, Archetype.COMPARATIVE))
+    out = tmp_path / "session.md"
+
+    result = runner.invoke(cli.app, ["chat", "--transcript", str(out)], input="compare us\nexit\n")
+
+    assert result.exit_code == 0
+    text = out.read_text()
+    assert text.startswith("# Tessera chat — ")
+    assert "## Q1. compare us" in text
+    assert "Archetype D (comparative — declined)" in text
+    assert "[D] answer to compare us" in text
+
+
+def test_chat_requires_an_existing_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    class EmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 0
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", EmptyStore)
+
+    result = runner.invoke(cli.app, ["chat"], input="q\n")
+
+    assert result.exit_code == 1
+    assert "run `tessera ingest` first" in result.output

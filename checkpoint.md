@@ -1405,6 +1405,18 @@ same change and stays ungated (`QUALITY_BAR.md`).
       **Phase 1 exit criteria re-confirmed (2026-10-01)** — see the end of
       "Next task to pick up". `v0.3.0` tagged on the merge commit.
 
+- [x] **`tessera chat` + tuning probe** (2026-10-01, post-Phase-3, not a
+      plan task). `tessera chat [--transcript FILE]`: interactive session
+      over `answer_query()` — loads indexes + embedder once, labels each
+      answer with archetype + latency, survives a failed question, appends
+      a Markdown transcript. Each question is independent (no
+      conversation memory — that's ADR 0003 session state). Shared
+      `render_answer()` / `_open_stores()` now back both `query` and
+      `chat`. 5 new CLI tests; live smoke test (1 A, 1 D) clean. CLI-only
+      — no retrieval/prompt change, so no bar check required. Tuning
+      probe result recorded under "Next task to pick up". Purpose: the
+      user's 20-question manual test and a LinkedIn demo recording.
+
 ## Next task to pick up
 
 **Phases 1–3 are complete** (`v0.1.0`, `v0.2.0`, `v0.3.0`). There is no
@@ -1419,6 +1431,30 @@ task to start:
    Terraform, CI/CD…") would need revising as part of that adoption.
 2. **Or a small tuning task first** on one of the thin margins below,
    if they should be widened before more infrastructure goes on top.
+
+**Tuning probe on both thin margins (2026-10-01, retrieval-only, zero
+LLM calls) — no principled lever; don't re-try these two:**
+- **B: `CANDIDATE_K` is not the problem.** Person recall is identical
+  (0.911, every case unchanged) at `CANDIDATE_K` 50/75/100/150/200 —
+  every gold person is already in the pool (at k=600 the `ql019` gold
+  ranks are 1, 2, 4, 16, 25). The misses are ordering among strongly
+  evidenced near-neighbours (`ql041`: a sustainability principal with
+  industrials projects at #2; `ql042`: a supply-chain EM outside the
+  30-person label at #3). Re-weighting to move them would fit 3 of 9
+  cases. The honest way to widen this margin is **more labelled B
+  cases**, not tuning.
+- **A/C relevance: adaptive `k` by top-hit dominance doesn't separate
+  the low-relevance cases.** Top-1 − top-2 score gaps: `ql027` 0.095,
+  `ql028` 0.072 (no dominant hit — adaptive `k` wouldn't trigger);
+  `ql004` 0.195 (dominant, but it has 2 relevant docs — trimming would
+  give back its P2-4 recall gain); `ql007` 0.208 (the only clean win).
+  The gap-dominant cases that would also trigger (`ql009`/`ql026`/
+  `ql030`/`ql031`/`ql032`) already score relevance 5. Best case ≈ one
+  case 3→5 ≈ +0.06 on the 35-case mean — below run-to-run judge noise
+  (4.57–4.75).
+- Probe scripts were scratchpad one-offs: they monkeypatch
+  `retrieval.expertise.CANDIDATE_K` and read `find_experts`/`retrieve`
+  scores directly against the persisted index.
 
 **Carried forward from Phase 3 (not blocking — the exit sweep passed):**
 - **A/C mean relevance 4.60 vs 4.5** — the P2-5 narrow-A margin, still
