@@ -19,7 +19,7 @@ chat UI is a **pending decision** to put to the user right after P4-2
 (plan §7). The user wants AWS work done AI-assisted end to end;
 `apply`/`destroy` still need their explicit go-ahead per run.
 
-**Phase 3 complete** (`v0.3.0`, P3-6 PR, 2026-10-01). All six plan tasks
+**Phase 3 complete** (`v0.3.0`, PR #53, 2026-10-01). All six plan tasks
 plus two unplanned passes merged; the Phase 3 exit sweep — full clean
 `tessera eval --check`, **55/55 cases, zero ERROR rows** — passes every
 gated A/C and B threshold (`=> PASS`). All 5 Phase 1 exit criteria
@@ -1353,7 +1353,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       recall clears the bar by **0.01** on 9 cases; `ql041`/`ql042` (0.80
       each) unchanged.
 
-- [x] **P3-6 — Phase 3 exit** (2026-10-01, P3-6 PR).
+- [x] **P3-6 — Phase 3 exit** (2026-10-01, PR #53 merged; `v0.3.0` tagged).
       `docs/Tessera_Phase3_Plan.md` §5. Docs + verification + tag — no
       code changed.
 
@@ -1420,8 +1420,8 @@ same change and stays ungated (`QUALITY_BAR.md`).
       **Phase 1 exit criteria re-confirmed (2026-10-01)** — see the end of
       "Next task to pick up". `v0.3.0` tagged on the merge commit.
 
-- [x] **`tessera chat` + tuning probe** (2026-10-01, post-Phase-3, not a
-      plan task). `tessera chat [--transcript FILE]`: interactive session
+- [x] **`tessera chat` + tuning probe** (2026-10-01, PR #54 merged,
+      post-Phase-3, not a plan task). `tessera chat [--transcript FILE]`: interactive session
       over `answer_query()` — loads indexes + embedder once, labels each
       answer with archetype + latency, survives a failed question, appends
       a Markdown transcript. Each question is independent (no
@@ -1432,7 +1432,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       probe result recorded under "Next task to pick up". Purpose: the
       user's 20-question manual test and a LinkedIn demo recording.
 
-- [x] **P4-1 — HTTP API + `tessera serve`** (2026-10-01).
+- [x] **P4-1 — HTTP API + `tessera serve`** (2026-10-01, PR #56 merged).
       `src/tessera/api.py`: `create_app(llm, embedder, store,
       expertise_store, *, llm_name)` — receives built dependencies, never
       reads config (composition-root adapter, constraint #6).
@@ -1455,6 +1455,39 @@ same change and stays ungated (`QUALITY_BAR.md`).
       latency was high again; server log clean.
       Gotcha: `pkill -f 'tessera serve …'` killed its own shell (the
       pattern matched the command line) — use `pkill -f '[t]essera serve'`.
+
+- [x] **Phase 4 planned, adopted, then replanned and re-adopted**
+      (2026-10-01, PRs #55 and #57).
+      - **#55** adopted a first Phase 4: local chat UI → Claude on
+        Bedrock → one container → ephemeral Terraform stack (deploy →
+        demo → destroy). User decisions recorded in that plan: FastAPI +
+        plain HTML/JS, Claude on Bedrock, Chroma indexes baked into the
+        image, Terraform.
+      - P4-1 (HTTP API, #56) was built under it. The live answers took
+        40–60 s on NIM, and the user decided a UI on that latency wasn't
+        worth building yet — and asked instead what would make the
+        project stand out.
+      - **Research** (web, 2026-10-01): Gartner — >50% of GenAI projects
+        abandoned after POC, citing poor data quality, inadequate risk
+        controls, escalating costs, unclear business value; MIT NANDA
+        2025 — 95% of pilots show no P&L impact, a "learning gap" (no
+        feedback, no improvement); vendor consensus that RAG leaks content
+        users couldn't open directly unless permissions are enforced
+        before ranking. Sources are listed in plan §0.
+      - **#57 replanned Phase 4** around those causes, all four features
+        chosen by the user: Bedrock + routing + cost per answer (P4-2);
+        traces + feedback-to-eval loop (P4-3); freshness + data-quality
+        report (P4-4); restricted tier + permission-aware retrieval with
+        gated leakage and prompt-injection evals (P4-5/P4-6); exit P4-7.
+        AWS → Phase 5 (the #55 design carried over, plan §9); CI/CD +
+        monitoring → Phase 6. Access control follows Discovery §4:
+        per-engagement ethical walls over the 600 consultants,
+        deny-by-default, fail closed, and a human review gate rather than
+        any claim to detect anonymized-but-identifiable content.
+      - **Chat UI: decision pending** until after P4-2 (plan §7), with the
+        user's note: "a persona switcher showing access control would be
+        the strongest demo shot".
+      - CLAUDE.md updated twice (per #55 §7, then per #57 §10).
 
 ## Next task to pick up
 
@@ -1670,6 +1703,26 @@ Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
 the eval gate, monitoring.
 
 ## Notes / open flags
+
+- **`gh pr edit` fails on this repo** (2026-10-01): it errors with
+  "Projects (classic) is being deprecated … (repository.pullRequest.
+  projectCards)" and exits non-zero, so anything chained after it with
+  `&&` doesn't run (it skipped a merge once). Retitle through REST
+  instead: `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=...`.
+  `gh pr create`/`ready`/`merge` were unaffected.
+- **`pkill -f '<cmd>'` can kill its own shell** when the pattern appears
+  in the shell's command line (hit stopping `tessera serve`, 2026-10-01).
+  Use a bracketed pattern: `pkill -f '[t]essera serve'`.
+- **AWS CLI v2.37.7 installed 2026-10-01** in `~/.local/aws-cli` (binary
+  `~/.local/bin/aws`), no sudo; installed ahead of the plan, then kept
+  at the user's request (needed from P4-2). Not connected to any
+  Tessera profile yet. `~/.aws` holds other projects' profiles
+  (`novapay`, `cerberus*`) — never reuse them for Tessera. The user was
+  told `~/.aws/credentials` is mode 775 (`chmod 600` advised); not
+  changed by us.
+- **NIM spend 2026-10-01:** one full 55-case exit sweep (~140 calls) plus
+  ~15 live probe/demo calls — well inside the free tier. From P4-2 on,
+  Bedrock sweeps cost real money: state the cost first (CLAUDE.md).
 
 - **A fresh clone needs both indexes before `eval`** (hit 2026-10-01 on
   `y520`): `data/vectorstore/` is gitignored, so run `tessera ingest`
