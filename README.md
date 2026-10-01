@@ -252,6 +252,19 @@ run it says so rather than erroring. Archetype-D (comparative) queries
 return a fixed confidentiality refusal — see "Archetype handling at query
 time" above.
 
+```sh
+uv run tessera chat                              # ask questions one after another
+uv run tessera chat --transcript session.md      # ...and save the session as Markdown
+```
+
+An interactive session over the same pipeline: it loads the indexes and
+embedding model once, then answers each question exactly as `tessera
+query` does, labelled with its archetype and latency. Each question is
+answered independently — earlier questions aren't used as context
+(conversation memory is part of the Phase 4+ session design, ADR 0003).
+A question that fails (e.g. an LLM error after retries) is reported and
+the session carries on; `exit` or Ctrl-D leaves.
+
 Each archetype-A/B/C query costs 2 NVIDIA NIM calls (route + generate),
 or 1 when nothing clears the relevance/evidence floor; D costs 1 (route
 only). The free tier allows up to 40
