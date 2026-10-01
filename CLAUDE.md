@@ -38,12 +38,18 @@ Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Phase2_Plan.md` — the authoritative brief for Phase 2
   (complete, tagged `v0.2.0`): eval set populated + tuned, a documented
   internal quality bar. `evals/QUALITY_BAR.md` carries the bar itself.
-- `docs/Tessera_Phase3_Plan.md` — the authoritative brief for Phase 3 (the
-  current phase): archetype B (expertise-finding) built end to end over a
-  synthesized firm expertise dataset. §5 is the task sequence.
+- `docs/Tessera_Phase3_Plan.md` — the authoritative brief for Phase 3
+  (complete, tagged `v0.3.0`): archetype B (expertise-finding) built end
+  to end over a synthesized firm expertise dataset.
+- `docs/Tessera_Phase4_Plan.md` — the authoritative brief for Phase 4 (the
+  current phase): a local chat UI over the pipeline, Claude on Bedrock
+  behind `LLMClient`, and an **ephemeral** AWS deployment (deploy → record
+  a demo → destroy, verified). §5 is the task sequence.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
   (e.g. the hybrid Go/Python production split). Documentation only; none
-  of it is built in Phases 1–3.
+  of it is built in Phases 1–3. Phase 4 builds the Solution Design's
+  minimal "pilot footprint" (one Python Lambda), not the ADR 0002/0003
+  Go edge + DynamoDB design.
 
 ## Phase 1 objective and boundaries
 
@@ -57,21 +63,32 @@ embedding + local vector store, retrieval for archetype A (lookup) and C
 (synthesis), grounded generation with mandatory citations, eval harness
 scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 
-**Explicitly NOT in Phases 1–3 — do not build these:**
+**Explicitly NOT in Phases 1–4 — do not build these:**
 - Archetype D (comparative) — out of pilot scope by design (confidentiality).
   Implement only as a refusal guardrail — never actually attempt it.
 - Real HR-system integration (Workday, an SSO directory, an SFDC
-  people-index) — Phase 4+. Phase 3's `ExpertiseStore` is a local
+  people-index) — Phase 5+. Phase 3's `ExpertiseStore` is a local
   implementation behind the port, the same as `ChromaVectorStore` is for
   documents.
-- Expertise staleness / live-sync mechanism — Phase 4+. Phase 3 ships a
+- Expertise staleness / live-sync mechanism — Phase 5+. Phase 3 ships a
   dated static snapshot whose age the answer surfaces.
-- Any AWS deployment, Terraform, CI/CD, or monitoring — Phases 4–5.
+- An **always-on** AWS deployment, CI/CD, or monitoring — Phase 5+.
+  Phase 4's AWS stack (Terraform, one Lambda, ECR, a Function URL) is
+  ephemeral by design: deployed for a demo recording, then destroyed and
+  the teardown verified. Never leave it running between sessions.
+- The Go edge layer, DynamoDB session state, Kubernetes (ADRs
+  0002–0004), OpenSearch Serverless, Bedrock Titan embeddings, an
+  S3-hosted corpus — documented direction, not built in Phase 4.
+- Conversation memory / multi-turn context — each question is answered
+  independently (CLI and UI alike).
 - PowerPoint/deck ingestion — not in the pilot corpus.
 - Access-control enforcement — pilot corpus and the expertise dataset are
   low-sensitivity by construction; this sidesteps the confidentiality
   problem, it doesn't solve it.
-- A web UI — CLI is sufficient.
+
+**A web UI** was on this list through Phase 3 ("CLI is sufficient"). Phase
+4 builds one — a FastAPI app plus a static chat page (no Node toolchain)
+— per `docs/Tessera_Phase4_Plan.md`.
 
 If a task seems to require something on this list, stop and flag it rather
 than building it.
@@ -103,8 +120,10 @@ These are reasons, not preferences:
 4. **Evals are infrastructure, not an afterthought.** The harness is built now
    even though real test cases arrive later, because it becomes the CI gate
    in Phase 5.
-5. **Local-first.** No cloud dependencies in Phase 1 except the LLM API call
-   itself.
+5. **Local-first.** Local stays the development and evaluation
+   environment; the only cloud dependency on the query path is the LLM
+   call (NVIDIA NIM by default, Claude on Bedrock when selected by
+   config). AWS is used only for Phase 4's ephemeral demo deployment.
 6. **The query path stays transport-agnostic.** `router.py`, `retriever.py`,
    `generation/`, and `pipeline.py` — everything between "a query came in"
    and "here's a grounded answer" — must be pure with respect to
@@ -122,7 +141,10 @@ These are reasons, not preferences:
 
    Ingestion code (`loader.py`) is exempt from the no-I/O part of this rule
    — reading the corpus off disk is its job — but stays parameterized like
-   everything else: no hardcoded paths or credentials, ever.
+   everything else: no hardcoded paths or credentials, ever. The same goes
+   for the composition roots, `cli.py` and (Phase 4) `api.py`: they may
+   read config and speak a transport (terminal, HTTP), and they build the
+   dependencies the core receives — the core never reaches for them.
 
 ## Technology decisions
 
@@ -133,7 +155,10 @@ These are reasons, not preferences:
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
 | Expertise store (Phase 3) | Chroma collection, separate from documents | Real people-index / HR API | Behind `ExpertiseStore` interface; reuses the `Embedder` port |
-| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day for Phase 1-2 (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps), swapped for Claude/Bedrock in Phase 4 |
+| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps). Phase 4 adds Claude on Bedrock as a config-selected provider; NIM stays the local default and the eval judge |
+| HTTP / UI (Phase 4) | FastAPI + static HTML/JS page, `tessera serve` | same, on Lambda | `api.py` is a composition root like `cli.py`; no Node toolchain |
+| Packaging (Phase 4) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Lambda via the Lambda Web Adapter |
+| IaC (Phase 4) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 5 | Tagged `project=tessera`, `ephemeral=true`; `terraform destroy` after every demo |
 | Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
@@ -152,7 +177,8 @@ These are reasons, not preferences:
   migration cheap.
 - Work task by task per the current phase's plan — `docs/Tessera_Phase1_Build_Plan.md`
   §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2,
-  `docs/Tessera_Phase3_Plan.md` §5 for Phase 3. Stop after each task and
+  `docs/Tessera_Phase3_Plan.md` §5 for Phase 3, `docs/Tessera_Phase4_Plan.md`
+  §5 for Phase 4. Stop after each task and
   report against its acceptance check before continuing.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
@@ -183,10 +209,17 @@ Every change ships through a PR:
 criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
 exits. Not cut per-task; tasks are checkpoints, phases are releases.
 
-**CI/CD:** intentionally not set up in Phases 1–3 (do-not-build list). It
+**CI/CD:** intentionally not set up in Phases 1–4 (do-not-build list). It
 earns its place at Phase 5, gated by the eval harness built in Task 7 —
 no change ships if retrieval/answer quality regresses (Solution
 Design §5). Until then, quality gating is manual: run `pytest` and
 `tessera eval --check` locally before opening a PR, and paste the
 bar-check result into the PR body for any retrieval/prompt change (see
 "Working conventions" above and `evals/QUALITY_BAR.md`).
+
+**AWS (Phase 4):** every AWS change goes through Terraform in `infra/`,
+reviewed as a `terraform plan` before any `apply`. `apply` and `destroy`
+are run only with the user's explicit go-ahead for that specific run —
+they create and delete billed resources. After a demo, `terraform destroy`
+and verify nothing tagged `project=tessera` remains. `/end-day` checks for
+live tagged resources whenever a deploy happened that session.

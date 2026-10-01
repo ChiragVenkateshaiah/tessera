@@ -4,6 +4,15 @@ Last updated: 2026-10-01
 
 ## Status
 
+**Phase 4 adopted 2026-10-01** (`docs/Tessera_Phase4_Plan.md`, PR #55;
+CLAUDE.md updated per its §7). Phase 4 = a local chat UI (FastAPI + static
+page) → Claude on Bedrock behind `LLMClient` (eval judge stays on
+Nemotron) → one container image → an **ephemeral** Terraform-managed AWS
+stack (one Lambda + Function URL) deployed for a LinkedIn demo recording,
+then destroyed and verified gone. Six tasks, P4-1…P4-6. **Next: P4-1.**
+The user wants AWS work done AI-assisted end to end; `apply`/`destroy`
+still need their explicit go-ahead per run (CLAUDE.md Git workflow).
+
 **Phase 3 complete** (`v0.3.0`, P3-6 PR, 2026-10-01). All six plan tasks
 plus two unplanned passes merged; the Phase 3 exit sweep — full clean
 `tessera eval --check`, **55/55 cases, zero ERROR rows** — passes every
@@ -1419,6 +1428,20 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
+**P4-1 — HTTP API + `tessera serve`** (`docs/Tessera_Phase4_Plan.md` §5,
+§3.1). `src/tessera/api.py` (FastAPI): `POST /api/ask`, `GET
+/api/health`, `GET /` placeholder for P4-2's page; dependencies built
+once at startup; JSON errors, no stack traces. `tessera serve`.
+
+**Acceptance (plan §5 P4-1, verbatim):** `pytest` green; `curl` against a
+local `tessera serve` returns a correct A, B and D answer as JSON.
+
+Then P4-2 (local chat UI — the user's 20-question manual test runs
+through it). P4-3 needs AWS CLI credentials + Bedrock model access on
+this machine (plan §9).
+
+---
+
 **Phases 1–3 are complete** (`v0.1.0`, `v0.2.0`, `v0.3.0`). There is no
 Phase 4 plan doc yet, so the next step is a decision for the user, not a
 task to start:
@@ -1575,7 +1598,15 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 - ~~P3-5 — eval harness B metrics + bar extension + no-match set~~ — done (#48)
 - ~~LLM retry/backoff + eval progress~~ — done (#50, not a plan task)
 - ~~B-retrieval pass (lead/recency intent) + gate the B bar~~ — done (#51, not a plan task)
-- ~~P3-6 — Phase 3 exit, tag `v0.3.0`~~ — done (2026-10-01)
+- ~~P3-6 — Phase 3 exit, tag `v0.3.0`~~ — done (#53, 2026-10-01)
+
+**Phase 4 (`docs/Tessera_Phase4_Plan.md` §5)** — adopted 2026-10-01 (#55):
+- **P4-1 — HTTP API + `tessera serve`  ← next**
+- P4-2 — local chat UI
+- P4-3 — Claude on Bedrock + fixed (Nemotron) judge; bar check
+- P4-4 — container image
+- P4-5 — Terraform (`plan` only, reviewed)
+- P4-6 — deploy → demo → destroy (verified) → tag `v0.4.0`
 
 ## Notes / open flags
 

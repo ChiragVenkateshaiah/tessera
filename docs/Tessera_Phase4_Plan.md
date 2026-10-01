@@ -1,7 +1,8 @@
 # Tessera — Phase 4 Plan (Claude Code Brief)
 
-**Status: DRAFT 2026-10-01** — for review; not yet adopted. Until it is,
-CLAUDE.md's do-not-build list still applies (no web UI, no AWS). Phase 3
+**Status: ADOPTED 2026-10-01** (drafted + adopted same day, PR #55;
+CLAUDE.md updated per §7). Phase 4 is driven by §5's task sequence; see
+`checkpoint.md` for current standing. Phase 3
 is complete and tagged `v0.3.0`; all 5 Phase 1 exit criteria and every
 gated A/C and B bar threshold hold (`checkpoint.md`, Phase 3 close).
 Companion documents: `Tessera_Solution_Design.md` §4 (AWS target),
