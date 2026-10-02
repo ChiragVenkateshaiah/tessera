@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import typer
 from pydantic import ValidationError
 
-from tessera.config import Settings
+from tessera.config import MODEL_PRICES, Settings
 from tessera.embedding.local import LocalEmbedder
+from tessera.generation.base import LLMClient
+from tessera.generation.bedrock import BedrockClient
 from tessera.generation.nvidia import NvidiaClient
 from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
@@ -61,24 +64,104 @@ def _load_settings() -> Settings:
         raise typer.Exit(code=1) from exc
 
 
-def _build_llm(settings: Settings, *, min_interval: float = 0.0) -> RetryingLLMClient:
+def _announce_retry(attempt: int, delay: float, error: BaseException) -> None:
+    code = getattr(error, "status_code", "error")
+    typer.echo(
+        f"  LLM returned {code}; retrying in {delay:.0f}s (attempt {attempt})",
+        err=True,
+    )
+
+
+def _build_nvidia(settings: Settings, *, min_interval: float = 0.0) -> RetryingLLMClient:
     """NVIDIA NIM behind retry/backoff. The SDK's own fast retries are
     turned off so they don't multiply with ours.
     """
-
-    def announce(attempt: int, delay: float, error: BaseException) -> None:
-        code = getattr(error, "status_code", "error")
-        typer.echo(
-            f"  LLM returned {code}; retrying in {delay:.0f}s (attempt {attempt})",
-            err=True,
-        )
-
     inner = NvidiaClient(
         api_key=settings.nvidia_api_key,
         model=settings.nvidia_model,
         sdk_max_retries=0,
     )
-    return RetryingLLMClient(inner, min_interval=min_interval, on_retry=announce)
+    return RetryingLLMClient(inner, min_interval=min_interval, on_retry=_announce_retry)
+
+
+def _require_aws_profile(profile: str) -> None:
+    """Fail before the first question, not on it: without this a missing
+    profile turns every case of an eval sweep into an ERROR row.
+    """
+    from botocore.exceptions import ProfileNotFound
+    from botocore.session import Session
+
+    try:
+        credentials = Session(profile=profile).get_credentials()
+    except ProfileNotFound:
+        credentials = None
+    if credentials is None:
+        typer.echo(
+            f"AWS profile '{profile}' not found or has no credentials. Create it "
+            f"with `aws configure --profile {profile}` (it needs "
+            "bedrock-mantle:CreateInference), or point BEDROCK_AWS_PROFILE at "
+            "an existing one. TESSERA_LLM_PROVIDER=nvidia runs without AWS.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+
+def _build_bedrock(
+    settings: Settings, model: str, *, effort: str | None
+) -> RetryingLLMClient:
+    inner = BedrockClient(
+        model,
+        aws_region=settings.bedrock_region,
+        aws_profile=settings.bedrock_aws_profile,
+        effort=effort,
+        sdk_max_retries=0,
+    )
+    return RetryingLLMClient(inner, on_retry=_announce_retry)
+
+
+@dataclass(frozen=True)
+class LLMs:
+    """The clients one command needs: ``answer`` writes answers, ``router``
+    classifies the question (the same client on NIM), and ``name`` says
+    which models those are, for display.
+    """
+
+    answer: LLMClient
+    router: LLMClient
+    name: str
+
+
+def _build_llms(settings: Settings, *, min_interval: float = 0.0) -> LLMs:
+    """Per TESSERA_LLM_PROVIDER. min_interval paces NIM calls (an eval
+    sweep); Bedrock isn't paced.
+    """
+    if settings.llm_provider == "bedrock":
+        _require_aws_profile(settings.bedrock_aws_profile)
+        return LLMs(
+            answer=_build_bedrock(
+                settings,
+                settings.bedrock_answer_model,
+                effort=settings.bedrock_answer_effort,
+            ),
+            # Haiku 4.5 rejects output_config.effort, so the router gets none.
+            router=_build_bedrock(settings, settings.bedrock_router_model, effort=None),
+            name=(
+                f"bedrock:{settings.bedrock_answer_model} "
+                f"(router {settings.bedrock_router_model})"
+            ),
+        )
+    nvidia = _build_nvidia(settings, min_interval=min_interval)
+    return LLMs(answer=nvidia, router=nvidia, name=f"nvidia:{settings.nvidia_model}")
+
+
+def usage_line(result: AnswerResult) -> str:
+    """Tokens and, when every model is priced, cost — e.g.
+    "1,234 in / 210 out tokens · $0.0091".
+    """
+    usage = result.usage
+    line = f"{usage.input_tokens:,} in / {usage.output_tokens:,} out tokens"
+    cost = usage.cost_usd(MODEL_PRICES)
+    return line if cost is None else f"{line} · ${cost:.4f}"
 
 
 def _require_index(store: ChromaVectorStore) -> None:
@@ -173,11 +256,13 @@ def query(text: str) -> None:
     store, expertise_store = _open_stores(settings)
 
     embedder = LocalEmbedder()
-    llm = _build_llm(settings)
+    llms = _build_llms(settings)
 
-    result = answer_query(text, llm, embedder, store, expertise_store)
+    result = answer_query(
+        text, llms.answer, embedder, store, expertise_store, router_llm=llms.router
+    )
 
-    typer.echo(f"\n{render_answer(result)}")
+    typer.echo(f"\n{render_answer(result)}\n\n({usage_line(result)})")
 
 
 @app.command()
@@ -200,7 +285,7 @@ def chat(
 
     typer.echo("Loading the embedding model…")
     embedder = LocalEmbedder()
-    llm = _build_llm(settings)
+    llms = _build_llms(settings)
 
     if transcript is not None:
         with transcript.open("a", encoding="utf-8") as f:
@@ -226,7 +311,9 @@ def chat(
 
         start = time.perf_counter()
         try:
-            result = answer_query(text, llm, embedder, store, expertise_store)
+            result = answer_query(
+                text, llms.answer, embedder, store, expertise_store, router_llm=llms.router
+            )
         except KeyboardInterrupt:
             typer.echo("  (cancelled)")
             continue
@@ -238,13 +325,17 @@ def chat(
 
         label = ARCHETYPE_LABELS[result.archetype]
         rendered = render_answer(result)
-        typer.echo(f"\n── {result.archetype.value} · {label} · {elapsed:.1f}s\n{rendered}")
+        typer.echo(
+            f"\n── {result.archetype.value} · {label} · {elapsed:.1f}s · "
+            f"{usage_line(result)}\n{rendered}"
+        )
 
         if transcript is not None:
             with transcript.open("a", encoding="utf-8") as f:
                 f.write(
                     f"## Q{asked}. {text}\n\n"
-                    f"*Archetype {result.archetype.value} ({label}), {elapsed:.1f}s*\n\n"
+                    f"*Archetype {result.archetype.value} ({label}), {elapsed:.1f}s, "
+                    f"{usage_line(result)}*\n\n"
                     f"```text\n{rendered}\n```\n\n"
                 )
 
@@ -258,7 +349,7 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Interface to listen on."),
     port: int = typer.Option(8000, help="Port to listen on."),
 ) -> None:
-    """Serve the HTTP API (and, from P4-2, the chat page) locally.
+    """Serve the HTTP API locally.
 
     Builds the same dependencies `chat` does, once, then hands them to
     `tessera.api.create_app` — the API never reads config itself.
@@ -273,10 +364,16 @@ def serve(
 
     typer.echo("Loading the embedding model…")
     embedder = LocalEmbedder()
-    llm = _build_llm(settings)
+    llms = _build_llms(settings)
 
     api = create_app(
-        llm, embedder, store, expertise_store, llm_name=f"nvidia:{settings.nvidia_model}"
+        llms.answer,
+        embedder,
+        store,
+        expertise_store,
+        llm_name=llms.name,
+        router_llm=llms.router,
+        prices=MODEL_PRICES,
     )
     typer.echo(f"Tessera on http://{host}:{port}  (Ctrl-C to stop)")
     uvicorn.run(api, host=host, port=port)
@@ -320,7 +417,16 @@ def eval_command(
         raise typer.Exit(code=1)
 
     embedder = LocalEmbedder()
-    llm = _build_llm(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+    llms = _build_llms(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+    # The judge stays on Nemotron so bar numbers stay comparable across
+    # providers (plan §3.1.4). On NIM it is the same paced client as the
+    # answers, so pacing covers every call.
+    judge = (
+        llms.answer
+        if settings.llm_provider == "nvidia"
+        else _build_nvidia(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+    )
+    typer.echo(f"Answers: {llms.name} · judge: nvidia:{settings.nvidia_model}", err=True)
 
     def show_progress(done: int, total: int, result: object) -> None:
         error = getattr(result, "error", None)
@@ -330,12 +436,15 @@ def eval_command(
     cases = load_cases(EVAL_CASES_DIR)
     report = run_harness(
         cases,
-        llm,
+        llms.answer,
         embedder,
         store,
         settings.corpus_dir,
         expertise_store=expertise_store,
         on_case_complete=show_progress,
+        router_llm=llms.router,
+        judge_llm=judge,
+        prices=MODEL_PRICES,
     )
 
     typer.echo(format_report(report))

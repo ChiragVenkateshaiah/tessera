@@ -631,3 +631,121 @@ def test_run_harness_reports_progress_for_every_case_including_errors() -> None:
     )
 
     assert seen == [(1, 3, "c1", False), (2, 3, "c2", True), (3, 3, "c3", False)]
+
+
+# --- Phase 4: router/judge clients and cost ---
+
+
+class MeteredScripted(ScriptedLLMClient):
+    def __init__(self, responses_by_system: dict[str, str], model: str) -> None:
+        super().__init__(responses_by_system)
+        self.model = model
+
+    def complete_with_usage(self, system: str, user: str, temperature: float = 0.0):
+        from tessera.generation.base import Completion, Usage
+
+        return Completion(
+            self.complete(system, user, temperature), Usage(self.model, 1_000, 100, 0.1)
+        )
+
+
+def _lookup_case() -> EvalCase:
+    return EvalCase(
+        id="q1",
+        query="do we have X?",
+        archetype=Archetype.LOOKUP,
+        relevant_sources=["methodology/target.md"],
+        ideal_answer="points to target",
+    )
+
+
+def _cost_setup():
+    from tessera.generation.usage import ModelPrice
+
+    router = MeteredScripted({ROUTER_SYSTEM_PROMPT: _router_response("A")}, "haiku")
+    answerer = MeteredScripted({LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1]."}, "opus")
+    judge = ScriptedLLMClient(
+        {JUDGE_SYSTEM_PROMPT: '{"groundedness": 5, "relevance": 4, "reasoning": "ok"}'}
+    )
+    store = FakeVectorStore([_result("data/corpus/methodology/target.md", 0.9)])
+    prices = {"haiku": ModelPrice(1.0, 5.0), "opus": ModelPrice(4.0, 20.0)}
+    return router, answerer, judge, store, prices
+
+
+def test_run_case_uses_router_and_judge_clients_and_costs_only_the_answer_path() -> None:
+    router, answerer, judge, store, prices = _cost_setup()
+
+    result = run_case(
+        _lookup_case(),
+        answerer,
+        FakeEmbedder(),
+        store,
+        CORPUS_DIR,
+        router_llm=router,
+        judge_llm=judge,
+        prices=prices,
+    )
+
+    assert [s for s, _ in router.calls] == [ROUTER_SYSTEM_PROMPT]
+    assert [s for s, _ in answerer.calls] == [LOOKUP_ANSWER_SYSTEM_PROMPT]
+    assert [s for s, _ in judge.calls] == [JUDGE_SYSTEM_PROMPT]
+    assert result.judge == JudgeScore(groundedness=5, relevance=4, reasoning="ok")
+    assert (result.input_tokens, result.output_tokens) == (2_000, 200)
+    # haiku 1000*1 + 100*5, opus 1000*4 + 100*20 — judge not included
+    assert result.cost_usd == pytest.approx((1_500 + 6_000) / 1e6)
+
+
+def test_run_harness_reports_cost_by_archetype_and_a_provisional_bar_row() -> None:
+    router, answerer, judge, store, prices = _cost_setup()
+
+    report = run_harness(
+        [_lookup_case()],
+        answerer,
+        FakeEmbedder(),
+        store,
+        CORPUS_DIR,
+        router_llm=router,
+        judge_llm=judge,
+        prices=prices,
+    )
+
+    assert report.mean_cost_per_answer == pytest.approx(7_500 / 1e6)
+    assert report.total_cost_usd == pytest.approx(7_500 / 1e6)
+    assert report.mean_cost_by_archetype == {Archetype.LOOKUP: pytest.approx(7_500 / 1e6)}
+    assert (report.total_input_tokens, report.total_output_tokens) == (2_000, 200)
+
+    row = next(t for t in evaluate_bar(report).thresholds if t.name == "Mean cost per answer")
+    assert row.gated is False and row.passed is True
+    assert "provisional" in row.requirement
+
+    text = format_report(report)
+    assert "A: $0.0075 per answer" in text
+    assert "[----] Mean cost per answer: $0.0075 (provisional" in text
+    assert "cost=$0.0075" in text
+
+
+def test_unpriced_sweep_reports_tokens_but_no_cost_row() -> None:
+    router, answerer, judge, store, _ = _cost_setup()
+
+    report = run_harness(
+        [_lookup_case()], answerer, FakeEmbedder(), store, CORPUS_DIR,
+        router_llm=router, judge_llm=judge,
+    )
+
+    assert report.total_input_tokens == 2_000
+    assert report.mean_cost_per_answer is None
+    assert all(t.name != "Mean cost per answer" for t in evaluate_bar(report).thresholds)
+    assert "Cost: n/a" in format_report(report)
+
+
+def test_gated_cost_ceiling_fails_the_bar_when_exceeded() -> None:
+    from evals.harness import QualityBar
+
+    report = _passing_report(mean_cost_per_answer=0.05)
+
+    ok = evaluate_bar(report, QualityBar(max_mean_cost_per_answer_usd=0.10, gate_cost=True))
+    over = evaluate_bar(report, QualityBar(max_mean_cost_per_answer_usd=0.01, gate_cost=True))
+
+    assert ok.passed is True
+    assert over.passed is False
+    assert [t.name for t in over.gated_failures] == ["Mean cost per answer"]

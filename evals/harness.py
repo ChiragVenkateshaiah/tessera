@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -42,6 +42,7 @@ from tessera.generation.answer import NO_RESULTS_MESSAGE, filter_relevant, gener
 from tessera.generation.base import LLMClient
 from tessera.generation.expertise import NO_EXPERT_MESSAGE, generate_expertise_answer
 from tessera.generation.prompts import format_person_record
+from tessera.generation.usage import ModelPrice, UsageRecorder, combine
 from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.router import Archetype, route, terminal_response_for
@@ -146,6 +147,11 @@ class CaseResult:
     # No-match set only: True iff the fixed no-match message came back with
     # zero generation LLM calls. False also when the case misrouted.
     no_match_correct: bool | None = None
+    # Tokens and cost of the routing + answer calls (Phase 4). The judge's
+    # calls are never counted. cost_usd is None when a model is unpriced.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost_usd: float | None = None
 
 
 EXPERTISE_NOT_SCORED_NOTE = (
@@ -172,7 +178,8 @@ def _run_expertise_case(
     case: EvalCase,
     decision_archetype: Archetype,
     routing_correct: bool,
-    llm: LLMClient,
+    answer_llm: LLMClient,
+    judge_llm: LLMClient,
     embedder: Embedder,
     expertise_store: ExpertiseStore,
     k: int,
@@ -183,7 +190,7 @@ def _run_expertise_case(
     the answer actually presents.
     """
     result = find_experts(case.query, embedder, expertise_store, k=k)
-    counting = _CountingLLM(llm)
+    counting = _CountingLLM(answer_llm)
     generated = generate_expertise_answer(result, counting)
     latency = time.perf_counter() - start
 
@@ -209,7 +216,7 @@ def _run_expertise_case(
             case.ideal_answer,
             records,
             generated.answer,
-            llm,
+            judge_llm,
             system=EXPERTISE_JUDGE_SYSTEM_PROMPT,
         )
 
@@ -243,14 +250,57 @@ def run_case(
     corpus_dir: Path,
     k: int = DEFAULT_K,
     expertise_store: ExpertiseStore | None = None,
+    *,
+    router_llm: LLMClient | None = None,
+    judge_llm: LLMClient | None = None,
+    prices: Mapping[str, ModelPrice] | None = None,
 ) -> CaseResult:
     """Run one eval case through routing, then the archetype's path: D is
     terminal, B runs expertise retrieval + generation (needs
     expertise_store; without one a B case is scored on routing only), and
     A/C run document retrieval + generation.
+
+    ``llm`` writes answers; router_llm (default ``llm``) routes, as in
+    pipeline.answer_query(); judge_llm (default ``llm``) scores — kept
+    separate so answers can move to Claude while the judge stays on
+    Nemotron (Phase 4 plan §3.1.4). The case's tokens and cost cover the
+    routing and answer calls only, never the judge's.
     """
+    answer_llm = UsageRecorder(llm)
+    routing_llm = UsageRecorder(router_llm) if router_llm is not None else answer_llm
+    result = _run_case(
+        case,
+        routing_llm,
+        answer_llm,
+        judge_llm if judge_llm is not None else llm,
+        embedder,
+        store,
+        corpus_dir,
+        k,
+        expertise_store,
+    )
+    usage = combine([routing_llm, answer_llm])
+    return replace(
+        result,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cost_usd=usage.cost_usd(prices or {}),
+    )
+
+
+def _run_case(
+    case: EvalCase,
+    routing_llm: LLMClient,
+    answer_llm: LLMClient,
+    judge_llm: LLMClient,
+    embedder: Embedder,
+    store: VectorStore,
+    corpus_dir: Path,
+    k: int,
+    expertise_store: ExpertiseStore | None,
+) -> CaseResult:
     start = time.perf_counter()
-    decision = route(case.query, llm)
+    decision = route(case.query, routing_llm)
     routing_correct = decision.archetype is case.archetype
 
     terminal = terminal_response_for(decision.archetype)
@@ -260,7 +310,8 @@ def run_case(
                 case,
                 decision.archetype,
                 routing_correct,
-                llm,
+                answer_llm,
+                judge_llm,
                 embedder,
                 expertise_store,
                 k,
@@ -285,7 +336,7 @@ def run_case(
         )
 
     retrieval = retrieve(case.query, decision.archetype, embedder, store)
-    generated = generate_answer(retrieval, llm)
+    generated = generate_answer(retrieval, answer_llm)
     latency = time.perf_counter() - start
 
     retrieved_documents = unique_documents_by_rank(retrieval.results, corpus_dir)
@@ -303,7 +354,7 @@ def run_case(
             for r in filter_relevant(retrieval.results)
         ]
         judge = judge_answer(
-            case.query, case.ideal_answer, source_descriptions, generated.answer, llm
+            case.query, case.ideal_answer, source_descriptions, generated.answer, judge_llm
         )
 
     return CaseResult(
@@ -344,6 +395,14 @@ class EvalReport:
     mean_expertise_groundedness: float | None = None
     mean_expertise_relevance: float | None = None
     no_match_rate: float | None = None
+    # Cost (Phase 4), over cases that completed. The cost fields are None
+    # when any such case had an unpriced model (e.g. a NIM-only sweep);
+    # tokens are reported either way.
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    mean_cost_per_answer: float | None = None
+    total_cost_usd: float | None = None
+    mean_cost_by_archetype: dict[Archetype, float] = field(default_factory=dict)
 
 
 def run_harness(
@@ -355,6 +414,10 @@ def run_harness(
     k: int = DEFAULT_K,
     expertise_store: ExpertiseStore | None = None,
     on_case_complete: Callable[[int, int, CaseResult], None] | None = None,
+    *,
+    router_llm: LLMClient | None = None,
+    judge_llm: LLMClient | None = None,
+    prices: Mapping[str, ModelPrice] | None = None,
 ) -> EvalReport:
     """Run every case and aggregate metrics across all of them.
 
@@ -370,12 +433,25 @@ def run_harness(
     moving on. The failure is captured on the case's own CaseResult
     (`error` set, routing/metric fields None) and excluded from every
     aggregate below, rather than silently corrupting them.
+
+    router_llm / judge_llm / prices: see run_case().
     """
     case_results: list[CaseResult] = []
     for done, case in enumerate(cases, start=1):
         try:
             case_results.append(
-                run_case(case, llm, embedder, store, corpus_dir, k, expertise_store)
+                run_case(
+                    case,
+                    llm,
+                    embedder,
+                    store,
+                    corpus_dir,
+                    k,
+                    expertise_store,
+                    router_llm=router_llm,
+                    judge_llm=judge_llm,
+                    prices=prices,
+                )
             )
         except Exception as exc:
             case_results.append(
@@ -444,6 +520,14 @@ def run_harness(
         if r.error is None:
             latency_by_archetype[r.expected_archetype].append(r.latency_seconds)
 
+    completed = [r for r in case_results if r.error is None]
+    priced = bool(completed) and all(r.cost_usd is not None for r in completed)
+    cost_by_archetype: dict[Archetype, list[float]] = defaultdict(list)
+    if priced:
+        for r in completed:
+            cost_by_archetype[r.expected_archetype].append(r.cost_usd)  # type: ignore[arg-type]
+    costs = [r.cost_usd for r in completed if r.cost_usd is not None]
+
     return EvalReport(
         case_results=case_results,
         routing_accuracy=routing_accuracy,
@@ -469,6 +553,13 @@ def run_harness(
         no_match_rate=(
             mean([1.0 if f else 0.0 for f in no_match_flags]) if no_match_flags else None
         ),
+        total_input_tokens=sum(r.input_tokens or 0 for r in completed),
+        total_output_tokens=sum(r.output_tokens or 0 for r in completed),
+        mean_cost_per_answer=mean(costs) if priced else None,
+        total_cost_usd=sum(costs) if priced else None,
+        mean_cost_by_archetype={
+            archetype: mean(values) for archetype, values in cost_by_archetype.items()
+        },
     )
 
 
@@ -504,6 +595,11 @@ class QualityBar:
     # switch was flipped in the same change. Set False to fall back to
     # report-only.
     gate_expertise: bool = True
+    # Cost per answer (Phase 4 plan §4): reported, provisional, until a
+    # budget is agreed with the user — then set the ceiling and flip
+    # gate_cost, the same staging B went through.
+    max_mean_cost_per_answer_usd: float | None = None
+    gate_cost: bool = False
 
 
 DEFAULT_QUALITY_BAR = QualityBar()
@@ -655,6 +751,21 @@ def evaluate_bar(
             )
         )
 
+    cost = report.mean_cost_per_answer
+    if cost is not None:
+        ceiling = bar.max_mean_cost_per_answer_usd
+        thresholds.append(
+            ThresholdResult(
+                "Mean cost per answer",
+                bar.gate_cost and ceiling is not None,
+                "provisional — no budget agreed yet"
+                if ceiling is None
+                else f"<= ${ceiling:.4f}",
+                f"${cost:.4f}",
+                ceiling is None or cost <= ceiling,
+            )
+        )
+
     return BarResult(
         thresholds=thresholds,
         passed=all(t.passed for t in thresholds if t.gated),
@@ -728,6 +839,27 @@ def format_report(report: EvalReport) -> str:
             )
     lines.append("")
 
+    if report.total_input_tokens or report.total_output_tokens:
+        lines.append("Cost (routing + answer calls; the judge is excluded):")
+        lines.append(
+            f"  Tokens: {report.total_input_tokens:,} in / "
+            f"{report.total_output_tokens:,} out"
+        )
+        if report.mean_cost_per_answer is None:
+            lines.append("  Cost: n/a (a model has no price in config.MODEL_PRICES)")
+        else:
+            for archetype in Archetype:
+                if archetype in report.mean_cost_by_archetype:
+                    lines.append(
+                        f"  {archetype.value}: "
+                        f"${report.mean_cost_by_archetype[archetype]:.4f} per answer"
+                    )
+            lines.append(
+                f"  Mean: ${report.mean_cost_per_answer:.4f} per answer · "
+                f"total ${report.total_cost_usd:.2f}"
+            )
+        lines.append("")
+
     lines.append("Per-case detail:")
     for r in report.case_results:
         if r.error is not None:
@@ -757,6 +889,8 @@ def format_report(report: EvalReport) -> str:
                 f"groundedness={r.expertise_judge.groundedness} "
                 f"relevance={r.expertise_judge.relevance}"
             )
+        if r.cost_usd is not None:
+            parts.append(f"cost=${r.cost_usd:.4f}")
         parts.append(f"latency={r.latency_seconds:.2f}s")
         lines.append("  " + " ".join(parts))
 

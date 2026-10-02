@@ -1,5 +1,5 @@
 """HTTP transport over the pipeline — `POST /api/ask`, `GET /api/health`,
-and `GET /` for the chat page (P4-2).
+and a placeholder page at `GET /`.
 
 A composition-root-side adapter, like `cli.py` (CLAUDE.md constraint #6):
 `create_app()` receives already-built dependencies (LLM client, embedder,
@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import FastAPI
@@ -21,6 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from tessera.embedding.base import Embedder
 from tessera.generation.base import LLMClient
+from tessera.generation.usage import ModelPrice
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
 from tessera.store.base import ExpertiseStore, VectorStore
@@ -34,12 +36,12 @@ ANSWER_FAILED_MESSAGE = (
     "Try again in a moment."
 )
 
-# Until P4-2 replaces it with the chat page.
+# Whether a chat page replaces this is decided after P4-2 (Phase 4 plan §7).
 PLACEHOLDER_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Tessera</title></head>
 <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem;">
 <h1>Tessera</h1>
-<p>The API is running. The chat page arrives in P4-2.</p>
+<p>The API is running.</p>
 <p>Ask a question with <code>POST /api/ask</code> and a JSON body
 <code>{"question": "..."}</code>, or try it from <a href="/docs">/docs</a>.</p>
 </body></html>
@@ -58,10 +60,16 @@ class AskRequest(BaseModel):
         return stripped
 
 
-def answer_to_dict(result: AnswerResult, latency_s: float) -> dict[str, Any]:
+def answer_to_dict(
+    result: AnswerResult,
+    latency_s: float,
+    prices: Mapping[str, ModelPrice] | None = None,
+) -> dict[str, Any]:
     """The JSON shape of one answer: everything `tessera query` prints,
-    as data, plus the evidence behind each named person.
+    as data, plus the evidence behind each named person and the tokens
+    (and, when every model is priced, the cost) it took.
     """
+    usage = result.usage
     return {
         "question": result.query,
         "archetype": result.archetype.value,
@@ -97,6 +105,20 @@ def answer_to_dict(result: AnswerResult, latency_s: float) -> dict[str, Any]:
             }
             for i, m in enumerate(result.experts, start=1)
         ],
+        "usage": {
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "calls": [
+                {
+                    "model": u.model,
+                    "input_tokens": u.input_tokens,
+                    "output_tokens": u.output_tokens,
+                    "latency_s": round(u.latency_s, 2),
+                }
+                for u in usage.calls
+            ],
+        },
+        "cost_usd": usage.cost_usd(prices or {}),
         "latency_s": round(latency_s, 2),
     }
 
@@ -108,11 +130,15 @@ def create_app(
     expertise_store: ExpertiseStore | None,
     *,
     llm_name: str,
+    router_llm: LLMClient | None = None,
+    prices: Mapping[str, ModelPrice] | None = None,
 ) -> FastAPI:
     """Build the HTTP app around already-constructed dependencies.
 
     llm_name is reported by /api/health so a demo can show which model is
-    answering; it must not contain secrets.
+    answering; it must not contain secrets. router_llm (optional) makes the
+    routing call; prices turn each answer's tokens into ``cost_usd``
+    (None when a model is unpriced).
     """
     app = FastAPI(
         title="Tessera",
@@ -129,12 +155,17 @@ def create_app(
         try:
             with pipeline_lock:
                 result = answer_query(
-                    request.question, llm, embedder, store, expertise_store
+                    request.question,
+                    llm,
+                    embedder,
+                    store,
+                    expertise_store,
+                    router_llm=router_llm,
                 )
         except Exception:  # the client gets a message, the log gets the trace
             logger.exception("answer_query failed for an /api/ask request")
             return JSONResponse(status_code=502, content={"error": ANSWER_FAILED_MESSAGE})
-        return JSONResponse(answer_to_dict(result, time.perf_counter() - start))
+        return JSONResponse(answer_to_dict(result, time.perf_counter() - start, prices))
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:

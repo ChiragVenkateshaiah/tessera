@@ -9,9 +9,11 @@ reason.
 
 from __future__ import annotations
 
+import time
+
 from openai import OpenAI
 
-from tessera.generation.base import LLMClient
+from tessera.generation.base import Completion, LLMClient, Usage
 
 DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
@@ -42,6 +44,12 @@ class NvidiaClient(LLMClient):
         self._model = model
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+        return self.complete_with_usage(system, user, temperature).text
+
+    def complete_with_usage(
+        self, system: str, user: str, temperature: float = 0.0
+    ) -> Completion:
+        start = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self._model,
             messages=[
@@ -58,7 +66,16 @@ class NvidiaClient(LLMClient):
             # Phase 1's Gemini calls.
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
+        latency = time.perf_counter() - start
         content = response.choices[0].message.content
         if not content:
             raise RuntimeError("NVIDIA NIM returned an empty completion")
-        return content
+        usage = None
+        if response.usage is not None:
+            usage = Usage(
+                model=self._model,
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                latency_s=latency,
+            )
+        return Completion(content, usage)
