@@ -42,7 +42,11 @@ from tessera.feedback.candidates import CANDIDATE_STATUS
 from tessera.generation.answer import NO_RESULTS_MESSAGE, filter_relevant, generate_answer
 from tessera.generation.base import LLMClient
 from tessera.generation.expertise import NO_EXPERT_MESSAGE, generate_expertise_answer
-from tessera.generation.prompts import format_person_record
+from tessera.generation.prompts import (
+    format_person_record,
+    format_source_group,
+    group_by_document,
+)
 from tessera.generation.usage import ModelPrice, UsageRecorder, combine
 from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
@@ -356,9 +360,11 @@ def _run_case(
 
     judge = None
     if case.ideal_answer and generated.answer != NO_RESULTS_MESSAGE:
+        # Numbered exactly as the answer prompt numbered them (one per
+        # document), so the answer's [n] markers point at the same text.
         source_descriptions = [
-            f"{r.document_title} — {' > '.join(r.heading_path)}\n{r.text}"
-            for r in filter_relevant(retrieval.results)
+            format_source_group(group)
+            for group in group_by_document(filter_relevant(retrieval.results))
         ]
         judge = judge_answer(
             case.query, case.ideal_answer, source_descriptions, generated.answer, judge_llm
