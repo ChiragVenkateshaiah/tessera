@@ -50,15 +50,37 @@ SYNTHESIS_ANSWER_SYSTEM_PROMPT = f"""You are Tessera, an internal knowledge assi
 Synthesize the numbered sources into a coherent briefing — weave the material together rather than listing sources one by one, and cite each source inline near the claim it supports."""
 
 
+def group_by_document(sources: list[SearchResult]) -> list[list[SearchResult]]:
+    """Chunks grouped by document, documents in order of first appearance,
+    chunks in their given order. One group = one numbered source: since
+    P4's parent-document expansion a lookup can show a whole document, and
+    numbering each chunk would cite one document many times over.
+    """
+    groups: dict[str, list[SearchResult]] = {}
+    for source in sources:
+        groups.setdefault(source.document_path, []).append(source)
+    return list(groups.values())
+
+
+def format_source_group(group: list[SearchResult]) -> str:
+    """One numbered source's body (without its [n]): the document title,
+    then each shown section. Public so the eval judge is shown sources
+    numbered and worded exactly as the model saw them — if the two
+    numberings drift, the judge reads every citation as pointing at the
+    wrong text.
+    """
+    sections = "\n\n".join(f"— {' > '.join(c.heading_path)}\n{c.text}" for c in group)
+    return f"{group[0].document_title}\n{sections}"
+
+
 def build_grounded_answer_user_prompt(query: str, sources: list[SearchResult]) -> str:
     """Format retrieved chunks as numbered sources the model can cite by
-    number — the numbering here is what the [n] markers in the answer
-    refer back to.
+    number, one number per document (see group_by_document) — the
+    numbering here is what the [n] markers in the answer refer back to.
     """
     formatted_sources = "\n\n".join(
-        f"[{i}] {source.document_title} — {' > '.join(source.heading_path)}\n"
-        f"{source.text}"
-        for i, source in enumerate(sources, start=1)
+        f"[{i}] {format_source_group(group)}"
+        for i, group in enumerate(group_by_document(sources), start=1)
     )
     return f"Question: {query}\n\nSources:\n\n{formatted_sources}"
 

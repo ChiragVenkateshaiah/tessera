@@ -750,3 +750,40 @@ def test_gated_cost_ceiling_fails_the_bar_when_exceeded() -> None:
     assert ok.passed is True
     assert over.passed is False
     assert [t.name for t in over.gated_failures] == ["Mean cost per answer"]
+
+
+def test_judge_sees_sources_numbered_exactly_as_the_answer_prompt() -> None:
+    """Answers cite one [n] per document; if the judge numbered chunks
+    instead, every citation after a multi-chunk document would point at
+    the wrong text (the 2026-10-02 groundedness drop).
+    """
+    from evals.metrics import build_judge_user_prompt
+    from tessera.generation.prompts import build_grounded_answer_user_prompt
+
+    chunks = [
+        _result("data/corpus/methodology/ref.md", 0.9, title="Reference"),
+        _result("data/corpus/methodology/ref.md", 0.8, title="Reference"),
+        _result("data/corpus/methodology/other.md", 0.7, title="Other"),
+    ]
+    llm = ScriptedLLMClient(
+        {
+            ROUTER_SYSTEM_PROMPT: _router_response("C"),
+            SYNTHESIS_ANSWER_SYSTEM_PROMPT: "Briefing [1][2].",
+            JUDGE_SYSTEM_PROMPT: '{"groundedness": 5, "relevance": 5, "reasoning": "ok"}',
+        }
+    )
+    case = EvalCase(
+        id="q1", query="brief me", archetype=Archetype.SYNTHESIS,
+        relevant_sources=["methodology/ref.md"], ideal_answer="covers ref",
+    )
+
+    run_case(case, llm, FakeEmbedder(), FakeVectorStore(chunks), CORPUS_DIR)
+
+    answer_prompt = next(u for s, u in llm.calls if s == SYNTHESIS_ANSWER_SYSTEM_PROMPT)
+    judge_prompt = next(u for s, u in llm.calls if s == JUDGE_SYSTEM_PROMPT)
+    answer_sources = answer_prompt.split("Sources:\n\n", 1)[1]
+    judge_sources = judge_prompt.split("Sources the assistant could use:\n\n", 1)[1].split(
+        "\n\nAssistant's actual answer:", 1
+    )[0]
+    assert judge_sources == answer_sources
+    assert "[2] Other" in judge_sources and "[3]" not in judge_sources

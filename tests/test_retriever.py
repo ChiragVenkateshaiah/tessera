@@ -8,7 +8,7 @@ import pytest
 from tessera.embedding.base import Embedder
 from tessera.retrieval.retriever import (
     LOOKUP_CANDIDATE_K,
-    LOOKUP_MAX_PER_DOCUMENT,
+    LOOKUP_EXPAND_DOCUMENTS,
     LOOKUP_TOP_K,
     SYNTHESIS_CANDIDATE_K,
     SYNTHESIS_MAX_PER_DOCUMENT,
@@ -50,6 +50,19 @@ def _result(chunk_id: str, document_path: str, score: float) -> SearchResult:
     )
 
 
+def _matches(result: SearchResult, where: dict[str, object] | None) -> bool:
+    """The subset of Chroma's where syntax retriever.py uses: a single
+    {"document_path": ...} or {"$and": [...]} over such clauses; other keys
+    (e.g. doc_type) aren't modelled and always match.
+    """
+    if not where:
+        return True
+    if "$and" in where:
+        return all(_matches(result, w) for w in where["$and"])  # type: ignore[union-attr]
+    path = where.get("document_path")
+    return path is None or result.document_path == path
+
+
 class FakeVectorStore(VectorStore):
     """Records the k/where it was called with and returns a canned,
     best-match-first candidate list spread across several documents —
@@ -58,8 +71,7 @@ class FakeVectorStore(VectorStore):
 
     def __init__(self, candidates: list[SearchResult]) -> None:
         self._candidates = candidates
-        self.last_k: int | None = None
-        self.last_where: dict[str, object] | None = None
+        self.calls: list[tuple[int, dict[str, object] | None]] = []
 
     def add(self, chunks: object, embeddings: object) -> None:
         raise NotImplementedError
@@ -70,9 +82,13 @@ class FakeVectorStore(VectorStore):
         k: int,
         where: dict[str, object] | None = None,
     ) -> list[SearchResult]:
-        self.last_k = k
-        self.last_where = where
-        return self._candidates[:k]
+        self.calls.append((k, where))
+        matching = [c for c in self._candidates if _matches(c, where)]
+        return matching[:k]
+
+    @property
+    def first_k(self) -> int:
+        return self.calls[0][0]
 
     def count(self) -> int:
         return len(self._candidates)
@@ -83,7 +99,8 @@ def _spread_candidates(n: int, docs: int) -> list[SearchResult]:
     documents so a document's chunks aren't all consecutive.
     """
     return [
-        _result(f"c{i}", f"doc{i % docs}.md", score=1.0 - i * 0.01) for i in range(n)
+        _result(f"doc{i % docs}::{i}", f"doc{i % docs}.md", score=1.0 - i * 0.01)
+        for i in range(n)
     ]
 
 
@@ -95,30 +112,55 @@ def test_lookup_fetches_a_candidate_pool_then_narrows_to_top_k() -> None:
     )
 
     # Fetches the wider pool from the store...
-    assert store.last_k == LOOKUP_CANDIDATE_K
+    assert store.first_k == LOOKUP_CANDIDATE_K
     # ...but the caller only ever sees the top LOOKUP_TOP_K distinct docs.
-    assert len(result.results) == LOOKUP_TOP_K
+    assert len({r.document_path for r in result.results}) == LOOKUP_TOP_K
 
 
-def test_lookup_returns_one_chunk_per_document() -> None:
-    # 30 candidates round-robined across 3 docs — a raw top-5 would give
-    # doc0 twice; diversification must return 3 distinct docs, one chunk each.
+def _documents_in_order(results: list[SearchResult]) -> list[str]:
+    seen: list[str] = []
+    for r in results:
+        if r.document_path not in seen:
+            seen.append(r.document_path)
+    return seen
+
+
+def test_lookup_picks_distinct_documents_before_expanding() -> None:
+    # 40 candidates round-robined across 20 docs (2 chunks each). The
+    # documents are chosen one chunk each (P2-4: a strong document can't
+    # hide its siblings), best first...
+    store = FakeVectorStore(_spread_candidates(40, docs=20))
+
+    result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    assert _documents_in_order(result.results) == [f"doc{i}.md" for i in range(LOOKUP_TOP_K)]
+    # ...then the top LOOKUP_EXPAND_DOCUMENTS are shown whole, the rest as
+    # their single best chunk.
+    per_doc = {d: sum(r.document_path == d for r in result.results) for d in _documents_in_order(result.results)}
+    assert list(per_doc.values()) == [2] * LOOKUP_EXPAND_DOCUMENTS + [1] * (
+        LOOKUP_TOP_K - LOOKUP_EXPAND_DOCUMENTS
+    )
+
+
+def test_an_expanded_document_comes_whole_and_in_document_order() -> None:
+    # 30 candidates across 3 docs, 10 chunks each; doc0 is the best match.
     store = FakeVectorStore(_spread_candidates(30, docs=3))
 
     result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
 
-    assert len(result.results) == 3
-    assert len({r.document_path for r in result.results}) == 3
+    doc0 = [r.chunk_id for r in result.results if r.document_path == "doc0.md"]
+    assert doc0 == [f"doc0::{i}" for i in range(0, 30, 3)]
+    # The third document is outside the expansion: one chunk.
+    assert sum(r.document_path == "doc2.md" for r in result.results) == 1
 
 
-def test_lookup_caps_a_dominant_document_at_one_chunk() -> None:
-    # All 30 candidates from one document — A must return exactly one,
-    # not LOOKUP_TOP_K chunks of the same source (the q001 failure mode).
-    store = FakeVectorStore(_spread_candidates(30, docs=1))
+def test_expansion_keeps_each_chunks_own_score() -> None:
+    store = FakeVectorStore(_spread_candidates(30, docs=3))
 
     result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
 
-    assert len(result.results) == LOOKUP_MAX_PER_DOCUMENT == 1
+    by_id = {c.chunk_id: c.score for c in _spread_candidates(30, docs=3)}
+    assert all(r.score == by_id[r.chunk_id] for r in result.results)
 
 
 def test_synthesis_uses_broader_candidate_k() -> None:
@@ -126,7 +168,8 @@ def test_synthesis_uses_broader_candidate_k() -> None:
 
     retrieve("get me up to speed on pricing strategy", Archetype.SYNTHESIS, FakeEmbedder(), store)
 
-    assert store.last_k == SYNTHESIS_CANDIDATE_K
+    assert store.first_k == SYNTHESIS_CANDIDATE_K
+    assert len(store.calls) == 1  # synthesis doesn't expand
 
 
 def test_same_query_returns_visibly_different_breadth_under_a_vs_c() -> None:
@@ -190,7 +233,13 @@ def test_where_filter_passed_through_to_store() -> None:
         where={"doc_type": "methodology"},
     )
 
-    assert store.last_where == {"doc_type": "methodology"}
+    first_where = store.calls[0][1]
+    assert first_where == {"doc_type": "methodology"}
+    # Expansion narrows to one document but keeps the caller's filter
+    # (P4-6's permission filter will ride on this).
+    for _, where in store.calls[1:]:
+        assert where["$and"][0] == {"doc_type": "methodology"}
+        assert set(where["$and"][1]) == {"document_path"}
 
 
 @pytest.mark.parametrize("archetype", [Archetype.EXPERTISE, Archetype.COMPARATIVE])
@@ -208,3 +257,18 @@ def test_retrieval_result_carries_query_and_archetype() -> None:
 
     assert result.query == "do we have anything on churn?"
     assert result.archetype is Archetype.LOOKUP
+
+
+def test_expansion_ignores_chunks_of_other_documents_from_a_loose_store() -> None:
+    class LooseStore(FakeVectorStore):
+        def query(self, embedding, k, where=None):  # ignores the filter entirely
+            self.calls.append((k, where))
+            return self._candidates[:k]
+
+    store = LooseStore(_spread_candidates(30, docs=10))
+
+    result = retrieve("market entry framework", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    ids = [r.chunk_id for r in result.results]
+    assert len(ids) == len(set(ids))  # nothing twice
+    assert _documents_in_order(result.results) == [f"doc{i}.md" for i in range(LOOKUP_TOP_K)]

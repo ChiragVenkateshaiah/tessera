@@ -9,6 +9,7 @@ from tessera.generation.prompts import (
     LOOKUP_ANSWER_SYSTEM_PROMPT,
     SYNTHESIS_ANSWER_SYSTEM_PROMPT,
     build_grounded_answer_user_prompt,
+    group_by_document,
 )
 from tessera.retrieval.retriever import RetrievalResult
 from tessera.retrieval.router import Archetype
@@ -43,7 +44,8 @@ _SYSTEM_PROMPT_BY_ARCHETYPE = {
 class Citation:
     """One numbered source offered to the model for a generated answer —
     the marker matches the [n] reference the prompt asks the model to
-    cite inline with.
+    cite inline with. One per document; heading_path is empty when more
+    than one section of the document was shown.
     """
 
     marker: int
@@ -117,14 +119,16 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
         system=system,
         user=build_grounded_answer_user_prompt(retrieval.query, relevant),
     )
+    # One citation per document, numbered as the prompt numbered them.
+    # heading_path is the section only when a single section was shown.
     citations = [
         Citation(
             marker=i,
-            document_path=r.document_path,
-            document_title=r.document_title,
-            heading_path=r.heading_path,
+            document_path=group[0].document_path,
+            document_title=group[0].document_title,
+            heading_path=group[0].heading_path if len(group) == 1 else (),
         )
-        for i, r in enumerate(relevant, start=1)
+        for i, group in enumerate(group_by_document(relevant), start=1)
     ]
     return GeneratedAnswer(
         query=retrieval.query,
