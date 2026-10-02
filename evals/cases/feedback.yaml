@@ -1,0 +1,32 @@
+# Eval cases promoted from user feedback (Phase 4, P4-3): a thumbs-down
+# answer -> `tessera feedback to-cases` -> labelled here by reading the
+# corpus. Each case notes the trace it came from and what went wrong; the
+# labels say what a correct answer points to, not what the system did.
+#
+# fb001 — 2026-10-02, trace 96ffa58f36c04dfe843f46191988bdb7 (NIM). The
+# answer said the corpus has no worked example. It does: the Framework
+# section of the Elasticity Calculation Reference estimates elasticity
+# from transaction data (log-log OLS with confounder controls) and works a
+# breakeven substitution. The trace showed why the model missed it: the
+# lookup path keeps one chunk per document (P2-4 diversification), so only
+# that page's Overview chunk was shown — the Framework chunk never was —
+# and a supply-chain chunk took a slot. Labels drafted by Claude from the
+# document text; reviewed in the PR that added this file.
+
+- id: fb001
+  query: "Where's our worked example for calculating price elasticity from transaction data?"
+  archetype: A
+  relevant_sources:
+    - methodology/pricing-strategy-elasticity-calculation-reference.md
+    - methodology/pricing-strategy-price-elasticity.md
+  ideal_answer: >-
+    Points to the Pricing Strategy: Elasticity Calculation Reference. Its
+    Framework section shows how to estimate elasticity from transaction data
+    with a log-log demand regression (controls for seasonality, own
+    promotions, competitor price, store fixed effects and holidays, with
+    store-clustered errors), says to report the confidence interval, gives
+    the arc-elasticity formula for a single observed price change, and works
+    a breakeven substitution (price 10.00, variable cost 8.00 -> margin
+    ratio 0.20 -> breakeven |e| = 5.0). The Price Elasticity Analysis
+    methodology page is the companion on when to use elasticity and how to
+    interpret it. It should not say no worked example exists.

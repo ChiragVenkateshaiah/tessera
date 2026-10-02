@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sys
 import time
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -13,6 +14,9 @@ from pydantic import ValidationError
 
 from tessera.config import MODEL_PRICES, Settings
 from tessera.embedding.local import LocalEmbedder
+from tessera.feedback.base import Feedback
+from tessera.feedback.candidates import candidate_cases, render_candidates
+from tessera.feedback.local import JsonlFeedbackStore, JsonlTraceLog
 from tessera.generation.base import LLMClient
 from tessera.generation.bedrock import BedrockClient
 from tessera.generation.nvidia import NvidiaClient
@@ -24,6 +28,7 @@ from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
+from tessera.trace import trace_record
 
 # evals/ sits alongside src/, not inside it, so it isn't shipped as part
 # of the installed tessera package or resolvable from the console-script
@@ -249,6 +254,28 @@ def render_answer(result: AnswerResult) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _record_trace(
+    settings: Settings, result: AnswerResult, latency_s: float, llm_name: str
+) -> str:
+    """Write the answer's trace to the trace log; return its trace_id. A
+    write failure is reported, not raised — the answer still stands.
+    """
+    trace_id = uuid.uuid4().hex
+    record = trace_record(
+        trace_id,
+        result,
+        timestamp=datetime.now(timezone.utc),
+        latency_s=latency_s,
+        prices=MODEL_PRICES,
+        llm=llm_name,
+    )
+    try:
+        JsonlTraceLog(settings.trace_log).append(record)
+    except OSError as exc:
+        typer.echo(f"  (couldn't write the trace to {settings.trace_log}: {exc})", err=True)
+    return trace_id
+
+
 @app.command()
 def query(text: str) -> None:
     """Answer a query against the persisted index, with citations."""
@@ -258,11 +285,15 @@ def query(text: str) -> None:
     embedder = LocalEmbedder()
     llms = _build_llms(settings)
 
+    start = time.perf_counter()
     result = answer_query(
         text, llms.answer, embedder, store, expertise_store, router_llm=llms.router
     )
+    trace_id = _record_trace(settings, result, time.perf_counter() - start, llms.name)
 
-    typer.echo(f"\n{render_answer(result)}\n\n({usage_line(result)})")
+    typer.echo(
+        f"\n{render_answer(result)}\n\n({usage_line(result)} · trace {trace_id})"
+    )
 
 
 @app.command()
@@ -322,12 +353,13 @@ def chat(
             continue
         elapsed = time.perf_counter() - start
         asked += 1
+        trace_id = _record_trace(settings, result, elapsed, llms.name)
 
         label = ARCHETYPE_LABELS[result.archetype]
         rendered = render_answer(result)
         typer.echo(
             f"\n── {result.archetype.value} · {label} · {elapsed:.1f}s · "
-            f"{usage_line(result)}\n{rendered}"
+            f"{usage_line(result)} · trace {trace_id}\n{rendered}"
         )
 
         if transcript is not None:
@@ -335,7 +367,7 @@ def chat(
                 f.write(
                     f"## Q{asked}. {text}\n\n"
                     f"*Archetype {result.archetype.value} ({label}), {elapsed:.1f}s, "
-                    f"{usage_line(result)}*\n\n"
+                    f"{usage_line(result)}, trace `{trace_id}`*\n\n"
                     f"```text\n{rendered}\n```\n\n"
                 )
 
@@ -374,6 +406,8 @@ def serve(
         llm_name=llms.name,
         router_llm=llms.router,
         prices=MODEL_PRICES,
+        trace_log=JsonlTraceLog(settings.trace_log),
+        feedback_store=JsonlFeedbackStore(settings.feedback_file),
     )
     typer.echo(f"Tessera on http://{host}:{port}  (Ctrl-C to stop)")
     uvicorn.run(api, host=host, port=port)
@@ -457,3 +491,94 @@ def eval_command(
             failed = ", ".join(t.name for t in result.gated_failures)
             typer.echo(f"\nQuality bar FAILED: {failed}", err=True)
             raise typer.Exit(code=1)
+
+
+feedback_app = typer.Typer(
+    help="Rate answers and turn thumbs-down into candidate eval cases."
+)
+app.add_typer(feedback_app, name="feedback")
+
+
+@feedback_app.command("add")
+def feedback_add(
+    trace_id: str = typer.Argument(..., help="The trace id printed with the answer."),
+    rating: str = typer.Option(..., "--rating", help="up or down."),
+    reason: str | None = typer.Option(None, help="Short reason, e.g. wrong-source."),
+    comment: str | None = typer.Option(None, help="Free-text detail."),
+) -> None:
+    """Rate one answer (what `POST /api/feedback` does, from the terminal)."""
+    if rating not in ("up", "down"):
+        typer.echo("--rating must be 'up' or 'down'.", err=True)
+        raise typer.Exit(code=1)
+    settings = _load_settings()
+    if JsonlTraceLog(settings.trace_log).get(trace_id) is None:
+        typer.echo(f"No answer with trace id {trace_id!r} in {settings.trace_log}.", err=True)
+        raise typer.Exit(code=1)
+    JsonlFeedbackStore(settings.feedback_file).add(
+        Feedback(
+            trace_id=trace_id,
+            rating=rating,  # type: ignore[arg-type]
+            created_at=datetime.now(timezone.utc),
+            reason=reason,
+            comment=comment,
+        )
+    )
+    typer.echo(f"Recorded thumbs-{rating} for {trace_id}.")
+
+
+@feedback_app.command("review")
+def feedback_review() -> None:
+    """List thumbs-down answers with what their traces show."""
+    settings = _load_settings()
+    traces = JsonlTraceLog(settings.trace_log)
+    cases, missing = candidate_cases(
+        JsonlFeedbackStore(settings.feedback_file).list(), traces.get, settings.corpus_dir
+    )
+    if not cases and not missing:
+        typer.echo("No thumbs-down feedback.")
+        return
+    for case in cases:
+        seen = case["observed"]
+        trace = traces.get(seen["trace_id"]) or {}
+        shown = seen["sources_shown"] or seen["people_shown"]
+        why = " — ".join(x for x in (seen["reason"], seen["comment"]) if x) or "(no reason given)"
+        typer.echo(
+            f"\n{seen['trace_id']}  [{case['archetype']}]  {case['query']}\n"
+            f"  feedback: {why}\n"
+            f"  route: {trace.get('route_reasoning', '')}\n"
+            f"  shown to the model: {', '.join(shown) if shown else 'nothing (fixed response)'}\n"
+            f"  cost: {trace.get('cost_usd')}  latency: {trace.get('latency_s')}s"
+        )
+    for trace_id in missing:
+        typer.echo(f"\n{trace_id}  (thumbs-down, but no trace record found)")
+
+
+@feedback_app.command("to-cases")
+def feedback_to_cases(
+    out: Path | None = typer.Option(
+        None, "--out", help="Staging file (default: TESSERA_FEEDBACK_CANDIDATES)."
+    ),
+) -> None:
+    """Write thumbs-down answers as CANDIDATE eval cases for a human to
+    label. Never writes into evals/cases/ — unlabelled cases would corrupt
+    the quality bar.
+    """
+    settings = _load_settings()
+    target = out or settings.feedback_candidates
+    if EVAL_CASES_DIR.resolve() in target.resolve().parents:
+        typer.echo(
+            "Refusing to write candidates into evals/cases/ — they must be "
+            "labelled first. Write them elsewhere and promote by hand.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    cases, missing = candidate_cases(
+        JsonlFeedbackStore(settings.feedback_file).list(),
+        JsonlTraceLog(settings.trace_log).get,
+        settings.corpus_dir,
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_candidates(cases), encoding="utf-8")
+    typer.echo(f"Wrote {len(cases)} candidate case(s) to {target}.")
+    if missing:
+        typer.echo(f"Skipped {len(missing)} with no trace record: {', '.join(missing)}", err=True)

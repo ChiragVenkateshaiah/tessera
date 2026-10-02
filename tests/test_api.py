@@ -272,3 +272,97 @@ def test_ask_with_no_llm_calls_reports_zero_usage(monkeypatch: pytest.MonkeyPatc
 
     assert body["usage"] == {"input_tokens": 0, "output_tokens": 0, "calls": []}
     assert body["cost_usd"] == 0.0  # no LLM calls in the canned answer
+
+
+# --- P4-3: traces and feedback ---
+
+
+def _traced_client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, feedback: bool = True
+) -> tuple[TestClient, Path, Path]:
+    from datetime import datetime, timezone
+
+    from tessera.feedback.local import JsonlFeedbackStore, JsonlTraceLog
+
+    monkeypatch.setattr(api, "answer_query", lambda q, *a, **kw: _lookup(q))
+    traces, fb = tmp_path / "traces.jsonl", tmp_path / "feedback.jsonl"
+    app = api.create_app(
+        object(),
+        object(),
+        FakeStore(336),
+        None,
+        llm_name="fake:model",
+        trace_log=JsonlTraceLog(traces),
+        feedback_store=JsonlFeedbackStore(fb) if feedback else None,
+        new_trace_id=lambda: "t-0001",
+        now=lambda: datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc),
+    )
+    return TestClient(app), traces, fb
+
+
+def test_every_answer_gets_a_trace_id_and_a_logged_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import json
+
+    client, traces, _ = _traced_client(monkeypatch, tmp_path)
+
+    body = client.post("/api/ask", json={"question": "pricing?"}).json()
+
+    assert body["trace_id"] == "t-0001"
+    assert "trace" not in body
+    (record,) = [json.loads(line) for line in traces.read_text().splitlines()]
+    assert record["trace_id"] == "t-0001"
+    assert record["query"] == "pricing?"
+    assert record["citations"] == ["data/corpus/methodology/market-entry-overview.md"]
+
+
+def test_include_trace_returns_the_record(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    client, _, _ = _traced_client(monkeypatch, tmp_path)
+
+    body = client.post("/api/ask", json={"question": "pricing?", "include_trace": True}).json()
+
+    assert body["trace"]["trace_id"] == "t-0001"
+    assert body["trace"]["archetype"] == "A"
+    assert body["trace"]["timestamp"] == "2026-10-02T12:00:00+00:00"
+
+
+def test_feedback_on_a_known_answer_is_recorded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import json
+
+    client, _, fb = _traced_client(monkeypatch, tmp_path)
+    client.post("/api/ask", json={"question": "pricing?"})
+
+    response = client.post(
+        "/api/feedback",
+        json={"trace_id": "t-0001", "rating": "down", "reason": "wrong-source", "comment": "too broad"},
+    )
+
+    assert response.status_code == 201
+    (stored,) = [json.loads(line) for line in fb.read_text().splitlines()]
+    assert stored["rating"] == "down" and stored["reason"] == "wrong-source"
+
+
+def test_feedback_for_an_unknown_trace_is_404(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    client, _, fb = _traced_client(monkeypatch, tmp_path)
+
+    response = client.post("/api/feedback", json={"trace_id": "nope", "rating": "up"})
+
+    assert response.status_code == 404
+    assert not fb.exists()
+
+
+def test_feedback_rejects_a_bad_rating(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    client, _, _ = _traced_client(monkeypatch, tmp_path)
+
+    assert client.post("/api/feedback", json={"trace_id": "t-0001", "rating": "meh"}).status_code == 422
+
+
+def test_feedback_is_503_when_not_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    client, _, _ = _traced_client(monkeypatch, tmp_path, feedback=False)
+
+    response = client.post("/api/feedback", json={"trace_id": "t-0001", "rating": "up"})
+
+    assert response.status_code == 503

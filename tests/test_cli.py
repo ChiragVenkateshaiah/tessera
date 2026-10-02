@@ -723,3 +723,69 @@ def test_bedrock_provider_without_the_aws_profile_exits_with_instructions(
     assert result.exit_code == 1
     assert "AWS profile 'tessera-missing' not found" in result.output
     assert "aws configure --profile tessera-missing" in result.output
+
+
+# --- P4-3: traces and the feedback commands ---
+
+
+def _query_once(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Run `tessera query` with fakes; return the trace id it printed."""
+    import re
+
+    _patch_chat_deps(monkeypatch, _canned)
+    result = runner.invoke(cli.app, ["query", "pricing?"])
+    assert result.exit_code == 0, result.output
+    return re.search(r"trace ([0-9a-f]{32})", result.output).group(1)
+
+
+def test_query_writes_a_trace_and_prints_its_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tessera.feedback.local import JsonlTraceLog
+
+    trace_id = _query_once(monkeypatch)
+
+    record = JsonlTraceLog(Path("data/traces/traces.jsonl")).get(trace_id)
+    assert record is not None and record["query"] == "pricing?"
+
+
+def test_feedback_add_review_and_to_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    import yaml
+
+    trace_id = _query_once(monkeypatch)
+
+    added = runner.invoke(
+        cli.app,
+        ["feedback", "add", trace_id, "--rating", "down", "--reason", "wrong-source", "--comment", "too broad"],
+    )
+    assert added.exit_code == 0, added.output
+
+    review = runner.invoke(cli.app, ["feedback", "review"])
+    assert trace_id in review.output and "wrong-source — too broad" in review.output
+
+    out = runner.invoke(cli.app, ["feedback", "to-cases"])
+    assert "Wrote 1 candidate case(s)" in out.output
+    (case,) = yaml.safe_load(Path("data/feedback/candidates.yaml").read_text())
+    assert case["status"] == "candidate" and case["query"] == "pricing?"
+
+
+def test_feedback_add_rejects_an_unknown_trace_or_rating(monkeypatch: pytest.MonkeyPatch) -> None:
+    unknown = runner.invoke(cli.app, ["feedback", "add", "nope", "--rating", "down"])
+    assert unknown.exit_code == 1 and "No answer with trace id" in unknown.output
+
+    bad = runner.invoke(cli.app, ["feedback", "add", "nope", "--rating", "meh"])
+    assert bad.exit_code == 1 and "--rating must be" in bad.output
+
+
+def test_feedback_to_cases_refuses_to_write_into_evals_cases() -> None:
+    result = runner.invoke(
+        cli.app, ["feedback", "to-cases", "--out", str(cli.EVAL_CASES_DIR / "from_feedback.yaml")]
+    )
+
+    assert result.exit_code == 1
+    assert "Refusing to write candidates into evals/cases/" in result.output
+    assert not (cli.EVAL_CASES_DIR / "from_feedback.yaml").exists()
+
+
+def test_feedback_review_with_nothing_to_review() -> None:
+    result = runner.invoke(cli.app, ["feedback", "review"])
+
+    assert result.exit_code == 0 and "No thumbs-down feedback." in result.output

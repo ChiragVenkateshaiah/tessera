@@ -110,19 +110,20 @@ def test_load_cases_parses_real_case_files() -> None:
     """Loads every *.yaml under the real evals/cases/ — placeholder.yaml
     (8 Discovery Findings workshop queries, held out as a P2-3
     overfitting check-set), query_log.yaml (41 synthesized query-log
-    stand-in cases, see its header comment), and expertise_nomatch.yaml
+    stand-in cases, see its header comment), expertise_nomatch.yaml
     (6 archetype-B no-match cases, ql022 moved there from query_log.yaml
-    in P3-5). Counts below must be updated if any file's case count
+    in P3-5), and feedback.yaml (1 case promoted from a thumbs-down in
+    P4-3). Counts below must be updated if any file's case count
     changes.
     """
     cases = load_cases(CASES_DIR)
 
-    assert len(cases) == 55
+    assert len(cases) == 56
     by_archetype = {a: 0 for a in Archetype}
     for case in cases:
         by_archetype[case.archetype] += 1
     assert by_archetype == {
-        Archetype.LOOKUP: 20,
+        Archetype.LOOKUP: 21,
         Archetype.EXPERTISE: 15,
         Archetype.SYNTHESIS: 15,
         Archetype.COMPARATIVE: 5,
