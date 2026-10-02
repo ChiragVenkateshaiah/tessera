@@ -18,7 +18,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from tessera.generation.base import LLMClient
+from tessera.generation.base import Completion, LLMClient
 
 # Backoff bases, in seconds, doubled per attempt and capped. 429 (rate
 # limit) starts higher than a 5xx overload: a 429 means the window is
@@ -102,10 +102,15 @@ class RetryingLLMClient(LLMClient):
         return min(base * 2 ** (attempt - 1), MAX_BACKOFF_SECONDS)
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+        return self.complete_with_usage(system, user, temperature).text
+
+    def complete_with_usage(
+        self, system: str, user: str, temperature: float = 0.0
+    ) -> Completion:
         for attempt in range(1, self._max_attempts + 1):
             self._pace()
             try:
-                return self._inner.complete(system, user, temperature)
+                return self._inner.complete_with_usage(system, user, temperature)
             except Exception as exc:
                 if not is_retryable(exc) or attempt == self._max_attempts:
                     raise

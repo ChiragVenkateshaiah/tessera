@@ -34,7 +34,7 @@ def _client(
 ) -> tuple[TestClient, list[str]]:
     asked: list[str] = []
 
-    def fake_answer(question, llm, embedder, store, expertise_store=None):
+    def fake_answer(question, llm, embedder, store, expertise_store=None, **kw):
         asked.append(question)
         return answer(question)
 
@@ -219,3 +219,56 @@ def test_serve_builds_dependencies_once_and_runs_uvicorn(
     health = TestClient(ran["app"]).get("/api/health").json()
     assert health["document_chunks"] == 3 and health["people_search"] is True
     assert health["llm"].startswith("nvidia:")
+
+
+def test_ask_reports_tokens_and_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tessera.generation.base import Usage
+    from tessera.generation.usage import ModelPrice, UsageSummary
+
+    def priced(question: str) -> AnswerResult:
+        base = _lookup(question)
+        usage = UsageSummary(
+            calls=(Usage("haiku", 500, 20, 0.4), Usage("opus", 3000, 400, 6.2)),
+        )
+        return AnswerResult(
+            query=base.query,
+            archetype=base.archetype,
+            answer=base.answer,
+            citations=base.citations,
+            usage=usage,
+        )
+
+    seen: dict = {}
+
+    def fake_answer(question, llm, embedder, store, expertise_store=None, **kw):
+        seen.update(kw)
+        return priced(question)
+
+    monkeypatch.setattr(api, "answer_query", fake_answer)
+    router = object()
+    app = api.create_app(
+        object(),
+        object(),
+        FakeStore(336),
+        None,
+        llm_name="bedrock:opus",
+        router_llm=router,
+        prices={"haiku": ModelPrice(1.0, 5.0), "opus": ModelPrice(4.0, 20.0)},
+    )
+
+    body = TestClient(app).post("/api/ask", json={"question": "pricing?"}).json()
+
+    assert seen["router_llm"] is router
+    assert body["usage"]["input_tokens"] == 3500
+    assert body["usage"]["output_tokens"] == 420
+    assert [c["model"] for c in body["usage"]["calls"]] == ["haiku", "opus"]
+    assert body["cost_usd"] == pytest.approx((500 + 100 + 12_000 + 8_000) / 1e6)
+
+
+def test_ask_with_no_llm_calls_reports_zero_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _ = _client(monkeypatch, _lookup)
+
+    body = client.post("/api/ask", json={"question": "pricing?"}).json()
+
+    assert body["usage"] == {"input_tokens": 0, "output_tokens": 0, "calls": []}
+    assert body["cost_usd"] == 0.0  # no LLM calls in the canned answer

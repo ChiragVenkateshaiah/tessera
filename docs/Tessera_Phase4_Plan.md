@@ -95,6 +95,9 @@ new eval cases; every existing threshold must keep passing.
 `BedrockClient(LLMClient)` using the Anthropic SDK's
 `AnthropicBedrockMantle(aws_region=...)`; credentials from the AWS
 credential chain (a dedicated local `tessera` profile), never from code.
+IAM authorizes this endpoint as `bedrock-mantle:CreateInference` (not
+`bedrock:InvokeModel*`, which is the older `bedrock-runtime` path —
+corrected 2026-10-02).
 Wrapped in `RetryingLLMClient` with SDK retries off. Selected by config:
 `TESSERA_LLM_PROVIDER=nvidia|bedrock` (default stays `nvidia` until the
 bar passes on Bedrock).
@@ -336,7 +339,9 @@ streaming) and slotted before Phase 5.
 - **AWS CLI** — v2 installed 2026-10-01 in `~/.local`. A dedicated
   `tessera` profile is needed (other projects' profiles in `~/.aws` are
   not reused), ideally an IAM user or role limited to
-  `bedrock:InvokeModel*` on the two chosen models.
+  `bedrock-mantle:CreateInference` (the Mantle endpoint's action;
+  `bedrock:InvokeModel*` belongs to the older `bedrock-runtime` path),
+  narrowed to the two models once their resource ARNs are confirmed.
 - **Bedrock model access** in a region that offers both models.
 - **A sweep budget** the user is comfortable with.
 

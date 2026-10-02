@@ -195,7 +195,7 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
     fake_harness.load_cases = lambda cases_dir: (calls.append("load_cases"), [])[1]
 
     def fake_run_harness(
-        cases, llm, embedder, store, corpus_dir, expertise_store=None, on_case_complete=None
+        cases, llm, embedder, store, corpus_dir, expertise_store=None, on_case_complete=None, **kw
     ):
         calls.append("run_harness")
         assert expertise_store is not None  # B must be scored by `tessera eval`
@@ -350,7 +350,7 @@ def _patch_query_deps(monkeypatch: pytest.MonkeyPatch, expertise_count: int, see
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
     monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
 
-    def fake_answer(text, llm, embedder, store, expertise_store=None):
+    def fake_answer(text, llm, embedder, store, expertise_store=None, **kw):
         seen["expertise_store"] = expertise_store
         return seen["canned"]
 
@@ -489,7 +489,7 @@ def _patch_chat_deps(monkeypatch: pytest.MonkeyPatch, answer) -> list[str]:
 
     asked: list[str] = []
 
-    def fake_answer(text, llm, embedder, store, expertise_store=None):
+    def fake_answer(text, llm, embedder, store, expertise_store=None, **kw):
         asked.append(text)
         return answer(text)
 
@@ -572,3 +572,154 @@ def test_chat_requires_an_existing_index(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert result.exit_code == 1
     assert "run `tessera ingest` first" in result.output
+
+
+# --- Phase 4: provider selection ---
+
+
+def _record_bedrock(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    built: list[dict] = []
+    monkeypatch.setattr(cli, "_require_aws_profile", lambda profile: None)
+
+    def fake_bedrock(model, **kw):
+        built.append({"model": model, **kw})
+        return object()
+
+    monkeypatch.setattr(cli, "BedrockClient", fake_bedrock)
+    return built
+
+
+def test_bedrock_provider_builds_a_haiku_router_and_an_opus_answerer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "bedrock")
+    built = _record_bedrock(monkeypatch)
+    monkeypatch.setattr(cli, "NvidiaClient", lambda *a, **kw: pytest.fail("NIM not expected"))
+
+    llms = cli._build_llms(cli._load_settings())
+
+    answer, router = built
+    assert answer["model"] == "anthropic.claude-opus-5-5"
+    assert answer["effort"] == "medium"
+    assert router["model"] == "anthropic.claude-haiku-4-5"
+    assert router["effort"] is None
+    for client in built:
+        assert client["aws_profile"] == "tessera"
+        assert client["aws_region"] == "us-east-1"
+        assert client["sdk_max_retries"] == 0
+    assert llms.answer is not llms.router
+    assert "opus-5-5" in llms.name and "haiku-4-5" in llms.name
+
+
+def test_nvidia_provider_uses_one_client_for_routing_and_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
+    monkeypatch.setattr(cli, "BedrockClient", lambda *a, **kw: pytest.fail("Bedrock not expected"))
+
+    llms = cli._build_llms(cli._load_settings())
+
+    assert llms.answer is llms.router
+    assert llms.name.startswith("nvidia:")
+
+
+def test_eval_on_bedrock_keeps_the_judge_on_nvidia(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tessera.config import MODEL_PRICES
+    from tessera.generation.resilient import RetryingLLMClient
+
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "bedrock")
+    _record_bedrock(monkeypatch)
+    nvidia_built: list[str] = []
+
+    def fake_nvidia(api_key, model, **kw):
+        nvidia_built.append(model)
+        return object()
+
+    monkeypatch.setattr(cli, "NvidiaClient", fake_nvidia)
+
+    class Store:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", Store)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", Store)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+
+    captured: dict = {}
+    fake_harness = type(sys)("evals.harness")
+    fake_harness.load_cases = lambda d: []
+
+    def fake_run_harness(cases, llm, embedder, store, corpus_dir, **kw):
+        captured.update(kw, llm=llm)
+        return "report"
+
+    fake_harness.run_harness = fake_run_harness
+    fake_harness.format_report = lambda r: "REPORT TEXT"
+    fake_evals_pkg = type(sys)("evals")
+    fake_evals_pkg.harness = fake_harness
+    monkeypatch.setitem(sys.modules, "evals", fake_evals_pkg)
+    monkeypatch.setitem(sys.modules, "evals.harness", fake_harness)
+
+    result = runner.invoke(cli.app, ["eval"])
+
+    assert result.exit_code == 0, result.output
+    assert nvidia_built == ["nvidia/nemotron-3-ultra-550b-a55b"]  # the judge only
+    judge = captured["judge_llm"]
+    assert isinstance(judge, RetryingLLMClient)
+    assert judge._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert judge is not captured["llm"] and captured["router_llm"] is not captured["llm"]
+    assert captured["prices"] is MODEL_PRICES
+    assert "judge: nvidia:" in result.output
+
+
+def test_query_prints_tokens_and_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tessera.generation.base import Usage
+    from tessera.generation.usage import UsageSummary
+
+    _patch_chat_deps(
+        monkeypatch,
+        lambda text: AnswerResult(
+            query=text,
+            archetype=Archetype.LOOKUP,
+            answer="ok",
+            citations=[],
+            usage=UsageSummary(calls=(Usage("anthropic.claude-haiku-4-5", 1000, 100, 0.1),)),
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["query", "pricing?"])
+
+    assert result.exit_code == 0, result.output
+    assert "1,000 in / 100 out tokens · $0.0015" in result.output
+
+
+def test_bedrock_provider_without_the_aws_profile_exits_with_instructions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Point botocore at empty files so the real ~/.aws is never read.
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "config"))
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "credentials"))
+    for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("BEDROCK_AWS_PROFILE", "tessera-missing")
+
+    class Store:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", Store)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", Store)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+
+    result = runner.invoke(cli.app, ["query", "pricing?"])
+
+    assert result.exit_code == 1
+    assert "AWS profile 'tessera-missing' not found" in result.output
+    assert "aws configure --profile tessera-missing" in result.output

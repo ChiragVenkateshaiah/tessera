@@ -5,6 +5,27 @@ and Claude via Bedrock (Phase 4).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Usage:
+    """Token usage of one LLM call, as reported by the provider."""
+
+    model: str
+    input_tokens: int
+    output_tokens: int
+    latency_s: float
+
+
+@dataclass(frozen=True)
+class Completion:
+    """A completion's text plus its usage — None when the client can't
+    tell (a provider that doesn't report tokens, or a test fake).
+    """
+
+    text: str
+    usage: Usage | None = None
 
 
 class LLMClient(ABC):
@@ -24,3 +45,14 @@ class LLMClient(ABC):
         """Send a system instruction + user message, return the model's
         text response.
         """
+
+    def complete_with_usage(
+        self, system: str, user: str, temperature: float = 0.0
+    ) -> Completion:
+        """Like complete(), but also returns the call's token usage.
+
+        Phase 4 (cost accounting). Clients that know their usage override
+        this and implement complete() on top of it; the default here keeps
+        every other client (and test fake) working, with usage=None.
+        """
+        return Completion(self.complete(system, user, temperature))

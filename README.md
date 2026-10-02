@@ -274,11 +274,22 @@ Serves the same pipeline over HTTP (Phase 4): `POST /api/ask` with
 `{"question": "..."}` returns the answer as JSON — `archetype` and
 `archetype_label`, `answer`, `citations` (marker, title, heading path,
 document path), `experts` (name, title, practice, office, snapshot date,
-`evidenced`, and the evidence lines behind each person) and `latency_s`.
-`GET /api/health` reports the index sizes and which LLM is answering;
-`GET /docs` is FastAPI's interactive explorer. Questions are answered one
-at a time; a failed LLM call returns a JSON `502` with a plain message,
-never a stack trace. The chat page arrives at `/` with P4-2.
+`evidenced`, and the evidence lines behind each person), `usage`
+(tokens per LLM call), `cost_usd` (`null` when a model is unpriced) and
+`latency_s`. `GET /api/health` reports the index sizes and which LLM is
+answering; `GET /docs` is FastAPI's interactive explorer. Questions are
+answered one at a time; a failed LLM call returns a JSON `502` with a
+plain message, never a stack trace.
+
+**Claude on Bedrock (Phase 4).** `TESSERA_LLM_PROVIDER=bedrock` answers
+with Claude on Amazon Bedrock instead of NVIDIA NIM: Haiku 4.5 routes
+(`BEDROCK_ROUTER_MODEL`) and Opus 5.5 writes the answer
+(`BEDROCK_ANSWER_MODEL`, effort `medium`). Credentials come from a
+dedicated AWS profile (`BEDROCK_AWS_PROFILE`, default `tessera`) that
+needs only `bedrock-mantle:CreateInference`; nothing AWS-related goes in
+`.env` beyond its name. `query`, `chat` and the API report tokens and,
+from the price table in `config.py`, cost per answer. The eval judge
+stays on NVIDIA NIM either way.
 
 Each archetype-A/B/C query costs 2 NVIDIA NIM calls (route + generate),
 or 1 when nothing clears the relevance/evidence floor; D costs 1 (route
@@ -295,8 +306,9 @@ Runs every case in `evals/cases/` through routing, retrieval, and
 generation, judges each answer with an LLM grader, and prints a report:
 routing accuracy, mean recall/precision/MRR@5, mean groundedness/relevance
 (1-5), the archetype-B person metrics (person recall/precision/MRR, B
-judge scores, no-match refusal rate), per-archetype latency, and the
-quality-bar PASS/FAIL block. Requires both `ingest` and `index-people`.
+judge scores, no-match refusal rate), per-archetype latency, tokens and
+cost per answer by archetype (routing + answer calls, judge excluded),
+and the quality-bar PASS/FAIL block. Requires both `ingest` and `index-people`.
 `evals/cases/` holds **55 cases** — `query_log.yaml` (41, the synthesized
 stand-in for the fictional consultant query log; the tuning set),
 `placeholder.yaml` (8, held out as an overfitting check-set), and

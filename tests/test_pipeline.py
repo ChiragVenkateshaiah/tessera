@@ -223,3 +223,55 @@ def test_off_corpus_lookup_query_produces_clean_refusal_without_generation_call(
     assert result.citations == []
     # router call happened, but no generation call was scripted/needed
     assert len(llm.calls) == 1
+
+
+# --- Phase 4: separate router client, usage per answer ---
+
+
+class MeteredScripted(ScriptedLLMClient):
+    """ScriptedLLMClient that also reports a fixed usage for ``model``."""
+
+    def __init__(self, responses_by_system: dict[str, str], model: str) -> None:
+        super().__init__(responses_by_system)
+        self.model = model
+
+    def complete_with_usage(self, system: str, user: str, temperature: float = 0.0):
+        from tessera.generation.base import Completion, Usage
+
+        return Completion(self.complete(system, user, temperature), Usage(self.model, 100, 10, 0.1))
+
+
+def test_router_llm_routes_and_llm_answers_with_usage_from_both() -> None:
+    from tessera.generation.prompts import LOOKUP_ANSWER_SYSTEM_PROMPT
+
+    router = MeteredScripted({ROUTER_SYSTEM_PROMPT: _router_response("A")}, "haiku")
+    answerer = MeteredScripted({LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1]."}, "opus")
+    store = FakeVectorStore([_result("methodology/market-entry.md", 0.6)])
+
+    result = answer_query(
+        "market entry template?", answerer, FakeEmbedder(), store, router_llm=router
+    )
+
+    assert [s for s, _ in router.calls] == [ROUTER_SYSTEM_PROMPT]
+    assert [s for s, _ in answerer.calls] == [LOOKUP_ANSWER_SYSTEM_PROMPT]
+    assert [u.model for u in result.usage.calls] == ["haiku", "opus"]
+    assert result.usage.input_tokens == 200
+
+
+def test_terminal_answer_carries_the_routing_usage() -> None:
+    llm = MeteredScripted({ROUTER_SYSTEM_PROMPT: _router_response("D")}, "haiku")
+
+    result = answer_query("compare Acme and Globex", llm, FakeEmbedder(), FakeVectorStore([]))
+
+    assert result.archetype is Archetype.COMPARATIVE
+    assert [u.model for u in result.usage.calls] == ["haiku"]
+
+
+def test_unmetered_client_leaves_usage_without_cost() -> None:
+    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("D")})
+
+    result = answer_query("compare Acme and Globex", llm, FakeEmbedder(), FakeVectorStore([]))
+
+    assert result.usage.calls == ()
+    assert result.usage.unmetered_calls == 1
+    assert result.usage.cost_usd({}) is None

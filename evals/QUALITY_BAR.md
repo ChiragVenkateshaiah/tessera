@@ -56,6 +56,21 @@ fixed no-match message with zero generation LLM calls.
 `relevant_sources` is non-empty; B/D cases are excluded from every
 document-retrieval metric (B has its own person metrics, below).
 
+### Cost (Phase 4)
+
+| Metric | Threshold | Gated? |
+|---|---|---|
+| Mean cost per answer (routing + answer calls) | no budget agreed yet | **provisional** — reported, not gated |
+
+Reported, with cost per answer by archetype, whenever every model in the
+sweep has a price in `config.MODEL_PRICES` (a NIM-only sweep reports
+tokens but no cost). The judge's calls are never counted — they are the
+cost of measuring, not of answering. Once a budget is agreed with the
+user, it becomes `QualityBar.max_mean_cost_per_answer_usd` and
+`gate_cost` is flipped (Phase 4 plan §4), the same staging the B rows
+went through. The prices are Anthropic's published rates, **not yet
+verified against Bedrock's** — check them before quoting a sweep's cost.
+
 A gated metric with **no value** (e.g. `mean_recall` is `n/a` because the
 eval set had no A/C cases) counts as a **failure**, not a skip — a sweep
 that can't measure a gated dimension has not cleared the bar.
