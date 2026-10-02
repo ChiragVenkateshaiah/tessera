@@ -95,9 +95,10 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 - Automated detection of anonymized-but-identifiable content — Discovery
   §4 says automated detection must not be presented as a solution.
   Phase 4 gates such material behind a human review flag instead.
-- A chat UI — **decision pending** until after P4-2 (plan §7; the user
-  noted a persona switcher showing access control as the strongest demo
-  shot). Prompt the user for the decision before starting P4-3. P4-1's
+- A chat UI — **decision deferred** (user, 2026-10-02) until Bedrock
+  latency can be measured (plan §7; the user noted a persona switcher
+  showing access control as the strongest demo shot). Prompt the user
+  for the decision once P4-2's live Bedrock sweep has run. P4-1's
   HTTP API (`tessera serve`) is built.
 
 **Access-control enforcement** was on this list through Phase 3 (the

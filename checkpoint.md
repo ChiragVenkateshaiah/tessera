@@ -1,31 +1,37 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-01
+Last updated: 2026-10-02
 
 ## Status
 
-**Phase 4 replanned and adopted 2026-10-01** (`docs/Tessera_Phase4_Plan.md`,
-PR #57; supersedes the PR #55 version adopted earlier that day; CLAUDE.md
-updated per its §10). Phase 4 = four production-readiness features
-aimed at the documented reasons GenAI projects stall after proof of
-concept (Gartner: data quality, risk controls, cost, value; MIT: the
-learning gap): P4-2 Claude on Bedrock + model routing + cost per answer
-· P4-3 traces + feedback-to-eval loop · P4-4 freshness + data-quality
-report · P4-5/P4-6 restricted tier + permission-aware retrieval with a
-gated leakage eval · P4-7 exit (`v0.4.0`). **P4-1 done** (HTTP API +
-`tessera serve`, PR #56 — carried over). **Next: P4-2.** The ephemeral
-AWS deployment is now **Phase 5**; CI/CD + monitoring are Phase 6. The
-chat UI is a **pending decision** to put to the user right after P4-2
-(plan §7). The user wants AWS work done AI-assisted end to end;
-`apply`/`destroy` still need their explicit go-ahead per run.
+**Phase 4 in progress (2026-10-02).** P4-1 (HTTP API, #56), **P4-2 code**
+(Claude on Bedrock + model routing + cost accounting, #59), **P4-3**
+(traces + feedback-to-eval loop, #60) and a **lookup retrieval fix**
+driven by P4-3's first feedback case (parent-document expansion, #61)
+are merged. **P4-2's acceptance is still open:** the live sweep with
+answers on Bedrock is blocked on the user's AWS account (no payment
+method; AISPL-billed — see Notes). **Next: P4-4** (freshness +
+data-quality report). The chat-UI decision is **deferred** until Bedrock
+latency can be measured (user, 2026-10-02). Latest bar: 56/56, `=> PASS`,
+A/C groundedness 4.94 / relevance 4.92 — the best yet.
+
+Phase 4 = four production-readiness features aimed at the documented
+reasons GenAI projects stall after proof of concept
+(`docs/Tessera_Phase4_Plan.md`, replanned and adopted 2026-10-01, PR
+#57): P4-2 Bedrock + routing + cost · P4-3 traces + feedback loop · P4-4
+freshness + data-quality report · P4-5/P4-6 restricted tier +
+permission-aware retrieval with a gated leakage eval · P4-7 exit
+(`v0.4.0`). The ephemeral AWS deployment is **Phase 5**; CI/CD +
+monitoring are Phase 6. The user wants AWS work done AI-assisted end to
+end; `apply`/`destroy` still need their explicit go-ahead per run.
 
 **Phase 3 complete** (`v0.3.0`, PR #53, 2026-10-01). All six plan tasks
 plus two unplanned passes merged; the Phase 3 exit sweep — full clean
 `tessera eval --check`, **55/55 cases, zero ERROR rows** — passes every
 gated A/C and B threshold (`=> PASS`). All 5 Phase 1 exit criteria
 re-confirmed on a genuinely fresh clone (machine `y520`). Two thin
-margins carried forward (A/C relevance +0.10, B person recall +0.01) —
-see "Next task to pick up". There is no Phase 4 plan doc yet.
+margins carried forward (A/C relevance +0.10 — resolved 2026-10-02 by
+#61; B person recall +0.01 — still open).
 
 **Phase 3 adopted 2026-09-07** (`docs/Tessera_Phase3_Plan.md`, PR #38 +
 #39; CLAUDE.md updated per its §7). Phase 3 = archetype B
@@ -1489,56 +1495,146 @@ same change and stays ungated (`QUALITY_BAR.md`).
         the strongest demo shot".
       - CLAUDE.md updated twice (per #55 §7, then per #57 §10).
 
+- [x] **P4-2 code — Claude on Bedrock, model routing, cost accounting**
+      (2026-10-02, PR #59 merged). **Acceptance not yet met** — the live
+      Bedrock sweep is blocked on the AWS account (see Next task, Notes).
+      - `generation/bedrock.py`: `BedrockClient` over the Anthropic SDK's
+        `AnthropicBedrockMantle` (`anthropic[bedrock]` 1.11), credentials
+        from a named AWS profile (default `tessera`), `output_config.effort`
+        for answers, temperature 0.0 sent only to Haiku 4.5 via
+        `extra_body` (SDK 1.x removed the kwarg; Opus 4.7+ rejects it),
+        refusal / empty text raise.
+      - Port: `LLMClient.complete_with_usage()` (default usage=None, so
+        `complete()` and every caller unchanged); NIM, Bedrock and
+        `RetryingLLMClient` report tokens. `generation/usage.py`:
+        `UsageRecorder` made **per answer inside the pipeline** (nothing
+        threaded through the composition roots — a deliberate deviation
+        from plan §3.1.3's "injected recorder"), `UsageSummary` (cost None,
+        never understated, when a call is unmetered or a model unpriced),
+        `ModelPrice`; `config.MODEL_PRICES` = Anthropic's rates, unverified
+        for Bedrock.
+      - `answer_query(router_llm=)`, `AnswerResult.usage`; harness
+        `router_llm`/`judge_llm`/`prices`, per-case tokens + cost (judge
+        never counted), cost by archetype, provisional "Mean cost per
+        answer" bar row (`QualityBar.max_mean_cost_per_answer_usd`,
+        `gate_cost`).
+      - CLI `TESSERA_LLM_PROVIDER=nvidia|bedrock` (default nvidia), eval
+        judge stays on NIM, a missing AWS profile fails fast; API
+        `usage` + `cost_usd`.
+      - Regression sweep (NIM, 55/55, zero errors, 21 min): `=> PASS`,
+        every gated row matching the Phase 3 exit.
+      - IAM correction recorded in plan §3.1.1/§8: the Mantle endpoint
+        authorizes `bedrock-mantle:CreateInference`, not
+        `bedrock:InvokeModel*`.
+
+- [x] **Chat-UI decision: deferred** (user, 2026-10-02). Plan §7 put it
+      after P4-2 once Bedrock latency was measured; that can't be measured
+      yet, so P4-3 started first. Ask again once the live Bedrock sweep
+      has run.
+
+- [x] **P4-3 — request traces + feedback-to-eval loop** (2026-10-02, PR #60
+      merged). **Acceptance met.**
+      - `tessera/trace.py`: the pipeline returns a `Trace` as data (route
+        reasoning, every retrieved chunk/person with its score and whether
+        it cleared the floor and reached the model, floors applied,
+        fixed-response flag); `trace_record()` builds the JSON line. Only
+        `cli.py`/`api.py` write it (`data/traces/traces.jsonl`,
+        gitignored).
+      - `tessera/feedback/`: `TraceLog` + `FeedbackStore` ports, local
+        JSONL implementations, `candidate_cases()` (latest thumbs-down per
+        trace → an unlabelled candidate marked `status: candidate`, which
+        `load_cases` refuses).
+      - API: `trace_id` on every answer, `include_trace`, `POST
+        /api/feedback` (201/404/503/422). CLI: `query`/`chat` print the
+        trace id; `tessera feedback add | review | to-cases` (`to-cases`
+        refuses to write into `evals/cases/`).
+      - Not yet traced: the principal and per-filter removal counts — they
+        arrive with P4-4/P4-6.
+      - **The loop, live:** "Where's our worked example for calculating
+        price elasticity from transaction data?" answered "no worked
+        example exists" — wrong; the trace showed only the Elasticity
+        Calculation Reference's Overview chunk was shown. Thumbs-down →
+        `to-cases` → labelled as **`fb001`** in the new
+        `evals/cases/feedback.yaml` (labels drafted by Claude from the
+        document; user approved the merge) → scored G2/R1 by the next sweep
+        (56/56, `=> PASS`, A/C relevance 4.56 — 0.06 above the gate).
+
+- [x] **Lookup retrieval fix for fb001: parent-document expansion**
+      (2026-10-02, PR #61). A still picks 5 distinct documents (P2-4
+      family recall unchanged by construction) but shows the **top 2
+      whole**, in document order (`LOOKUP_EXPAND_DOCUMENTS = 2`); the
+      caller's `where` applies to the expansion (P4-6 will rely on it);
+      expanded chunks are re-checked against the document path. Prompt and
+      citations number **one source per document**
+      (`prompts.group_by_document` / `format_source_group`), also for
+      synthesis.
+      - Root cause (retrieval-only probe): the worked example's Framework
+        chunks rank 6–7 *within their own document* (0.59/0.55, below
+        Overview 0.62), so no chunk-selection rule can surface them; three
+        of the five slots went to 0.39–0.42 filler.
+      - **Rejected first:** a relative score floor + extra chunks from
+        strong documents — 101-setting grid: A recall worst case 0.50, and
+        never both worked-example chunks. Don't retry.
+      - First sweep **failed** (groundedness 4.47): the judge still numbered
+        chunks while answers cited documents. Fixed with one shared
+        formatter + a test pinning the judge's source block to the answer
+        prompt's.
+      - Final sweep (56/56, zero errors, 29 min): `=> PASS`, **A/C
+        groundedness 4.94, relevance 4.92**; fb001 G5/R5; the P2-5
+        narrow-A carry-forward (`ql007`/`ql027`/`ql028` relevance 3) now
+        5/5/5. Watch item: `ql011` (C) relevance 5→3 in both post-change
+        sweeps. Sweep input tokens +28%.
+
 ## Next task to pick up
 
-**P4-2 — Claude on Bedrock, model routing, cost accounting**
-(`docs/Tessera_Phase4_Plan.md` §5, §3.1). `generation/bedrock.py`
-(`BedrockClient` via the Anthropic SDK's `AnthropicBedrockMantle`),
-`TESSERA_LLM_PROVIDER=nvidia|bedrock`, `BEDROCK_ROUTER_MODEL` (default
-`anthropic.claude-haiku-4-5`) / `BEDROCK_ANSWER_MODEL` (default
-`anthropic.claude-opus-5-5`); an optional separate router client in the
-pipeline; a `UsageRecorder` + price table → `AnswerResult.usage`, API
-`cost_usd`, cost by archetype in the eval report (provisional bar row);
-`judge_llm` in the harness so the judge stays on Nemotron.
+**P4-4 — Freshness + data-quality report** (`docs/Tessera_Phase4_Plan.md`
+§5, §3.3). ~5 superseded methodology documents (new data, front matter
+`status: current|superseded` + `superseded_by`, validated at load);
+superseded chunks excluded from A/C candidates, with the answer noting a
+newer version exists; `tessera data-report` (missing metadata,
+near-duplicate chunks minus the deliberate `## Related Frameworks` hard
+negatives, stale, superseded, quarantined — deterministic, zero LLM
+calls); new A/C cases where the superseded version is the lexically
+closer match.
 
-**Acceptance (plan §5 P4-2, verbatim):** a full `tessera eval --check`
-with answers on Bedrock, judge on Nemotron, passes every existing gated
-row; the report shows cost per answer by archetype; the provisional cost
-row is reported. Then **stop for the UI decision** (§7).
+**Acceptance (plan §5 P4-4, verbatim):** superseded documents are never
+cited as current on the new cases (gated 0); `tessera data-report` lists
+missing metadata, near-duplicates, stale, superseded and quarantined
+documents; existing bar passes.
 
-**Blocked on the user (plan §8) before any live Bedrock call:**
-1. A dedicated `tessera` AWS profile on this machine — ideally an IAM
-   user/role limited to `bedrock:InvokeModel*` on the two models. AWS
-   CLI v2.37.7 is installed in `~/.local` (2026-10-01) but not
-   connected; `~/.aws` holds other projects' profiles (`novapay`,
-   `cerberus*`) — **don't reuse them**. Also flagged to the user:
-   `~/.aws/credentials` is mode 775 (`chmod 600` advised).
-2. Bedrock model access for Haiku 4.5 + Opus 5.5 in one region.
-3. A per-sweep budget (estimate: single-digit dollars at first-party
-   rates; Bedrock pricing applies — check it).
-The code, tests and price table can be written before credentials exist;
-only the live sweep needs them.
+Notes for P4-4: "quarantined" belongs to §3.5.3 (P4-5's review gate) —
+report the category now even if it's empty until P4-5. Adding documents
+to `data/corpus/` means re-running `tessera ingest` before any live
+check, and a `tessera eval --check` in the PR (CLAUDE.md). The new
+exclusion filter should be traced as a removal count (plan §3.2.1). If
+the superseded filter runs as a `where` clause, parent-document expansion
+already carries `where` through.
 
-**After P4-2: ask the user the UI question** (plan §7) — recorded note:
-"a persona switcher showing access control would be the strongest demo
-shot". From P4-1: in B answers the prose may order people differently
-from the ranked `experts` list; any UI should follow the ranking and
-keep the `[n]` markers.
+**Still open from P4-2 — the live Bedrock sweep (its acceptance):** a full
+`tessera eval --check` with answers on Bedrock, judge on Nemotron, passes
+every existing gated row; the report shows cost per answer by archetype;
+the provisional cost row is reported. Blocked on the user (plan §8):
+1. The AWS account ("Project North Star", AISPL-billed) returns
+   `AccessDeniedException: … is not available for this account` for Haiku
+   4.5, Opus 4.8 and Opus 5.5 even after the Anthropic use-case form. **No
+   payment method is linked** — the user will add a card when this comes
+   up. If it still fails, AISPL Marketplace limits are the next suspect
+   (support case, Account and billing).
+2. Then: $10 monthly budget alert; IAM policy `tessera-bedrock-invoke`
+   (`bedrock-mantle:CreateInference`, `Resource: "*"` until the model
+   ARNs are confirmed from CloudTrail); IAM user `tessera-local` (no
+   console access); `aws configure --profile tessera` (region
+   us-east-1); `chmod 600 ~/.aws/credentials ~/.aws/config` (still 775).
+3. Smoke test (≈2 calls, < $0.01), then state the sweep's expected cost
+   before running it (CLAUDE.md). Verify `MODEL_PRICES` against Bedrock
+   pricing first. If Opus 5.5 stays unavailable, `BEDROCK_ANSWER_MODEL=
+   anthropic.claude-opus-4-8` is a drop-in (same Mantle endpoint).
+4. After that sweep: put the chat-UI decision to the user (deferred).
 
 ---
 
-**Phases 1–3 are complete** (`v0.1.0`, `v0.2.0`, `v0.3.0`). There is no
-Phase 4 plan doc yet, so the next step is a decision for the user, not a
-task to start:
-
-1. **Write and adopt `docs/Tessera_Phase4_Plan.md`** — move off local
-   (Bedrock, OpenSearch Serverless, S3, Lambda) per Solution Design §4
-   and `docs/adr/0002-…`. Phases 2 and 3 each started with a plan doc
-   adopted via PR plus a CLAUDE.md update (§7 of each plan); Phase 4
-   should too. CLAUDE.md's do-not-build list ("Any AWS deployment,
-   Terraform, CI/CD…") would need revising as part of that adoption.
-2. **Or a small tuning task first** on one of the thin margins below,
-   if they should be widened before more infrastructure goes on top.
+**Phases 1–3 are complete** (`v0.1.0`, `v0.2.0`, `v0.3.0`); Phase 4 is in
+progress per `docs/Tessera_Phase4_Plan.md` (above).
 
 **Tuning probe on both thin margins (2026-10-01, retrieval-only, zero
 LLM calls) — no principled lever; don't re-try these two:**
@@ -1565,9 +1661,9 @@ LLM calls) — no principled lever; don't re-try these two:**
   scores directly against the persisted index.
 
 **Carried forward from Phase 3 (not blocking — the exit sweep passed):**
-- **A/C mean relevance 4.60 vs 4.5** — the P2-5 narrow-A margin, still
-  the same four cases (`ql004`/`ql007`/`ql027`/`ql028` at 3). Lever:
-  adaptive `k` for archetype A (see Notes).
+- ~~**A/C mean relevance 4.60 vs 4.5**~~ — **resolved 2026-10-02** by
+  parent-document expansion (#61): relevance 4.92, `ql007`/`ql027`/
+  `ql028` at 5, `ql004` at 4.
 - **B person recall 0.91 vs 0.90 on 9 labelled cases** — one more miss
   fails the bar. Untried levers: `CANDIDATE_K` (pool starvation,
   `c0049` in `ql019`), a `where` filter from a place/practice named in
@@ -1688,10 +1784,12 @@ fix~~ (#35) · P2-5 ~~exit~~ (#36).
 **Phase 4 (`docs/Tessera_Phase4_Plan.md` §5)** — adopted 2026-10-01 (#55),
 replanned + re-adopted the same day (#57):
 - ~~P4-1 — HTTP API + `tessera serve`~~ — done (#56)
-- **P4-2 — Claude on Bedrock + model routing + cost accounting  ← next**
-  (then the pending UI decision, plan §7)
-- P4-3 — traces + feedback-to-eval loop
-- P4-4 — freshness + data-quality report
+- P4-2 — Claude on Bedrock + model routing + cost accounting — **code
+  done (#59); live Bedrock sweep (acceptance) pending AWS account access**
+- ~~UI decision (plan §7)~~ — deferred until Bedrock latency is measured
+- ~~P4-3 — traces + feedback-to-eval loop~~ — done (#60)
+- ~~Lookup parent-document expansion (fb001)~~ — done (#61, not a plan task)
+- **P4-4 — freshness + data-quality report  ← next**
 - P4-5 — restricted tier: data, walls, review gate, eval sets (leakage
   eval shown failing)
 - P4-6 — permission-aware retrieval (leaks 0, authorized recall ≥ 0.80,
@@ -1703,6 +1801,38 @@ Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
 the eval gate, monitoring.
 
 ## Notes / open flags
+
+- **Bedrock account blocked (2026-10-02).** See "Next task to pick up" →
+  "Still open from P4-2" for the full state and the setup steps. The
+  user's other AWS profiles (`novapay`, `cerberus*`) stay untouched; no
+  `tessera` profile or IAM user exists yet.
+- **Anthropic SDK 1.x (installed 1.11) removed `temperature`/`top_p`/
+  `top_k` from `messages.create()`** — passing one is a `TypeError`
+  before any request. `BedrockClient` sends temperature only to Haiku 4.5,
+  via `extra_body`. `tests/test_bedrock.py`'s fake SDK enforces the real
+  signature (`inspect.signature(Messages.create)`), so a dropped kwarg
+  fails a test, not a sweep.
+- **`config.MODEL_PRICES` are Anthropic's first-party rates**; AWS's
+  Bedrock pricing page didn't list these models on 2026-10-02. Verify
+  before quoting any Bedrock sweep's cost.
+- **The eval judge must see sources numbered exactly as the answer prompt
+  numbers them.** Answers cite one `[n]` per document (#61); when the judge
+  numbered chunks instead, every citation after a multi-chunk document
+  pointed at the wrong text and the bar failed (groundedness 4.47).
+  `prompts.format_source_group` feeds both; a harness test pins them
+  together. Any future change to source formatting must keep it shared.
+- **Watch `ql011`** (C, "staffed on a DD engagement — what should I read
+  first?"): relevance 5 → 3 in both sweeps after #61's per-document
+  grouping, though synthesis retrieval is unchanged. C's mean relevance
+  held (4.87) because `ql017` rose 3 → 5. If it stays at 3, look at how
+  grouping reorders a synthesis prompt.
+- **Traces and feedback are runtime data under `data/` (gitignored)** —
+  they hold users' questions. `data/feedback/candidates.yaml` is the
+  staging file; promoted cases go in `evals/cases/feedback.yaml` with the
+  trace id and what went wrong in its header.
+- **NIM sweep time varied 21–46 min on 2026-10-02** (morning 21 min;
+  evening 46 min with 41 retried 429/503s). Four full sweeps + ~6 live
+  queries today, all free tier, zero ERROR rows.
 
 - **`gh pr edit` fails on this repo** (2026-10-01): it errors with
   "Projects (classic) is being deprecated … (repository.pullRequest.
