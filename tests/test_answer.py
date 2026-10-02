@@ -235,3 +235,32 @@ def test_on_corpus_query_clears_the_relevance_bar(
 
     assert generated.answer == "Yes, see [1]."
     assert len(generated.citations) > 0
+
+
+# --- P4 parent-document expansion: one number per document ---
+
+
+def test_chunks_of_one_document_share_a_number_and_a_citation() -> None:
+    from tessera.generation.prompts import build_grounded_answer_user_prompt
+
+    chunks = [
+        _result("ref.md", "Elasticity Reference", 0.62, ("Overview",)),
+        _result("ref.md", "Elasticity Reference", 0.59, ("Framework",)),
+        _result("method.md", "Elasticity Method", 0.66, ("When to Use It",)),
+    ]
+    llm = FakeLLMClient("See [1] and [2].")
+
+    answer = generate_answer(
+        RetrievalResult(query="worked example?", archetype=Archetype.LOOKUP, results=chunks),
+        llm,
+    )
+
+    prompt = llm.calls[0][1]
+    assert prompt == build_grounded_answer_user_prompt("worked example?", chunks)
+    assert "[1] Elasticity Reference\n— Overview\n" in prompt
+    assert "— Framework\n" in prompt and "[3]" not in prompt
+    assert "[2] Elasticity Method\n— When to Use It\n" in prompt
+    assert [(c.marker, c.document_path, c.heading_path) for c in answer.citations] == [
+        (1, "ref.md", ()),  # two sections shown: no single heading
+        (2, "method.md", ("When to Use It",)),
+    ]

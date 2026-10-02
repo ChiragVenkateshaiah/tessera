@@ -14,6 +14,12 @@ LOOKUP_TOP_K, so `score_config`'s lookup branch does the same. The grid
 still tunes LOOKUP_TOP_K (as the count of distinct documents A returns);
 LOOKUP_MAX_PER_DOCUMENT is held fixed at retriever.py's value.
 
+P4 note: retrieve()'s A path then expands its top LOOKUP_EXPAND_DOCUMENTS
+documents to every chunk (parent-document expansion). That changes what
+the model reads, not which documents are retrieved or their order, so
+the document-level recall/precision/MRR scored here are unaffected and
+this script does not model it.
+
 Tunes against evals/cases/query_log.yaml only; evals/cases/placeholder.yaml
 is the held-out overfitting check-set (see its and query_log.yaml's
 header comments, and checkpoint.md's 2026-09-04 P2-2 entry) — the chosen

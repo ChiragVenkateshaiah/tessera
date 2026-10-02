@@ -247,9 +247,10 @@ def render_answer(result: AnswerResult) -> str:
         lines.append("Sources:")
         for citation in result.citations:
             heading = " > ".join(citation.heading_path)
+            section = f" — {heading}" if heading else ""
             lines.append(
-                f"  [{citation.marker}] {citation.document_title} — "
-                f"{heading} ({citation.document_path})"
+                f"  [{citation.marker}] {citation.document_title}{section} "
+                f"({citation.document_path})"
             )
     return "\n".join(lines).rstrip()
 
