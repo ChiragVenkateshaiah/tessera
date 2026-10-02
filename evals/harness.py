@@ -38,6 +38,7 @@ from evals.metrics import (
     shortlist_recall_at_k,
 )
 from tessera.embedding.base import Embedder
+from tessera.feedback.candidates import CANDIDATE_STATUS
 from tessera.generation.answer import NO_RESULTS_MESSAGE, filter_relevant, generate_answer
 from tessera.generation.base import LLMClient
 from tessera.generation.expertise import NO_EXPERT_MESSAGE, generate_expertise_answer
@@ -85,6 +86,12 @@ def load_cases(cases_dir: Path) -> list[EvalCase]:
     for path in sorted(cases_dir.glob("*.yaml")):
         entries = yaml.safe_load(path.read_text()) or []
         for entry in entries:
+            if entry.get("status") == CANDIDATE_STATUS:
+                raise ValueError(
+                    f"{path.name}: case {entry.get('id')!r} is an unlabelled "
+                    "feedback candidate (status: candidate) — label it and "
+                    "remove that line before it joins the eval set"
+                )
             cases.append(
                 EvalCase(
                     id=entry["id"],

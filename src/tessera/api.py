@@ -1,5 +1,5 @@
-"""HTTP transport over the pipeline — `POST /api/ask`, `GET /api/health`,
-and a placeholder page at `GET /`.
+"""HTTP transport over the pipeline — `POST /api/ask`, `POST
+/api/feedback`, `GET /api/health`, and a placeholder page at `GET /`.
 
 A composition-root-side adapter, like `cli.py` (CLAUDE.md constraint #6):
 `create_app()` receives already-built dependencies (LLM client, embedder,
@@ -13,7 +13,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Mapping
+import uuid
+from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI
@@ -21,11 +23,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from tessera.embedding.base import Embedder
+from tessera.feedback.base import Feedback, FeedbackStore, Rating, TraceLog
 from tessera.generation.base import LLMClient
 from tessera.generation.usage import ModelPrice
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
 from tessera.store.base import ExpertiseStore, VectorStore
+from tessera.trace import trace_record
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,8 @@ PLACEHOLDER_PAGE = """<!doctype html>
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    # Return the full trace record with the answer, not just its trace_id.
+    include_trace: bool = False
 
     @field_validator("question")
     @classmethod
@@ -58,6 +64,13 @@ class AskRequest(BaseModel):
         if not stripped:
             raise ValueError("question must not be blank")
         return stripped
+
+
+class FeedbackRequest(BaseModel):
+    trace_id: str = Field(min_length=1, max_length=64)
+    rating: Rating
+    reason: str | None = Field(default=None, max_length=200)
+    comment: str | None = Field(default=None, max_length=MAX_QUESTION_CHARS)
 
 
 def answer_to_dict(
@@ -132,13 +145,19 @@ def create_app(
     llm_name: str,
     router_llm: LLMClient | None = None,
     prices: Mapping[str, ModelPrice] | None = None,
+    trace_log: TraceLog | None = None,
+    feedback_store: FeedbackStore | None = None,
+    new_trace_id: Callable[[], str] = lambda: uuid.uuid4().hex,
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> FastAPI:
     """Build the HTTP app around already-constructed dependencies.
 
     llm_name is reported by /api/health so a demo can show which model is
     answering; it must not contain secrets. router_llm (optional) makes the
     routing call; prices turn each answer's tokens into ``cost_usd``
-    (None when a model is unpriced).
+    (None when a model is unpriced). Every answer gets a ``trace_id`` and
+    its trace is written to trace_log; feedback on it goes to
+    feedback_store (``/api/feedback`` answers 503 without both).
     """
     app = FastAPI(
         title="Tessera",
@@ -165,7 +184,47 @@ def create_app(
         except Exception:  # the client gets a message, the log gets the trace
             logger.exception("answer_query failed for an /api/ask request")
             return JSONResponse(status_code=502, content={"error": ANSWER_FAILED_MESSAGE})
-        return JSONResponse(answer_to_dict(result, time.perf_counter() - start, prices))
+        latency = time.perf_counter() - start
+        trace_id = new_trace_id()
+        record = trace_record(
+            trace_id,
+            result,
+            timestamp=now(),
+            latency_s=latency,
+            prices=prices or {},
+            llm=llm_name,
+        )
+        if trace_log is not None:
+            try:
+                trace_log.append(record)
+            except Exception:  # losing a trace must not lose the answer
+                logger.exception("couldn't write trace %s", trace_id)
+        body = answer_to_dict(result, latency, prices)
+        body["trace_id"] = trace_id
+        if request.include_trace:
+            body["trace"] = record
+        return JSONResponse(body)
+
+    @app.post("/api/feedback", status_code=201)
+    def feedback(request: FeedbackRequest) -> JSONResponse:
+        if trace_log is None or feedback_store is None:
+            return JSONResponse(
+                status_code=503, content={"error": "Feedback isn't enabled on this server."}
+            )
+        if trace_log.get(request.trace_id) is None:
+            return JSONResponse(
+                status_code=404, content={"error": f"No answer with trace_id {request.trace_id!r}."}
+            )
+        feedback_store.add(
+            Feedback(
+                trace_id=request.trace_id,
+                rating=request.rating,
+                created_at=now(),
+                reason=request.reason,
+                comment=request.comment,
+            )
+        )
+        return JSONResponse(status_code=201, content={"status": "recorded"})
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:

@@ -61,3 +61,14 @@ class Settings(BaseSettings):
     expertise_dir: Path = Field(
         default=Path("data/expertise/people"), validation_alias="TESSERA_EXPERTISE_DIR"
     )
+    # Phase 4 feedback loop. Runtime data, gitignored.
+    trace_log: Path = Field(
+        default=Path("data/traces/traces.jsonl"), validation_alias="TESSERA_TRACE_LOG"
+    )
+    feedback_file: Path = Field(
+        default=Path("data/feedback/feedback.jsonl"), validation_alias="TESSERA_FEEDBACK_FILE"
+    )
+    feedback_candidates: Path = Field(
+        default=Path("data/feedback/candidates.yaml"),
+        validation_alias="TESSERA_FEEDBACK_CANDIDATES",
+    )

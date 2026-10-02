@@ -104,7 +104,7 @@ flowchart TB
     end
 
     subgraph evalh["Evaluation harness"]
-        cases["evals/cases/*.yaml<br/>(55 synthesized cases incl. B + no-match set;<br/>placeholder.yaml held out)"]
+        cases["evals/cases/*.yaml<br/>(55 synthesized cases incl. B + no-match set,<br/>+ 1 from feedback; placeholder.yaml held out)"]
         harness["harness.py<br/>+ quality-bar check"]
         metrics["metrics.py<br/>recall@k, precision@k, MRR, person recall/MRR,<br/>groundedness, relevance, routing acc., latency"]
         cases --> harness
@@ -275,11 +275,26 @@ Serves the same pipeline over HTTP (Phase 4): `POST /api/ask` with
 `archetype_label`, `answer`, `citations` (marker, title, heading path,
 document path), `experts` (name, title, practice, office, snapshot date,
 `evidenced`, and the evidence lines behind each person), `usage`
-(tokens per LLM call), `cost_usd` (`null` when a model is unpriced) and
-`latency_s`. `GET /api/health` reports the index sizes and which LLM is
+(tokens per LLM call), `cost_usd` (`null` when a model is unpriced),
+`latency_s` and a `trace_id` (send `"include_trace": true` to get the
+whole trace back). `GET /api/health` reports the index sizes and which LLM is
 answering; `GET /docs` is FastAPI's interactive explorer. Questions are
 answered one at a time; a failed LLM call returns a JSON `502` with a
 plain message, never a stack trace.
+
+**Traces and feedback (Phase 4).** Every answer from `query`, `chat` and
+the API gets a `trace_id` and one JSON line in `data/traces/traces.jsonl`
+(gitignored): the route and its reasoning, every retrieved chunk or
+person with its score and whether it cleared the floor and reached the
+model, the floors applied, tokens, cost and latency. Rate an answer with
+`POST /api/feedback {"trace_id", "rating": "up"|"down", "reason",
+"comment"}` or `tessera feedback add TRACE_ID --rating down --reason ...`.
+`tessera feedback review` lists thumbs-down answers with what their
+traces show; `tessera feedback to-cases` writes them as **candidate** eval
+cases (`data/feedback/candidates.yaml`) marked `status: candidate`, which
+the eval loader refuses — a human labels each one from the corpus,
+removes that line and moves it into `evals/cases/`. The first one is
+`evals/cases/feedback.yaml`.
 
 **Claude on Bedrock (Phase 4).** `TESSERA_LLM_PROVIDER=bedrock` answers
 with Claude on Amazon Bedrock instead of NVIDIA NIM: Haiku 4.5 routes
@@ -309,11 +324,12 @@ routing accuracy, mean recall/precision/MRR@5, mean groundedness/relevance
 judge scores, no-match refusal rate), per-archetype latency, tokens and
 cost per answer by archetype (routing + answer calls, judge excluded),
 and the quality-bar PASS/FAIL block. Requires both `ingest` and `index-people`.
-`evals/cases/` holds **55 cases** — `query_log.yaml` (41, the synthesized
+`evals/cases/` holds **56 cases** — `query_log.yaml` (41, the synthesized
 stand-in for the fictional consultant query log; the tuning set),
-`placeholder.yaml` (8, held out as an overfitting check-set), and
+`placeholder.yaml` (8, held out as an overfitting check-set),
 `expertise_nomatch.yaml` (6 B queries with no qualifying expert, which
-must get the fixed refusal). A full sweep costs roughly 2-3 NVIDIA NIM
+must get the fixed refusal) and `feedback.yaml` (1, promoted from a
+thumbs-down — see below). A full sweep costs roughly 2-3 NVIDIA NIM
 calls per case — well within the 10,000/day free-tier limit.
 
 In practice NVIDIA's free tier throttles well below its documented 40

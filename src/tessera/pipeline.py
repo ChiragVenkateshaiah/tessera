@@ -12,14 +12,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tessera.embedding.base import Embedder
-from tessera.generation.answer import Citation, generate_answer
+from tessera.generation.answer import (
+    RELEVANCE_THRESHOLD,
+    Citation,
+    filter_relevant,
+    generate_answer,
+)
 from tessera.generation.base import LLMClient
-from tessera.generation.expertise import generate_expertise_answer
+from tessera.generation.expertise import (
+    EXPERTISE_PERSON_FLOOR,
+    EXPERTISE_QUERY_FLOOR,
+    filter_qualified,
+    generate_expertise_answer,
+)
 from tessera.generation.usage import UsageRecorder, UsageSummary, combine
 from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.router import Archetype, route, terminal_response_for
 from tessera.store.base import ExpertiseStore, PersonMatch, VectorStore
+from tessera.trace import RetrievedItem, Trace
 
 EXPERTISE_UNAVAILABLE_MESSAGE = (
     "The expertise index hasn't been built, so I can't look up people yet."
@@ -46,6 +57,9 @@ class AnswerResult:
     # Tokens of every LLM call behind this answer (routing included);
     # callers turn it into dollars with a price table (Phase 4).
     usage: UsageSummary = field(default_factory=UsageSummary)
+    # How the answer was produced — the composition roots log it with a
+    # trace_id (Phase 4, plan §3.2.1).
+    trace: Trace = field(default_factory=lambda: Trace(route_reasoning=""))
 
 
 def answer_query(
@@ -71,34 +85,65 @@ def answer_query(
     answer_llm = UsageRecorder(llm)
     routing_llm = UsageRecorder(router_llm) if router_llm is not None else answer_llm
 
+    decision = route(query, routing_llm)
+
     def result(
-        archetype: Archetype,
         answer: str,
+        trace: Trace,
         citations: list[Citation] | None = None,
         experts: list[PersonMatch] | None = None,
     ) -> AnswerResult:
         return AnswerResult(
             query=query,
-            archetype=archetype,
+            archetype=decision.archetype,
             answer=answer,
             citations=citations or [],
             experts=experts or [],
             usage=combine([routing_llm, answer_llm]),
+            trace=trace,
         )
-
-    decision = route(query, routing_llm)
 
     terminal = terminal_response_for(decision.archetype)
     if terminal is not None:
-        return result(decision.archetype, terminal)
+        return result(terminal, Trace(decision.reasoning, fixed_response=True))
 
     if decision.archetype is Archetype.EXPERTISE:
         if expertise_store is None:
-            return result(decision.archetype, EXPERTISE_UNAVAILABLE_MESSAGE)
-        experts = find_experts(query, embedder, expertise_store)
-        generated = generate_expertise_answer(experts, answer_llm)
-        return result(decision.archetype, generated.answer, experts=generated.experts)
+            return result(
+                EXPERTISE_UNAVAILABLE_MESSAGE,
+                Trace(decision.reasoning, fixed_response=True),
+            )
+        found = find_experts(query, embedder, expertise_store)
+        generated = generate_expertise_answer(found, answer_llm)
+        # The same filter the generator applied, so "used" is exactly who
+        # the model was shown.
+        shown = {m.person.person_id for m in filter_qualified(found.matches)}
+        trace = Trace(
+            decision.reasoning,
+            retrieved_kind="person",
+            retrieved=tuple(
+                RetrievedItem(m.person.person_id, m.evidence_score, m.person.person_id in shown)
+                for m in found.matches
+            ),
+            floors={
+                "expertise_query_floor": EXPERTISE_QUERY_FLOOR,
+                "expertise_person_floor": EXPERTISE_PERSON_FLOOR,
+            },
+            fixed_response=not shown,
+        )
+        return result(generated.answer, trace, experts=generated.experts)
 
     retrieval = retrieve(query, decision.archetype, embedder, store)
     generated = generate_answer(retrieval, answer_llm)
-    return result(decision.archetype, generated.answer, citations=generated.citations)
+    shown_chunks = {r.chunk_id for r in filter_relevant(retrieval.results)}
+    trace = Trace(
+        decision.reasoning,
+        retrieved_kind="chunk",
+        retrieved=tuple(
+            RetrievedItem(r.chunk_id, r.score, r.chunk_id in shown_chunks, r.document_path)
+            for r in retrieval.results
+        ),
+        floors={"relevance_threshold": RELEVANCE_THRESHOLD},
+        fixed_response=not shown_chunks,
+    )
+    return result(generated.answer, trace, citations=generated.citations)

@@ -15,6 +15,10 @@ venv/
 # Local vector store persistence
 data/vectorstore/
 
+# Runtime traces and feedback (may hold users' questions)
+data/traces/
+data/feedback/
+
 # OS / editor
 .DS_Store
 .vscode/
