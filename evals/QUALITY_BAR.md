@@ -71,6 +71,27 @@ user, it becomes `QualityBar.max_mean_cost_per_answer_usd` and
 went through. The prices are Anthropic's published rates, **not yet
 verified against Bedrock's** — check them before quoting a sweep's cost.
 
+### Freshness (Phase 4)
+
+Added with P4-4 (`docs/Tessera_Phase4_Plan.md` §3.3, §4).
+
+| Metric | Threshold | Gated? |
+|---|---|---|
+| Superseded document cited as current — A/C cases | 0 cases | **yes** |
+| Newer-version note on the freshness cases | reported | no |
+
+A case "cites a superseded document as current" when a chunk from a
+document with `status: superseded` is among the sources shown to the
+model, or — for the cases in `evals/cases/freshness.yaml` — when one of
+the case's own `superseded_sources` is retrieved at all. The row covers
+every A/C case, not only the freshness set; it is `n/a` (a failure) only
+when no case reached document retrieval. The freshness cases are worded
+in the retired method's vocabulary so the superseded version is the
+closer match; they are also ordinary A/C cases, so recall/MRR and the
+judge score them like any other. The note is appended by code, not the
+model, and the judge grades the answer without it — it names a document
+the model was never shown.
+
 A gated metric with **no value** (e.g. `mean_recall` is `n/a` because the
 eval set had no A/C cases) counts as a **failure**, not a skip — a sweep
 that can't measure a gated dimension has not cleared the bar.
@@ -137,7 +158,8 @@ a labeling gap worth gating against.
 
 Per `CLAUDE.md` "Working conventions": any PR that touches `retrieval/`
 (`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
-`generation/` (including any prompt), the expertise dataset or its
+`generation/` (including any prompt), the corpus (`data/corpus/`, including
+front-matter `status`), the expertise dataset or its
 generator (`data/expertise/`), or the eval set must paste a fresh `tessera eval --check` result — the full
 report plus its `=> PASS/FAIL` line — into the PR body. A gated failure
 blocks the merge.

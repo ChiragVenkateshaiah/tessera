@@ -48,6 +48,7 @@ from tessera.generation.prompts import (
     group_by_document,
 )
 from tessera.generation.usage import ModelPrice, UsageRecorder, combine
+from tessera.ingestion.loader import STATUS_SUPERSEDED
 from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.router import Archetype, route, terminal_response_for
@@ -76,6 +77,10 @@ class EvalCase:
     # doesn't have; the correct outcome is the fixed no-match message with
     # zero generation LLM calls (evals/cases/expertise_nomatch.yaml).
     expect_no_match: bool = False
+    # Freshness (P4-4): corpus-relative paths of superseded documents the
+    # query is lexically closer to than their current version. None of
+    # them may be cited; the answer should note the newer version.
+    superseded_sources: list[str] = field(default_factory=list)
 
 
 def load_cases(cases_dir: Path) -> list[EvalCase]:
@@ -105,6 +110,7 @@ def load_cases(cases_dir: Path) -> list[EvalCase]:
                     ideal_answer=entry.get("ideal_answer") or "",
                     relevant_people=entry.get("relevant_people") or [],
                     expect_no_match=bool(entry.get("expect_no_match", False)),
+                    superseded_sources=entry.get("superseded_sources") or [],
                 )
             )
     return cases
@@ -163,6 +169,14 @@ class CaseResult:
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: float | None = None
+    # Freshness (P4-4), A/C only: superseded documents shown to the model
+    # as a source (or, for a case's own superseded_sources, retrieved at
+    # all) — each is a superseded document cited as current. None for
+    # cases that never reached document retrieval.
+    superseded_cited: list[str] | None = None
+    # Cases with superseded_sources only: did the answer's note point away
+    # from one of them?
+    superseded_noted: bool | None = None
 
 
 EXPERTISE_NOT_SCORED_NOTE = (
@@ -358,16 +372,37 @@ def _run_case(
         precision = precision_at_k(retrieved_documents, relevant, k)
         reciprocal_rank_score = reciprocal_rank(retrieved_documents, relevant)
 
+    shown = filter_relevant(retrieval.results)
+    superseded_cited = sorted(
+        {
+            Path(r.document_path).relative_to(corpus_dir).as_posix()
+            for r in shown
+            if r.status == STATUS_SUPERSEDED
+        }
+        | (set(case.superseded_sources) & set(retrieved_documents))
+    )
+    superseded_noted = None
+    if case.superseded_sources:
+        noted = {
+            Path(m.document_path).relative_to(corpus_dir).as_posix()
+            for m in generated.superseded
+        }
+        superseded_noted = bool(noted & set(case.superseded_sources))
+
     judge = None
     if case.ideal_answer and generated.answer != NO_RESULTS_MESSAGE:
         # Numbered exactly as the answer prompt numbered them (one per
         # document), so the answer's [n] markers point at the same text.
-        source_descriptions = [
-            format_source_group(group)
-            for group in group_by_document(filter_relevant(retrieval.results))
-        ]
+        source_descriptions = [format_source_group(group) for group in group_by_document(shown)]
+        # The judge grades what the model wrote; the fixed superseded note
+        # is appended by code and names a document it was never shown.
+        model_answer = (
+            generated.answer.removesuffix(f"\n\n{generated.notice}")
+            if generated.notice
+            else generated.answer
+        )
         judge = judge_answer(
-            case.query, case.ideal_answer, source_descriptions, generated.answer, judge_llm
+            case.query, case.ideal_answer, source_descriptions, model_answer, judge_llm
         )
 
     return CaseResult(
@@ -384,6 +419,8 @@ def _run_case(
         judge=judge,
         latency_seconds=latency,
         no_match_correct=False if case.expect_no_match else None,
+        superseded_cited=superseded_cited,
+        superseded_noted=superseded_noted,
     )
 
 
@@ -416,6 +453,13 @@ class EvalReport:
     mean_cost_per_answer: float | None = None
     total_cost_usd: float | None = None
     mean_cost_by_archetype: dict[Archetype, float] = field(default_factory=dict)
+    # Freshness (P4-4). superseded_cited_cases: ids of A/C cases that cited
+    # a superseded document as current; None when no case reached document
+    # retrieval. freshness_cases / superseded_note_rate cover the cases
+    # with superseded_sources.
+    superseded_cited_cases: list[str] | None = None
+    freshness_cases: int = 0
+    superseded_note_rate: float | None = None
 
 
 def run_harness(
@@ -541,6 +585,9 @@ def run_harness(
             cost_by_archetype[r.expected_archetype].append(r.cost_usd)  # type: ignore[arg-type]
     costs = [r.cost_usd for r in completed if r.cost_usd is not None]
 
+    document_cases = [r for r in case_results if r.superseded_cited is not None]
+    note_flags = [r.superseded_noted for r in case_results if r.superseded_noted is not None]
+
     return EvalReport(
         case_results=case_results,
         routing_accuracy=routing_accuracy,
@@ -573,6 +620,15 @@ def run_harness(
         mean_cost_by_archetype={
             archetype: mean(values) for archetype, values in cost_by_archetype.items()
         },
+        superseded_cited_cases=(
+            sorted(r.case_id for r in document_cases if r.superseded_cited)
+            if document_cases
+            else None
+        ),
+        freshness_cases=len(note_flags),
+        superseded_note_rate=(
+            mean([1.0 if f else 0.0 for f in note_flags]) if note_flags else None
+        ),
     )
 
 
@@ -613,6 +669,9 @@ class QualityBar:
     # gate_cost, the same staging B went through.
     max_mean_cost_per_answer_usd: float | None = None
     gate_cost: bool = False
+    # Freshness (Phase 4 plan §4, P4-4): no A/C case may cite a superseded
+    # document as current.
+    max_superseded_cited: int = 0
 
 
 DEFAULT_QUALITY_BAR = QualityBar()
@@ -690,6 +749,19 @@ def evaluate_bar(
             "no A/C case at recall 0.00",
             "no total misses" if not zero_recall else "missed: " + ", ".join(zero_recall),
             not zero_recall,
+        )
+    )
+
+    cited = report.superseded_cited_cases
+    thresholds.append(
+        ThresholdResult(
+            "Superseded cited as current (A/C)",
+            True,
+            f"<= {bar.max_superseded_cited} cases",
+            "n/a"
+            if cited is None
+            else ("0 cases" if not cited else f"{len(cited)}: " + ", ".join(cited)),
+            cited is not None and len(cited) <= bar.max_superseded_cited,
         )
     )
 
@@ -830,6 +902,12 @@ def format_report(report: EvalReport) -> str:
         lines.append("")
     if report.no_match_rate is not None:
         lines += [f"No-match refusal rate (B): {report.no_match_rate:.0%}", ""]
+    if report.superseded_note_rate is not None:
+        lines += [
+            f"Freshness ({report.freshness_cases} cases with superseded_sources): "
+            f"newer-version note on {report.superseded_note_rate:.0%}",
+            "",
+        ]
 
     bar = evaluate_bar(report)
     lines.append("Quality bar (evals/QUALITY_BAR.md):")
@@ -893,6 +971,10 @@ def format_report(report: EvalReport) -> str:
             )
         if r.no_match_correct is not None:
             parts.append(f"no_match={'OK' if r.no_match_correct else 'WRONG'}")
+        if r.superseded_cited:
+            parts.append("superseded_cited=" + ",".join(r.superseded_cited))
+        if r.superseded_noted is not None:
+            parts.append(f"superseded_note={'yes' if r.superseded_noted else 'NO'}")
         if r.judge is not None:
             parts.append(
                 f"groundedness={r.judge.groundedness} relevance={r.judge.relevance}"
@@ -935,7 +1017,7 @@ def main() -> None:
     from tessera.generation.resilient import RetryingLLMClient
     from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
     from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
-    from tessera.ingestion.loader import load_corpus
+    from tessera.ingestion.loader import indexable, load_corpus
     from tessera.store.chroma import ChromaVectorStore
     from tessera.store.chroma_expertise import ChromaExpertiseStore
 
@@ -945,7 +1027,7 @@ def main() -> None:
     api_key = os.environ["NVIDIA_API_KEY"]
     model = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 
-    docs = load_corpus(corpus_dir)
+    docs = indexable(load_corpus(corpus_dir))
     chunks = chunk_corpus(docs)
     embedder = LocalEmbedder()
     embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])

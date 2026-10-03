@@ -11,7 +11,7 @@ from tessera.generation.prompts import (
     build_grounded_answer_user_prompt,
     group_by_document,
 )
-from tessera.retrieval.retriever import RetrievalResult
+from tessera.retrieval.retriever import RetrievalResult, SupersededMatch
 from tessera.retrieval.router import Archetype
 from tessera.store.base import PersonMatch, SearchResult
 
@@ -68,6 +68,11 @@ class GeneratedAnswer:
     answer: str
     citations: list[Citation]
     experts: list[PersonMatch] = field(default_factory=list)
+    # Superseded documents the answer's closing note points away from, and
+    # that note as appended to ``answer`` ("" when there is none). The eval
+    # judge grades the model's text without it.
+    superseded: tuple[SupersededMatch, ...] = ()
+    notice: str = ""
 
 
 def filter_relevant(
@@ -81,6 +86,39 @@ def filter_relevant(
     can reconstruct it without duplicating the filter.
     """
     return [r for r in results if r.score >= threshold]
+
+
+def noted_superseded(
+    retrieval: RetrievalResult, threshold: float = RELEVANCE_THRESHOLD
+) -> tuple[SupersededMatch, ...]:
+    """The excluded superseded documents worth telling the user about:
+    those that would have cleared the same floor the shown chunks did.
+    """
+    return tuple(m for m in retrieval.superseded if m.score >= threshold)
+
+
+def supersession_notice(
+    superseded: tuple[SupersededMatch, ...], citations: list[Citation]
+) -> str:
+    """The fixed closing note for superseded matches (plan §3.3.2) —
+    written here, not left to the model, so it is always there and always
+    points at the current version's citation number when it was shown.
+    """
+    cited = {c.document_path: c for c in citations}
+    lines = []
+    for m in superseded:
+        current = cited.get(m.superseded_by)
+        newer = (
+            f'"{current.document_title}" [{current.marker}]'
+            if current
+            else f"a newer version ({m.superseded_by})"
+        )
+        lines.append(
+            f'Note: an older version, "{m.document_title}", also matches this '
+            f"question but has been superseded by {newer}; this answer does not "
+            "draw on the older version."
+        )
+    return "\n".join(lines)
 
 
 def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnswer:
@@ -98,6 +136,10 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
     signal shouldn't cost anything against the LLM's daily quota, and the
     refusal is guaranteed rather than left to the model choosing to say
     so (CLAUDE.md constraint #2 — grounded generation only).
+
+    When retrieval excluded a superseded document that would have cleared
+    the floor, a fixed note naming it and its current version is appended
+    (plan §3.3.2).
     """
     if retrieval.archetype not in _SYSTEM_PROMPT_BY_ARCHETYPE:
         raise ValueError(
@@ -130,9 +172,15 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
         )
         for i, group in enumerate(group_by_document(relevant), start=1)
     ]
+    superseded = noted_superseded(retrieval)
+    notice = supersession_notice(superseded, citations) if superseded else ""
+    if notice:
+        answer = f"{answer.rstrip()}\n\n{notice}"
     return GeneratedAnswer(
         query=retrieval.query,
         archetype=retrieval.archetype,
         answer=answer,
         citations=citations,
+        superseded=superseded,
+        notice=notice,
     )

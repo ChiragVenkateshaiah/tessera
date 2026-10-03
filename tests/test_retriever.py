@@ -9,7 +9,9 @@ from tessera.embedding.base import Embedder
 from tessera.retrieval.retriever import (
     LOOKUP_CANDIDATE_K,
     LOOKUP_EXPAND_DOCUMENTS,
+    CURRENT_ONLY,
     LOOKUP_TOP_K,
+    SUPERSEDED_ONLY,
     SYNTHESIS_CANDIDATE_K,
     SYNTHESIS_MAX_PER_DOCUMENT,
     SYNTHESIS_MAX_RESULTS,
@@ -35,7 +37,13 @@ class FakeEmbedder(Embedder):
         return [0.0]
 
 
-def _result(chunk_id: str, document_path: str, score: float) -> SearchResult:
+def _result(
+    chunk_id: str,
+    document_path: str,
+    score: float,
+    status: str = "current",
+    superseded_by: str | None = None,
+) -> SearchResult:
     return SearchResult(
         chunk_id=chunk_id,
         text=f"text for {chunk_id}",
@@ -47,18 +55,26 @@ def _result(chunk_id: str, document_path: str, score: float) -> SearchResult:
         topics=["t1"],
         date="2024-01-01",
         heading_path=("Overview",),
+        status=status,
+        superseded_by=superseded_by,
     )
 
 
 def _matches(result: SearchResult, where: dict[str, object] | None) -> bool:
     """The subset of Chroma's where syntax retriever.py uses: a single
-    {"document_path": ...} or {"$and": [...]} over such clauses; other keys
-    (e.g. doc_type) aren't modelled and always match.
+    {"document_path": ...}, {"status": ...} or {"status": {"$ne": ...}}, or
+    {"$and": [...]} over such clauses; other keys (e.g. doc_type) aren't
+    modelled and always match.
     """
     if not where:
         return True
     if "$and" in where:
         return all(_matches(result, w) for w in where["$and"])  # type: ignore[union-attr]
+    status = where.get("status")
+    if isinstance(status, dict):
+        return result.status != status["$ne"]
+    if status is not None:
+        return result.status == status
     path = where.get("document_path")
     return path is None or result.document_path == path
 
@@ -169,7 +185,9 @@ def test_synthesis_uses_broader_candidate_k() -> None:
     retrieve("get me up to speed on pricing strategy", Archetype.SYNTHESIS, FakeEmbedder(), store)
 
     assert store.first_k == SYNTHESIS_CANDIDATE_K
-    assert len(store.calls) == 1  # synthesis doesn't expand
+    # Synthesis doesn't expand: the candidate query and the superseded
+    # probe, nothing narrowed to one document.
+    assert [where for _, where in store.calls] == [CURRENT_ONLY, SUPERSEDED_ONLY]
 
 
 def test_same_query_returns_visibly_different_breadth_under_a_vs_c() -> None:
@@ -234,12 +252,12 @@ def test_where_filter_passed_through_to_store() -> None:
     )
 
     first_where = store.calls[0][1]
-    assert first_where == {"doc_type": "methodology"}
-    # Expansion narrows to one document but keeps the caller's filter
-    # (P4-6's permission filter will ride on this).
+    assert first_where == {"$and": [{"doc_type": "methodology"}, CURRENT_ONLY]}
+    # Every later query (the superseded probe, expansion narrowing to one
+    # document) keeps the caller's filter — P4-6's permission filter will
+    # ride on this.
     for _, where in store.calls[1:]:
         assert where["$and"][0] == {"doc_type": "methodology"}
-        assert set(where["$and"][1]) == {"document_path"}
 
 
 @pytest.mark.parametrize("archetype", [Archetype.EXPERTISE, Archetype.COMPARATIVE])
@@ -272,3 +290,87 @@ def test_expansion_ignores_chunks_of_other_documents_from_a_loose_store() -> Non
     ids = [r.chunk_id for r in result.results]
     assert len(ids) == len(set(ids))  # nothing twice
     assert _documents_in_order(result.results) == [f"doc{i}.md" for i in range(LOOKUP_TOP_K)]
+
+
+# --- Freshness (Phase 4, P4-4) ---
+
+
+def _with_superseded(
+    current: list[SearchResult], old_score: float, replacement: str = "doc0.md"
+) -> list[SearchResult]:
+    """current plus one superseded document (two chunks) replaced by
+    ``replacement``, merged best-first as the store would rank them."""
+    old = [
+        _result("old::0", "old.md", old_score, "superseded", replacement),
+        _result("old::1", "old.md", old_score - 0.3, "superseded", replacement),
+    ]
+    return sorted(current + old, key=lambda r: r.score, reverse=True)
+
+
+@pytest.mark.parametrize("archetype", [Archetype.LOOKUP, Archetype.SYNTHESIS])
+def test_superseded_chunks_never_reach_the_results(archetype: Archetype) -> None:
+    store = FakeVectorStore(_with_superseded(_spread_candidates(30, docs=10), 2.0))
+
+    result = retrieve("market sizing", archetype, FakeEmbedder(), store)
+
+    assert all(r.status == "current" for r in result.results)
+    assert result.removed == {"superseded": 2}
+
+
+def test_a_superseded_document_that_would_have_ranked_is_reported() -> None:
+    # Scores 2.0, above every current chunk: it would have been first.
+    store = FakeVectorStore(_with_superseded(_spread_candidates(30, docs=10), 2.0))
+
+    result = retrieve("market sizing", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    assert [(m.document_path, m.superseded_by) for m in result.superseded] == [
+        ("old.md", "doc0.md")
+    ]
+    assert result.superseded[0].score == 2.0
+
+
+def test_a_superseded_document_below_the_cutoff_is_not_reported() -> None:
+    # The fifth distinct document scores 0.96; 0.8 would not have ranked.
+    store = FakeVectorStore(_with_superseded(_spread_candidates(30, docs=10), 0.8))
+
+    result = retrieve("market sizing", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    assert result.superseded == ()
+    # Its first chunk was still inside the 30-candidate pool (weakest 0.71),
+    # so it counts as removed — its weaker chunk (0.5) was not.
+    assert result.removed == {"superseded": 1}
+
+
+def test_the_current_version_takes_the_superseded_slot_when_it_did_not_rank() -> None:
+    # doc9 is the replacement but sits outside the top 5 distinct documents.
+    store = FakeVectorStore(
+        _with_superseded(_spread_candidates(30, docs=10), 2.0, replacement="doc9.md")
+    )
+
+    result = retrieve("market sizing", Archetype.LOOKUP, FakeEmbedder(), store)
+
+    documents = _documents_in_order(result.results)
+    assert documents[0] == "doc9.md"  # the slot the 2.0-scoring old version held
+    assert len(documents) == LOOKUP_TOP_K
+    assert "old.md" not in documents
+
+
+def test_no_superseded_documents_leaves_retrieval_unchanged() -> None:
+    plain = retrieve(
+        "q", Archetype.SYNTHESIS, FakeEmbedder(), FakeVectorStore(_spread_candidates(30, docs=10))
+    )
+
+    assert plain.superseded == ()
+    assert plain.removed == {"superseded": 0}
+
+
+def test_with_room_left_a_superseded_match_must_still_reach_the_candidate_pool() -> None:
+    # 20 candidates from 2 documents: synthesis keeps only 4 chunks (2 per
+    # document), so the selection has room — but 0.5 is below the weakest
+    # candidate (0.81) and would never have been considered.
+    store = FakeVectorStore(_with_superseded(_spread_candidates(20, docs=2), 0.5))
+
+    result = retrieve("q", Archetype.SYNTHESIS, FakeEmbedder(), store)
+
+    assert len(result.results) == 2 * SYNTHESIS_MAX_PER_DOCUMENT
+    assert result.superseded == ()

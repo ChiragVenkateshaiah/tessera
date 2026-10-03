@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date as date_type
 from pathlib import Path
 
-from tessera.ingestion.loader import Document
+from tessera.ingestion.loader import STATUS_CURRENT, Document
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 FENCE_RE = re.compile(r"^```")
@@ -44,6 +44,11 @@ class Chunk:
     heading_path: tuple[str, ...]
     text: str
     chunk_index: int
+    # Freshness (Phase 4): carried from the document so retrieval can
+    # exclude superseded chunks in the store query. superseded_by is the
+    # replacing document's path in the same form as document_path.
+    status: str = STATUS_CURRENT
+    superseded_by: str | None = None
 
 
 @dataclass
@@ -188,6 +193,10 @@ def chunk_document(
                     heading_path=heading_path,
                     text=piece,
                     chunk_index=index,
+                    status=doc.status,
+                    superseded_by=str(doc.superseded_by_path)
+                    if doc.superseded_by_path
+                    else None,
                 )
             )
             index += 1

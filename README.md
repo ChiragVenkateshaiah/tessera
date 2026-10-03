@@ -239,6 +239,29 @@ the document index. Also zero LLM calls. Needed for archetype B; re-run if
 the dataset is regenerated.
 
 ```sh
+uv run tessera data-report
+uv run tessera data-report --stale-years 2 --show-known
+```
+
+The corpus data-quality report (Phase 4): documents with missing or
+invalid front matter (listed, where `ingest` would stop on the first),
+near-duplicate chunks across documents by embedding similarity (the
+deliberate `## Related Frameworks` hard negatives are counted separately
+as known), stale documents by date, superseded documents and what
+replaced them, and quarantined documents awaiting human review
+(`review_status: pending` — never embedded). Reads the corpus directly,
+embeds locally, zero LLM calls.
+
+**Freshness (Phase 4).** A document can be marked `status: superseded`
+with `superseded_by: <corpus-relative path>` in its front matter
+(validated at load: the target must exist and be current). Superseded
+chunks are filtered out in the store query, so they never reach an
+answer's sources; when one would have ranked, its current version takes
+its slot, the answer ends with a fixed note naming both, and the trace
+records how many chunks the filter removed. The pilot corpus has five
+such documents (`methodology/*-2018.md`, `*-2019.md`).
+
+```sh
 uv run tessera query "What's our standard market entry framework?"
 ```
 

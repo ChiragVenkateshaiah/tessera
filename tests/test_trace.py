@@ -131,3 +131,27 @@ def test_trace_record_carries_route_retrieval_tokens_cost_and_latency() -> None:
     assert record["latency_s"] == 3.14
     assert record["answer_chars"] == len("See [1].")
     assert record["llm"] == "fake:model"
+
+
+def test_superseded_exclusion_is_traced_as_a_removal_count() -> None:
+    from dataclasses import replace
+
+    llm = ScriptedLLMClient(
+        {ROUTER_SYSTEM_PROMPT: ROUTE_A, LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1]."}
+    )
+    old = replace(
+        _result("data/corpus/old.md", 0.9), status="superseded", superseded_by="data/corpus/a.md"
+    )
+    store = FakeVectorStore([old, _result("data/corpus/a.md", 0.61)])
+
+    result = answer_query("pricing framework?", llm, FakeEmbedder(), store)
+
+    assert result.trace.removed == {"superseded": 1}
+    assert result.trace.superseded == ("data/corpus/old.md",)
+    assert "data/corpus/old.md" not in [i.document_path for i in result.trace.retrieved]
+    record = trace_record(
+        "t", result, timestamp=datetime(2026, 10, 3, tzinfo=timezone.utc),
+        latency_s=1.0, prices={}, llm="fake",
+    )
+    assert record["removed"] == {"superseded": 1}
+    assert record["superseded"] == ["data/corpus/old.md"]

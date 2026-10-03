@@ -7,6 +7,7 @@ from pathlib import Path
 import chromadb
 
 from tessera.ingestion.chunker import Chunk
+from tessera.ingestion.loader import STATUS_CURRENT
 from tessera.store.base import SearchResult, VectorStore
 
 DEFAULT_COLLECTION_NAME = "tessera_chunks"
@@ -25,6 +26,8 @@ def _serialize_metadata(chunk: Chunk) -> dict[str, str]:
         "topics": ",".join(chunk.topics),
         "date": chunk.date.isoformat(),
         "heading_path": " > ".join(chunk.heading_path),
+        "status": chunk.status,
+        "superseded_by": chunk.superseded_by or "",
     }
 
 
@@ -47,6 +50,9 @@ def _result_from_row(
         heading_path=tuple(meta["heading_path"].split(" > "))
         if meta["heading_path"]
         else (),
+        # An index built before Phase 4 has no status: every chunk current.
+        status=meta.get("status", STATUS_CURRENT),
+        superseded_by=meta.get("superseded_by") or None,
     )
 
 

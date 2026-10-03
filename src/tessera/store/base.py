@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from tessera.ingestion.chunker import Chunk
 from tessera.ingestion.expertise_loader import Person
+from tessera.ingestion.loader import STATUS_CURRENT
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,10 @@ class SearchResult:
     topics: list[str]
     date: str
     heading_path: tuple[str, ...]
+    # Freshness (Phase 4): "current" or "superseded"; superseded_by is the
+    # replacing document's path, in the same form as document_path.
+    status: str = STATUS_CURRENT
+    superseded_by: str | None = None
 
 
 class VectorStore(ABC):
