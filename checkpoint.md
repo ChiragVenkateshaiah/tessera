@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 ## Status
 
@@ -15,8 +15,8 @@ criteria re-confirmed on a fresh clone. **One acceptance left open by
 user decision (2026-10-03, tag with it recorded as a limit):** P4-2's
 live Bedrock sweep, blocked on the AWS account (see Notes). The chat-UI
 decision stays deferred until Bedrock latency is measured. **Next:
-Phase 4.5** (LangGraph + LangChain adapters + human-review interrupt) —
-plan and ADR 0005 to draft first.
+Phase 5** (LangChain / LangGraph / LangSmith, a parallel measured stack)
+— plan drafted in PR #67, awaiting adoption.
 
 Phase 4 = four production-readiness features aimed at the documented
 reasons GenAI projects stall after proof of concept
@@ -1638,18 +1638,16 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
-**Phase 4.5 — LangGraph orchestrator + LangChain adapters** (user
-decision 2026-10-03: after `v0.4.0`, with the human-review interrupt).
-First step: draft `docs/Tessera_Phase4_5_Plan.md` and ADR 0005
-("framework adoption: adapters, not core") for the user to review — no
-code before that. Shape agreed in discussion: a LangGraph `StateGraph`
-over the existing pure functions, selectable by config (native vs
-langgraph), both held to the frozen `v0.4.0` bar; LangChain adapters
-behind the ports (an `LLMClient` over any LangChain chat model; Tessera
-retrieval, with the permission filter, as a `BaseRetriever`); a LangGraph
-`interrupt` for a reviewer to approve a quarantined case study before
-it's indexed. Out: checkpointer-as-conversation-memory (do-not-build),
-LangSmith replacing Tessera's traces.
+**Phase 5 — LangChain, LangGraph, LangSmith** (plan `docs/Tessera_Phase5_Plan.md`,
+DRAFT in PR #67, awaiting user review/adoption; ADR 0006). User decisions
+2026-10-03: the goal is thorough hands-on learning of all three, used
+broadly; a **parallel LangChain stack** beside the untouched native core,
+measured per layer; agents/tool calling and conversation memory stay
+out; LangSmith with taint-based redaction; the phase renumbered to
+**Phase 5** (AWS → Phase 6, CI/CD → Phase 7). Reviewed twice by a Plan
+agent (plan §12/§13). First task after adoption: **P5-0** — the baseline
+at `v0.4.0` (`--json`, golden snapshot, baseline + noise-floor sweeps)
+*before* any dependency is added.
 
 **Still open from P4-2 — the live Bedrock sweep (its acceptance):** a full
 `tessera eval --check` with answers on Bedrock, judge on Nemotron, passes
@@ -1837,16 +1835,40 @@ replanned + re-adopted the same day (#57):
   injection 100%)~~ — done (#65)
 - ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (#66)
 
-**Phase 4.5** — LangGraph orchestrator + LangChain adapters + human-review
-interrupt (user decision 2026-10-03; plan + ADR 0005 to draft first)
-**← next**.
+**Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
+stack (plan drafted, PR #67, awaiting adoption) **← next**. Phase 6 =
+ephemeral AWS deployment; Phase 7 = CI/CD + monitoring.
 
-**Phase 5** — ephemeral AWS deployment (plan §9; container image,
-Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
-the eval gate, monitoring.
+(Until the Phase 5 plan is adopted, `CLAUDE.md` and the Phase 4 plan still
+call the AWS deployment "Phase 5" and CI/CD "Phase 6"; adoption renumbers
+them — Phase 5 plan §9 lists every place.)
 
 ## Notes / open flags
 
+- **Plans get a Plan-agent review before adoption** (user practice,
+  restated 2026-10-03: "Review the plan with planner review model"). Spawn
+  the `Plan` subagent read-only against the draft *and the real code*;
+  fold every finding in and map each one in a review section of the plan.
+  Both Phase 5 reviews found real defects that a docs-only read would
+  have missed (e.g. a marker check that would fail `ac-i04` forever, a
+  `grep 'nvidia-'` that matches `langchain-nvidia-ai-endpoints`,
+  LangChain's env-var tracing bypassing a redacting client).
+- **The user wants depth over speed for the portfolio** (2026-10-03):
+  "we do not have to crunch the time". Don't propose shrinkable scope by
+  default; and for Phase 5 the frameworks are to be used broadly, "irrespective
+  of whether it is required", to learn them — measured against native.
+- **Phase 5 needs a LangSmith account + API key** (free developer tier) for
+  the live steps of P5-3 and P5-9 only; everything else is built against a
+  real `langsmith.Client` with mocked HTTP. Ask the user when P5-3 comes up.
+- **The Phase 5 plan PR (#67) is docs-only by design.** Checkpoint updates
+  go to `main` via end-day PRs, not the plan PR, so `main` never waits on
+  plan adoption (fixed 2026-10-03 after the plan branch had picked up
+  checkpoint edits).
+- **NIM spend 2026-10-03:** 6 full sweeps (P4-4: 63 cases; P4-5: 91 and
+  92; P4-6: 92 and 92; P4-7 exit: 92) plus ~12 single live calls
+  (fresh-clone queries, the `ac-i03` re-run) — roughly 1,400 calls, well
+  inside 10,000/day. Sweep wall time 15–34 min; 3–17 transient 429/5xx
+  per sweep, all recovered by retry, zero ERROR rows.
 - **The router is unstable on single named-project questions**
   (2026-10-03): "What did Project Cobalt recommend…" was routed to the D
   refusal on some sweeps (as `ac-a06` twice, then as `ac-l06`) and not
