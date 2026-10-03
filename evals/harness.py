@@ -690,7 +690,13 @@ def run_harness(
 
     document_cases = [r for r in all_results if r.superseded_cited is not None]
     leakage_set = [r for r in access_results if r.access_set == "leakage"]
-    authorized = [r.recall for r in access_results if r.access_set == "authorized" and r.recall is not None]
+    # A cleared principal who never reached retrieval (e.g. routed to the
+    # D refusal) was blocked all the same: that is recall 0, not a skip.
+    authorized = [
+        r.recall if r.recall is not None else 0.0
+        for r in access_results
+        if r.access_set == "authorized"
+    ]
     injection = [r for r in access_results if r.access_set == "injection"]
     note_flags = [r.superseded_noted for r in case_results if r.superseded_noted is not None]
 

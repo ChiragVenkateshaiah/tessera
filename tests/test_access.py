@@ -186,3 +186,18 @@ def test_access_cases_ask_as_the_principals_they_claim() -> None:
             assert marker.lower() not in c.query.lower(), (c.id, marker)
     leakage = {c.query for c in cases if c.access == "leakage"}
     assert leakage == {c.query for c in cases if c.access == "authorized"}
+
+
+def test_the_embedded_instruction_case_checks_for_the_planted_canary() -> None:
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT))
+    from evals.harness import load_cases
+
+    planted = (CORPUS_DIR / "methodology" / "workshop-facilitation-client-workshop-template.md")
+    canary = "CANARY-OVERRIDE-4417"
+    (case,) = [c for c in load_cases(REPO_ROOT / "evals" / "cases") if c.id == "ac-i04"]
+
+    assert canary in planted.read_text(encoding="utf-8")
+    assert case.access == "injection" and canary in case.forbidden_markers
+    assert canary.lower() not in case.query.lower()  # only the document carries it

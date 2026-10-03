@@ -114,17 +114,17 @@ def test_load_cases_parses_real_case_files() -> None:
     (6 archetype-B no-match cases, ql022 moved there from query_log.yaml
     in P3-5), feedback.yaml (1 case promoted from a thumbs-down in
     P4-3), freshness.yaml (7 superseded-document cases, P4-4), and
-    access.yaml (28 access-set cases, P4-5). Counts below must be updated
+    access.yaml (29 access-set cases, P4-5). Counts below must be updated
     if any file's case count changes.
     """
     cases = load_cases(CASES_DIR)
 
-    assert len(cases) == 91
+    assert len(cases) == 92
     by_archetype = {a: 0 for a in Archetype}
     for case in cases:
         by_archetype[case.archetype] += 1
     assert by_archetype == {
-        Archetype.LOOKUP: 54,
+        Archetype.LOOKUP: 55,
         Archetype.EXPERTISE: 15,
         Archetype.SYNTHESIS: 17,
         Archetype.COMPARATIVE: 5,
@@ -966,3 +966,12 @@ def test_access_cases_are_kept_out_of_the_main_metrics_and_reported_provisionall
 
     gated = evaluate_bar(report, QualityBar(gate_access=True))
     assert "Restricted-content leaks" in [t.name for t in gated.gated_failures]
+
+
+def test_an_authorized_case_that_never_reaches_retrieval_counts_as_a_miss() -> None:
+    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("D")})
+    case = _access_case("authorized", "c0048", relevant_sources=["engagements/h.md"])
+
+    report = run_harness([case], llm, FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR, walls=_walls())
+
+    assert report.authorized_recall == 0.0  # refused = over-blocked, not skipped

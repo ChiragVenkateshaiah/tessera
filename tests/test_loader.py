@@ -105,7 +105,7 @@ def test_load_corpus_is_sorted_and_deterministic(tmp_path: Path) -> None:
 def test_real_corpus_loads_cleanly() -> None:
     docs = load_corpus(CORPUS_DIR)
 
-    assert len(docs) == 71  # 57 internal + 12 restricted engagements + 2 case studies
+    assert len(docs) == 72  # 58 internal + 12 restricted engagements + 2 case studies
     superseded = {d.path.name: d.superseded_by for d in docs if d.is_superseded}
     assert len(superseded) == 5  # P4-4's freshness set
     assert sum(d.is_quarantined for d in docs) == 2  # P4-5's pending-review case studies

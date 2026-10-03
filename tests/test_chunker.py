@@ -154,7 +154,7 @@ def test_real_corpus_chunks_reasonably() -> None:
         assert c.heading_path, f"chunk from {c.document_path} has no heading path"
 
     doc_paths = {c.document_path for c in chunks}
-    assert len(doc_paths) == 71  # every document contributed at least one chunk
+    assert len(doc_paths) == 72  # every document contributed at least one chunk
 
 
 def test_real_corpus_no_chunk_orphaned_from_source_metadata() -> None:
