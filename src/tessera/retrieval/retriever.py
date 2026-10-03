@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tessera.embedding.base import Embedder
+from tessera.ingestion.loader import STATUS_SUPERSEDED
 from tessera.retrieval.router import Archetype
 from tessera.store.base import SearchResult, VectorStore
 
@@ -38,6 +39,25 @@ SYNTHESIS_CANDIDATE_K = 20
 SYNTHESIS_MAX_RESULTS = 10
 SYNTHESIS_MAX_PER_DOCUMENT = 2
 
+# Freshness (Phase 4, plan §3.3.2): superseded chunks never enter an A/C
+# candidate set. "$ne" rather than equality on "current", so an index
+# built before chunks carried a status still returns everything.
+CURRENT_ONLY: dict[str, object] = {"status": {"$ne": STATUS_SUPERSEDED}}
+SUPERSEDED_ONLY: dict[str, object] = {"status": STATUS_SUPERSEDED}
+
+
+@dataclass(frozen=True)
+class SupersededMatch:
+    """A superseded document that would have ranked among the results
+    had it not been excluded. ``score`` is its best chunk's similarity;
+    ``superseded_by`` is the replacing document's path (document_path form).
+    """
+
+    document_path: str
+    document_title: str
+    superseded_by: str
+    score: float
+
 
 @dataclass(frozen=True)
 class RetrievalResult:
@@ -45,11 +65,18 @@ class RetrievalResult:
     (Task 6) — carries the archetype alongside the results so the
     generation step (found-documents summary vs multi-source synthesis)
     knows which prompt shape to use without re-deriving it.
+
+    ``superseded`` lists excluded superseded documents that would have
+    ranked (generation says a newer version exists); ``removed`` counts
+    chunks each exclusion filter kept out of the candidate pool, by filter
+    name — what the trace reports (plan §3.2.1).
     """
 
     query: str
     archetype: Archetype
     results: list[SearchResult]
+    superseded: tuple[SupersededMatch, ...] = ()
+    removed: dict[str, int] = field(default_factory=dict)
 
 
 def retrieve(
@@ -65,6 +92,11 @@ def retrieve(
     Embedder and VectorStore are injected, not constructed here. Only
     called for A and C — B and D are short-circuited by
     router.terminal_response_for() before retrieval would run.
+
+    Superseded documents (P4-4) are excluded in the store query. A second
+    query finds the ones that would have ranked; they are reported on the
+    result, and each one's current version is placed in its slot if it
+    didn't rank on its own.
     """
     if archetype not in (Archetype.LOOKUP, Archetype.SYNTHESIS):
         raise ValueError(
@@ -72,26 +104,124 @@ def retrieve(
         )
 
     query_embedding = embedder.embed_query(query)
+    lookup = archetype is Archetype.LOOKUP
+    candidate_k = LOOKUP_CANDIDATE_K if lookup else SYNTHESIS_CANDIDATE_K
+    max_results = LOOKUP_TOP_K if lookup else SYNTHESIS_MAX_RESULTS
+    max_per_document = LOOKUP_MAX_PER_DOCUMENT if lookup else SYNTHESIS_MAX_PER_DOCUMENT
 
-    if archetype is Archetype.LOOKUP:
-        candidates = store.query(
-            query_embedding, k=LOOKUP_CANDIDATE_K, where=where
-        )
-        selected = _diversify_by_source(
-            candidates,
-            max_results=LOOKUP_TOP_K,
-            max_per_document=LOOKUP_MAX_PER_DOCUMENT,
-        )
-        results = _expand_top_documents(
-            selected, query_embedding, store, LOOKUP_EXPAND_DOCUMENTS, where
-        )
+    # Re-checked here, not trusted to the store's filter.
+    candidates = [
+        c
+        for c in store.query(query_embedding, k=candidate_k, where=_and(where, CURRENT_ONLY))
+        if c.status != STATUS_SUPERSEDED
+    ]
+    selected = _diversify_by_source(
+        candidates, max_results=max_results, max_per_document=max_per_document
+    )
+
+    excluded = [
+        c
+        for c in store.query(query_embedding, k=candidate_k, where=_and(where, SUPERSEDED_ONLY))
+        if c.status == STATUS_SUPERSEDED and c.superseded_by
+    ]
+    superseded = _superseded_matches(excluded, candidates, candidate_k, selected, max_results)
+    selected = _with_replacements(selected, superseded, query_embedding, store, where, max_results)
+
+    results = (
+        _expand_top_documents(selected, query_embedding, store, LOOKUP_EXPAND_DOCUMENTS, where)
+        if lookup
+        else selected
+    )
+    return RetrievalResult(
+        query=query,
+        archetype=archetype,
+        results=results,
+        superseded=superseded,
+        removed={"superseded": _removed_from_pool(excluded, candidates, candidate_k)},
+    )
+
+
+def _and(
+    where: dict[str, object] | None, extra: dict[str, object]
+) -> dict[str, object]:
+    """The caller's filter (e.g. P4-6's permissions) plus one more clause."""
+    return extra if not where else {"$and": [where, extra]}
+
+
+def _removed_from_pool(
+    excluded: list[SearchResult], candidates: list[SearchResult], candidate_k: int
+) -> int:
+    """How many excluded chunks would have been in the candidate pool:
+    all of them while the pool isn't full, else those scoring at least as
+    well as its weakest member.
+    """
+    if len(candidates) < candidate_k:
+        return len(excluded)
+    weakest = candidates[-1].score
+    return sum(1 for c in excluded if c.score >= weakest)
+
+
+def _superseded_matches(
+    excluded: list[SearchResult],
+    candidates: list[SearchResult],
+    candidate_k: int,
+    selected: list[SearchResult],
+    max_results: int,
+) -> tuple[SupersededMatch, ...]:
+    """Superseded documents whose best chunk would have made the selected
+    results: it beats the weakest selected chunk — or, when the selection
+    had room left, the weakest candidate, since it had to reach the pool
+    first. Best first, one per document.
+    """
+    if len(selected) >= max_results:
+        cutoff = selected[-1].score
+    elif len(candidates) >= candidate_k:
+        cutoff = candidates[-1].score
     else:
-        candidates = store.query(
-            query_embedding, k=SYNTHESIS_CANDIDATE_K, where=where
-        )
-        results = _diversify_by_source(candidates)
+        cutoff = float("-inf")
+    matches: dict[str, SupersededMatch] = {}
+    for c in excluded:  # best first, so a document's first chunk is its best
+        if c.score >= cutoff and c.document_path not in matches:
+            matches[c.document_path] = SupersededMatch(
+                document_path=c.document_path,
+                document_title=c.document_title,
+                superseded_by=c.superseded_by or "",
+                score=c.score,
+            )
+    return tuple(matches.values())
 
-    return RetrievalResult(query=query, archetype=archetype, results=results)
+
+def _with_replacements(
+    selected: list[SearchResult],
+    superseded: tuple[SupersededMatch, ...],
+    query_embedding: list[float],
+    store: VectorStore,
+    where: dict[str, object] | None,
+    max_results: int,
+) -> list[SearchResult]:
+    """Make sure the current version of each superseded match is in the
+    results, so the answer can cite it: a replacement that didn't rank on
+    its own takes the slot the superseded document would have held, and
+    the list is trimmed back to max_results.
+    """
+    present = {r.document_path for r in selected}
+    out = list(selected)
+    for match in superseded:
+        if match.superseded_by in present:
+            continue
+        best = [
+            c
+            for c in store.query(
+                query_embedding, k=1, where=_document_filter(match.superseded_by, where)
+            )
+            if c.document_path == match.superseded_by and c.status != STATUS_SUPERSEDED
+        ]
+        if not best:
+            continue  # the replacement isn't visible under the caller's filter
+        slot = sum(1 for r in out if r.score > match.score)
+        out.insert(slot, best[0])
+        present.add(match.superseded_by)
+    return out[:max_results]
 
 
 def _diversify_by_source(

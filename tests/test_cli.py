@@ -45,7 +45,7 @@ def test_ingest_wires_loader_chunker_embedder_and_store(
 ) -> None:
     calls: list[str] = []
 
-    fake_docs = ["doc1", "doc2"]
+    fake_docs = [type("D", (), {"is_quarantined": False})() for _ in range(2)]
     fake_chunk_attrs = {"text": "a", "document_title": "Doc", "heading_path": ("H",)}
     fake_chunks = [
         type("C", (), fake_chunk_attrs)(),
@@ -789,3 +789,29 @@ def test_feedback_review_with_nothing_to_review() -> None:
     result = runner.invoke(cli.app, ["feedback", "review"])
 
     assert result.exit_code == 0 and "No thumbs-down feedback." in result.output
+
+
+def test_data_report_reads_the_corpus_and_prints_every_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text(
+        "---\ntitle: A\ndoc_type: methodology\nindustry: x\ntopics: [t]\n"
+        "date: 2018-01-01\nreview_status: pending\n---\n\n## Overview\n\nBody.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TESSERA_CORPUS_DIR", str(corpus))
+
+    class FakeEmbedder:
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0] for _ in texts]
+
+    monkeypatch.setattr(cli, "LocalEmbedder", FakeEmbedder)
+
+    result = runner.invoke(cli.app, ["data-report"])
+
+    assert result.exit_code == 0, result.output
+    assert "Data-Quality Report" in result.output
+    assert "Quarantined (awaiting human review; not embedded): 1" in result.output
+    assert "0 chunks embedded" in result.output  # the quarantined doc is not embedded

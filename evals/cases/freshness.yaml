@@ -1,0 +1,140 @@
+# Freshness cases (Phase 4, P4-4; docs/Tessera_Phase4_Plan.md §3.3.4).
+#
+# Each query is worded in the vocabulary of a SUPERSEDED methodology
+# document — the retired method's own terms ("share-of-wallet factor",
+# "value premium uplift", "decision packages", "master checklist",
+# "traffic-light") — so the old version is the lexically closer match and
+# outranks its replacement on raw similarity (verified retrieval-only on
+# 2026-10-03: on every case the superseded version's best chunk scored
+# 0.12-0.28 above the current version's best chunk). The current version must win: it is labelled
+# in relevant_sources, the superseded one in superseded_sources, and the
+# harness gates that no superseded document is cited as current
+# (QualityBar.max_superseded_cited = 0) and reports whether the answer
+# carried the newer-version note.
+#
+# The five superseded documents (data/corpus/methodology/*-2018.md /
+# *-2019.md) and these cases were written by Claude for this task, against
+# the current documents' text; labels drafted from reading both versions.
+# Asking for the history on purpose ("what did our 2019 approach say") is
+# out of scope this phase (plan §3.3.2) and has no case here.
+
+- id: fr001
+  query: "Do we have the share-of-wallet method for sizing a market top-down?"
+  archetype: A
+  relevant_sources:
+    - methodology/market-entry-market-sizing.md
+  superseded_sources:
+    - methodology/market-entry-market-sizing-2019.md
+  ideal_answer: >-
+    Points to the Market Sizing (TAM/SAM/SOM) methodology: define the
+    TAM/SAM/SOM funnel, build two independent estimates — top-down from a
+    published industry figure narrowed by filtering logic, and bottom-up
+    from customers x penetration x revenue per customer — triangulate them
+    (a gap over roughly 30% is itself a finding) and present a range under
+    conservative/base/aggressive assumptions rather than a point estimate.
+    It should not present a single top-down share-of-wallet pass as the
+    firm's current method.
+
+- id: fr002
+  query: "Do we have a value premium uplift scorecard for pricing a differentiated drug over cost?"
+  archetype: A
+  relevant_sources:
+    - methodology/pricing-strategy-value-based-pricing.md
+  superseded_sources:
+    - methodology/pricing-strategy-value-premium-uplift-2018.md
+  ideal_answer: >-
+    Points to the Value-Based Pricing methodology: price is set from a
+    quantified customer-side value model versus the next-best alternative
+    (e.g. total cost of care in pharma), capturing a share of that value
+    rather than all of it, validated with payers or customers rather than
+    internally, with the access/reimbursement dossier built alongside. Its
+    worked example warns against cost-plus-premium logic dressed up as
+    value pricing. It should not present a cost-plus uplift read off a
+    differentiation scorecard as the current method.
+
+- id: fr003
+  query: "Is there a template for zero-based budgeting with decision packages ranked by a finance committee?"
+  archetype: A
+  relevant_sources:
+    - methodology/cost-transformation-zero-based-budgeting.md
+  superseded_sources:
+    - methodology/cost-transformation-zbb-decision-packages-2019.md
+  ideal_answer: >-
+    Points to the Zero-Based Budgeting methodology: define granular cost
+    pools each with a single accountable owner (not a committee), rebuild
+    every line from zero against current cost drivers, benchmark each pool
+    externally, then negotiate and lock the new baseline with governance so
+    it stays zero-based. It warns against running ZBB as a predetermined
+    cut in disguise. It should not present committee-ranked decision
+    packages against a top-down savings target as the current approach.
+
+- id: fr004
+  query: "Where's our Day 1 and 100-day master checklist for an acquisition integration?"
+  archetype: A
+  relevant_sources:
+    - methodology/ma-integration-day-1-readiness.md
+    - methodology/ma-integration-day-1-runbook.md
+  superseded_sources:
+    - methodology/ma-integration-day-1-master-checklist-2018.md
+  ideal_answer: >-
+    Points to Day 1 Readiness Planning: build a Day 1 critical path of what
+    must work on the close date (payroll, system access, communications,
+    regulatory notifications) kept distinct from the longer integration
+    plan, appoint interim leadership before close, prepare Day 1
+    communications for every audience, and separate Day 1 must-haves from
+    Day 100 work — over-scoping Day 1 is a named pitfall. The Day 1 runbook
+    is the execution companion. It should not present one combined Day 1 +
+    100-day master checklist as the current tool.
+
+- id: fr005
+  query: "Do we have a red flag traffic-light report template for due diligence?"
+  archetype: A
+  relevant_sources:
+    - methodology/due-diligence-red-flag-reporting.md
+    - methodology/due-diligence-red-flag-severity-rubric.md
+  superseded_sources:
+    - methodology/due-diligence-red-flag-traffic-light-2019.md
+  ideal_answer: >-
+    Points to Red Flag Reporting: agree a materiality bar with the deal team
+    upfront, escalate each material finding immediately as a one-page red
+    flag report rather than holding it for the final report, separate
+    confirmed findings from open questions, and include a recommendation
+    (price adjustment, indemnity, structure, walk-away). The Red Flag
+    Severity Rubric is the companion for grading findings. It should not
+    present weekly red/amber/green ratings held for a final-report appendix
+    as the current format.
+
+- id: fr006
+  query: "I'm staffed on a market entry next week and need to size the market quickly from analyst figures and a share-of-wallet factor — what should I read?"
+  archetype: C
+  relevant_sources:
+    - methodology/market-entry-market-sizing.md
+    - methodology/market-entry-overview.md
+  superseded_sources:
+    - methodology/market-entry-market-sizing-2019.md
+  ideal_answer: >-
+    A briefing built on the market entry framework and its market sizing
+    stage: size with the TAM/SAM/SOM funnel using both a top-down estimate
+    (a published figure narrowed by filtering logic) and an independent
+    bottom-up one, triangulate, and present a sensitized range rather than
+    a single figure, alongside where sizing sits in the wider market entry
+    analysis. It should steer the consultant away from a single top-down
+    share-of-wallet number rather than endorse it.
+
+- id: fr007
+  query: "Client meeting Thursday on launch pricing for a specialty drug — they want a value premium uplift on unit cost from a differentiation scorecard. Catch me up."
+  archetype: C
+  relevant_sources:
+    - methodology/pricing-strategy-value-based-pricing.md
+    - thought_leadership/pharma-value-based-contracting.md
+  superseded_sources:
+    - methodology/pricing-strategy-value-premium-uplift-2018.md
+  ideal_answer: >-
+    A briefing on value-based pricing for a specialty drug: build a value
+    model in the payer's own terms (total cost of care, avoided
+    hospitalizations) against the next-best alternative, capture a share of
+    that value, validate with payers, and plan the evidence generation and
+    access dossier early; outcome-linked contracting from the pharma
+    value-based contracting piece is relevant context. It should explain
+    why an uplift on unit cost is the wrong anchor rather than endorse a
+    scorecard-driven premium.

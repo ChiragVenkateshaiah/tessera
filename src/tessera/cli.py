@@ -1,4 +1,5 @@
-"""`tessera ingest` / `index-people` / `query` / `chat` / `serve` / `eval`."""
+"""`tessera ingest` / `index-people` / `data-report` / `query` / `chat` /
+`serve` / `eval` / `feedback`."""
 
 from __future__ import annotations
 
@@ -23,7 +24,13 @@ from tessera.generation.nvidia import NvidiaClient
 from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
-from tessera.ingestion.loader import load_corpus
+from tessera.ingestion.data_quality import (
+    NEAR_DUPLICATE_THRESHOLD,
+    STALE_AFTER_YEARS,
+    build_report,
+    format_data_report,
+)
+from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
 from tessera.store.chroma import ChromaVectorStore
@@ -182,9 +189,13 @@ def ingest() -> None:
     """Load the corpus, chunk it, embed it, and persist the index."""
     settings = _load_settings()
 
-    docs = load_corpus(settings.corpus_dir)
+    loaded = load_corpus(settings.corpus_dir)
+    # Quarantined documents (pending human review) are never embedded.
+    docs = indexable(loaded)
     chunks = chunk_corpus(docs)
-    typer.echo(f"Loaded {len(docs)} documents, {len(chunks)} chunks.")
+    held = len(loaded) - len(docs)
+    quarantine = f" ({held} quarantined, not indexed)" if held else ""
+    typer.echo(f"Loaded {len(loaded)} documents{quarantine}, {len(chunks)} chunks.")
 
     embedder = LocalEmbedder()
     embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])
@@ -210,6 +221,39 @@ def index_people() -> None:
     store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
     store.add(people, embeddings)
     typer.echo(f"Indexed {store.count()} people at {settings.vectorstore_dir}.")
+
+
+@app.command(name="data-report")
+def data_report(
+    stale_years: int = typer.Option(
+        STALE_AFTER_YEARS, help="Flag current documents older than this many years."
+    ),
+    threshold: float = typer.Option(
+        NEAR_DUPLICATE_THRESHOLD, help="Cosine similarity for a near-duplicate pair."
+    ),
+    show_known: bool = typer.Option(
+        False, "--show-known", help="Also list the known Related Frameworks pairs."
+    ),
+) -> None:
+    """Report corpus data quality: missing metadata, near-duplicate chunks,
+    stale, superseded and quarantined documents. Reads the corpus directly
+    (no index needed) and makes zero LLM calls.
+    """
+    settings = _load_settings()
+    documents, problems = scan_corpus(settings.corpus_dir)
+    chunks = chunk_corpus(indexable(documents))
+    embeddings = LocalEmbedder().embed_documents([c.text for c in chunks])
+    report = build_report(
+        documents,
+        problems,
+        chunks,
+        embeddings,
+        settings.corpus_dir,
+        datetime.now(timezone.utc).date(),
+        near_duplicate_threshold=threshold,
+        stale_after_years=stale_years,
+    )
+    typer.echo(format_data_report(report, show_known=show_known))
 
 
 def _open_stores(

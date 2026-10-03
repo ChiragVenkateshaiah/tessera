@@ -233,7 +233,9 @@ def test_on_corpus_query_clears_the_relevance_bar(
 
     generated = generate_answer(retrieval, llm)
 
-    assert generated.answer == "Yes, see [1]."
+    # Starts with: the 2019 market-sizing guide also matches, so the
+    # superseded note (P4-4) follows the model's text.
+    assert generated.answer.startswith("Yes, see [1].")
     assert len(generated.citations) > 0
 
 
@@ -264,3 +266,56 @@ def test_chunks_of_one_document_share_a_number_and_a_citation() -> None:
         (1, "ref.md", ()),  # two sections shown: no single heading
         (2, "method.md", ("When to Use It",)),
     ]
+
+
+# --- Freshness (Phase 4, P4-4) ---
+
+
+def _superseded(score: float, superseded_by: str = "new.md") -> "SupersededMatch":
+    from tessera.retrieval.retriever import SupersededMatch
+
+    return SupersededMatch("old.md", "Market Sizing (2019)", superseded_by, score)
+
+
+def test_a_superseded_match_adds_a_fixed_note_pointing_at_the_current_citation() -> None:
+    retrieval = RetrievalResult(
+        query="market sizing?",
+        archetype=Archetype.LOOKUP,
+        results=[_result("new.md", "Market Sizing", 0.7)],
+        superseded=(_superseded(0.8),),
+    )
+
+    answer = generate_answer(retrieval, FakeLLMClient("Use the guide [1]."))
+
+    assert answer.answer.startswith("Use the guide [1].\n\n")
+    assert answer.notice in answer.answer
+    assert '"Market Sizing (2019)"' in answer.notice
+    assert 'superseded by "Market Sizing" [1]' in answer.notice
+    assert [m.document_path for m in answer.superseded] == ["old.md"]
+
+
+def test_a_superseded_match_below_the_floor_gets_no_note() -> None:
+    retrieval = RetrievalResult(
+        query="market sizing?",
+        archetype=Archetype.LOOKUP,
+        results=[_result("new.md", "Market Sizing", 0.7)],
+        superseded=(_superseded(RELEVANCE_THRESHOLD - 0.01),),
+    )
+
+    answer = generate_answer(retrieval, FakeLLMClient("Use the guide [1]."))
+
+    assert answer.answer == "Use the guide [1]."
+    assert answer.notice == "" and answer.superseded == ()
+
+
+def test_the_note_names_the_path_when_the_current_version_was_not_shown() -> None:
+    retrieval = RetrievalResult(
+        query="market sizing?",
+        archetype=Archetype.SYNTHESIS,
+        results=[_result("other.md", "Something Else", 0.7)],
+        superseded=(_superseded(0.8, superseded_by="methodology/new.md"),),
+    )
+
+    answer = generate_answer(retrieval, FakeLLMClient("Briefing [1]."))
+
+    assert "a newer version (methodology/new.md)" in answer.notice

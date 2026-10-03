@@ -105,9 +105,84 @@ def test_load_corpus_is_sorted_and_deterministic(tmp_path: Path) -> None:
 def test_real_corpus_loads_cleanly() -> None:
     docs = load_corpus(CORPUS_DIR)
 
-    assert len(docs) == 52
+    assert len(docs) == 57
+    superseded = {d.path.name: d.superseded_by for d in docs if d.is_superseded}
+    assert len(superseded) == 5  # P4-4's freshness set
+    assert not any(d.is_quarantined for d in docs)
     doc_types = {d.doc_type for d in docs}
     assert doc_types == {"methodology", "thought_leadership"}
     for d in docs:
         assert d.body.strip(), f"{d.path} has empty body"
         assert d.topics, f"{d.path} has no topics"
+
+
+# --- Freshness and review metadata (Phase 4, P4-4) ---
+
+
+def _superseded_file(superseded_by: str = "new.md") -> str:
+    return VALID_FILE.replace(
+        "date: 2024-01-15", f"date: 2019-03-01\nstatus: superseded\nsuperseded_by: {superseded_by}"
+    )
+
+
+def test_status_defaults_to_current(tmp_path: Path) -> None:
+    doc = load_document(_write(tmp_path, "doc.md", VALID_FILE))
+
+    assert doc.status == "current" and not doc.is_superseded
+    assert doc.superseded_by is None and not doc.is_quarantined
+
+
+def test_a_superseded_document_resolves_its_replacement(tmp_path: Path) -> None:
+    _write(tmp_path, "new.md", VALID_FILE)
+    _write(tmp_path, "old.md", _superseded_file())
+
+    old = next(d for d in load_corpus(tmp_path) if d.path.name == "old.md")
+
+    assert old.is_superseded
+    assert old.superseded_by == "new.md"
+    assert old.superseded_by_path == tmp_path / "new.md"
+
+
+@pytest.mark.parametrize(
+    ("replace_from", "replace_to", "match"),
+    [
+        ("date: 2024-01-15", "date: 2024-01-15\nstatus: retired", "status"),
+        ("date: 2024-01-15", "date: 2024-01-15\nstatus: superseded", "superseded_by is not set"),
+        ("date: 2024-01-15", "date: 2024-01-15\nsuperseded_by: x.md", "status is not superseded"),
+        ("date: 2024-01-15", "date: 2024-01-15\nreview_status: maybe", "review_status"),
+    ],
+)
+def test_invalid_freshness_metadata_is_rejected(
+    tmp_path: Path, replace_from: str, replace_to: str, match: str
+) -> None:
+    path = _write(tmp_path, "doc.md", VALID_FILE.replace(replace_from, replace_to))
+
+    with pytest.raises(CorpusError, match=match):
+        load_document(path)
+
+
+@pytest.mark.parametrize(
+    ("files", "match"),
+    [
+        ({"old.md": _superseded_file("missing.md")}, "not in the corpus"),
+        ({"old.md": _superseded_file("old.md")}, "points at itself"),
+        (
+            {"a.md": _superseded_file("b.md"), "b.md": _superseded_file("c.md"), "c.md": VALID_FILE},
+            "itself superseded",
+        ),
+    ],
+)
+def test_superseded_by_must_name_a_current_corpus_document(
+    tmp_path: Path, files: dict[str, str], match: str
+) -> None:
+    for name, content in files.items():
+        _write(tmp_path, name, content)
+
+    with pytest.raises(CorpusError, match=match):
+        load_corpus(tmp_path)
+
+
+def test_pending_review_marks_a_document_quarantined(tmp_path: Path) -> None:
+    content = VALID_FILE.replace("date: 2024-01-15", "date: 2024-01-15\nreview_status: pending")
+
+    assert load_document(_write(tmp_path, "doc.md", content)).is_quarantined

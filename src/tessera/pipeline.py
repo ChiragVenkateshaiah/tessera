@@ -145,5 +145,7 @@ def answer_query(
         ),
         floors={"relevance_threshold": RELEVANCE_THRESHOLD},
         fixed_response=not shown_chunks,
+        removed=dict(retrieval.removed),
+        superseded=tuple(m.document_path for m in generated.superseded),
     )
     return result(generated.answer, trace, citations=generated.citations)

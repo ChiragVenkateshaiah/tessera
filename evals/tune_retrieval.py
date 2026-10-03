@@ -20,6 +20,10 @@ the model reads, not which documents are retrieved or their order, so
 the document-level recall/precision/MRR scored here are unaffected and
 this script does not model it.
 
+P4-4 note: retrieve() excludes superseded documents in the store query,
+and so does fetch_candidates() (CURRENT_ONLY). Its replacement step only
+touches queries that match a superseded document and is not modelled.
+
 Tunes against evals/cases/query_log.yaml only; evals/cases/placeholder.yaml
 is the held-out overfitting check-set (see its and query_log.yaml's
 header comments, and checkpoint.md's 2026-09-04 P2-2 entry) — the chosen
@@ -41,6 +45,7 @@ from pathlib import Path
 
 from tessera.embedding.base import Embedder
 from tessera.retrieval.retriever import (
+    CURRENT_ONLY,
     LOOKUP_MAX_PER_DOCUMENT,
     LOOKUP_TOP_K,
     SYNTHESIS_CANDIDATE_K,
@@ -144,7 +149,8 @@ def fetch_candidates(
         if case.archetype not in (Archetype.LOOKUP, Archetype.SYNTHESIS):
             continue
         embedding = embedder.embed_query(case.query)
-        candidates = store.query(embedding, k=widest_k())
+        # Superseded chunks never reach retrieve()'s candidates (P4-4).
+        candidates = store.query(embedding, k=widest_k(), where=CURRENT_ONLY)
         fetched.append(FetchedCase(case=case, candidates=candidates))
     return fetched
 

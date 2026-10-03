@@ -48,6 +48,11 @@ class Trace:
     # True when a fixed message answered without a generation call: a
     # terminal archetype (D), nothing over the floor, or no people index.
     fixed_response: bool = False
+    # Chunks each exclusion filter kept out of the candidate pool, by
+    # filter name (e.g. {"superseded": 3}), and the superseded documents
+    # the answer's note pointed away from.
+    removed: dict[str, int] = field(default_factory=dict)
+    superseded: tuple[str, ...] = ()
 
 
 def trace_record(
@@ -80,6 +85,8 @@ def trace_record(
         ],
         "floors": dict(trace.floors),
         "fixed_response": trace.fixed_response,
+        "removed": dict(trace.removed),
+        "superseded": list(trace.superseded),
         "citations": [c.document_path for c in result.citations],
         "experts": [m.person.person_id for m in result.experts],
         "llm": llm,

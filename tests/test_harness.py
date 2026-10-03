@@ -112,24 +112,31 @@ def test_load_cases_parses_real_case_files() -> None:
     overfitting check-set), query_log.yaml (41 synthesized query-log
     stand-in cases, see its header comment), expertise_nomatch.yaml
     (6 archetype-B no-match cases, ql022 moved there from query_log.yaml
-    in P3-5), and feedback.yaml (1 case promoted from a thumbs-down in
-    P4-3). Counts below must be updated if any file's case count
-    changes.
+    in P3-5), feedback.yaml (1 case promoted from a thumbs-down in
+    P4-3), and freshness.yaml (7 superseded-document cases, P4-4). Counts
+    below must be updated if any file's case count changes.
     """
     cases = load_cases(CASES_DIR)
 
-    assert len(cases) == 56
+    assert len(cases) == 63
     by_archetype = {a: 0 for a in Archetype}
     for case in cases:
         by_archetype[case.archetype] += 1
     assert by_archetype == {
-        Archetype.LOOKUP: 21,
+        Archetype.LOOKUP: 26,
         Archetype.EXPERTISE: 15,
-        Archetype.SYNTHESIS: 15,
+        Archetype.SYNTHESIS: 17,
         Archetype.COMPARATIVE: 5,
     }
     q001 = next(c for c in cases if c.id == "q001")
     assert q001.relevant_sources  # A-archetype case has real sources
+    freshness = [c for c in cases if c.superseded_sources]
+    assert [c.id for c in freshness] == [f"fr00{i}" for i in range(1, 8)]
+    assert all(c.relevant_sources for c in freshness)
+    # Every labelled path, current and superseded, exists in the corpus.
+    for c in cases:
+        for rel in [*c.relevant_sources, *c.superseded_sources]:
+            assert (CASES_DIR.parents[1] / "data" / "corpus" / rel).is_file(), (c.id, rel)
 
 
 def test_load_cases_returns_empty_list_for_comment_only_file(tmp_path: Path) -> None:
@@ -515,6 +522,7 @@ def _passing_report(**overrides: object) -> EvalReport:
         mean_groundedness=5.0,
         mean_relevance=4.9,
         mean_latency_by_archetype={},
+        superseded_cited_cases=[],
     )
     defaults.update(overrides)
     return EvalReport(**defaults)  # type: ignore[arg-type]
@@ -787,3 +795,73 @@ def test_judge_sees_sources_numbered_exactly_as_the_answer_prompt() -> None:
     )[0]
     assert judge_sources == answer_sources
     assert "[2] Other" in judge_sources and "[3]" not in judge_sources
+
+
+# --- Freshness gate (P4-4) ---
+
+
+def test_bar_fails_when_a_case_cites_a_superseded_document() -> None:
+    result = evaluate_bar(_passing_report(superseded_cited_cases=["fr001"]))
+
+    assert result.passed is False
+    assert [t.name for t in result.gated_failures] == ["Superseded cited as current (A/C)"]
+    assert "fr001" in result.gated_failures[0].actual
+
+
+def test_superseded_gate_has_no_value_without_document_cases() -> None:
+    result = evaluate_bar(_passing_report(superseded_cited_cases=None))
+
+    assert "Superseded cited as current (A/C)" in [t.name for t in result.gated_failures]
+
+
+def test_run_case_scores_a_freshness_case_and_judges_without_the_note() -> None:
+    llm = ScriptedLLMClient(
+        {
+            ROUTER_SYSTEM_PROMPT: _router_response("A"),
+            LOOKUP_ANSWER_SYSTEM_PROMPT: "Use the current guide [1].",
+            JUDGE_SYSTEM_PROMPT: '{"groundedness": 5, "relevance": 5, "reasoning": "good"}',
+        }
+    )
+    old = SearchResult(
+        **{
+            **_result("data/corpus/methodology/old.md", 0.9, "Old Guide").__dict__,
+            "status": "superseded",
+            "superseded_by": "data/corpus/methodology/new.md",
+        }
+    )
+    store = FakeVectorStore([old, _result("data/corpus/methodology/new.md", 0.7, "New Guide")])
+    case = EvalCase(
+        id="fr1",
+        query="where's the old method?",
+        archetype=Archetype.LOOKUP,
+        relevant_sources=["methodology/new.md"],
+        ideal_answer="points to the new guide",
+        superseded_sources=["methodology/old.md"],
+    )
+
+    result = run_case(case, llm, FakeEmbedder(), store, CORPUS_DIR)
+
+    assert result.retrieved_documents == ["methodology/new.md"]
+    assert result.superseded_cited == []
+    assert result.superseded_noted is True
+    assert '"Old Guide"' in result.answer  # the user sees the note...
+    judged = next(user for system, user in llm.calls if system == JUDGE_SYSTEM_PROMPT)
+    assert "Old Guide" not in judged  # ...the judge grades the model's text
+
+
+def test_run_harness_reports_freshness_cases() -> None:
+    results = [
+        CaseResult(
+            case_id=cid, query="q", expected_archetype=Archetype.LOOKUP,
+            actual_archetype=Archetype.LOOKUP, routing_correct=True,
+            retrieved_documents=[], recall=1.0, precision=1.0,
+            reciprocal_rank_score=1.0, answer="", judge=None, latency_seconds=0.0,
+            superseded_cited=cited, superseded_noted=noted,
+        )
+        for cid, cited, noted in [("a", [], None), ("b", ["methodology/old.md"], True)]
+    ]
+
+    text = format_report(_passing_report(case_results=results, superseded_cited_cases=["b"]))
+
+    assert "[FAIL] Superseded cited as current (A/C): 1: b" in text
+    assert "superseded_cited=methodology/old.md" in text

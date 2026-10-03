@@ -76,6 +76,15 @@ Cases live in `evals/cases/*.yaml`, one list of entries per file:
   generation LLM calls (counted, not assumed). These live in
   `expertise_nomatch.yaml`, are not judged, and don't contribute to
   recall/MRR; they are scored only by the no-match refusal rate.
+- `superseded_sources` (A/C, Phase 4 P4-4): corpus-relative paths of
+  superseded documents (front matter `status: superseded`) that the query
+  is worded to match more closely than their current version, which goes
+  in `relevant_sources`. Retrieval excludes superseded chunks, so none of
+  these may be retrieved or cited; the per-case detail also reports
+  whether the answer carried the fixed newer-version note. These live in
+  `freshness.yaml`. Separately, every A/C case is checked for any
+  superseded document among the sources shown to the model — the gated
+  "Superseded cited as current" row (`evals/QUALITY_BAR.md`).
 
 `evals/cases/placeholder.yaml` holds the 8 workshop queries from
 Discovery Findings §7 (two per archetype). Since P2-2 it is **held out
