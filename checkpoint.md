@@ -1630,7 +1630,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       plain-prose decline; **user signed off** on the contract also
       accepting the prompt's decline wording. Final sweep 92/92 `=> PASS`:
       leaks 0/13, authorized recall 1.00, injection 100%.
-- [x] **P4-7 — Phase 4 exit** (2026-10-03). README (status, phase table,
+- [x] **P4-7 — Phase 4 exit** (2026-10-03, PR #66). README (status, phase table,
       "Phase 4 — production readiness" with the Gartner/MIT framing and
       honest limits), QUALITY_BAR current standing, this entry, Phase 1
       exit criteria re-confirmed on a fresh clone, final clean sweep
@@ -1835,7 +1835,7 @@ replanned + re-adopted the same day (#57):
   eval shown failing)~~ — done (#64)
 - ~~P4-6 — permission-aware retrieval (leaks 0, authorized recall ≥ 0.80,
   injection 100%)~~ — done (#65)
-- ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (__P47_PR__)
+- ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (#66)
 
 **Phase 4.5** — LangGraph orchestrator + LangChain adapters + human-review
 interrupt (user decision 2026-10-03; plan + ADR 0005 to draft first)
