@@ -205,6 +205,7 @@ def test_serve_builds_dependencies_once_and_runs_uvicorn(
     monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
     monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
     monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
+    monkeypatch.setattr(cli, "_principal_resolver", lambda settings: lambda pid: None)
 
     ran: dict = {}
 
@@ -366,3 +367,55 @@ def test_feedback_is_503_when_not_enabled(monkeypatch: pytest.MonkeyPatch, tmp_p
     response = client.post("/api/feedback", json={"trace_id": "t-0001", "rating": "up"})
 
     assert response.status_code == 503
+
+
+
+# --- as_person (Phase 4, P4-6): a demo identity ---
+
+
+def _principal_client(monkeypatch: pytest.MonkeyPatch, resolve) -> tuple[TestClient, dict]:
+    seen: dict = {}
+
+    def fake_answer(question, llm, embedder, store, expertise_store=None, **kw):
+        seen["principal"] = kw.get("principal")
+        return _lookup(question)
+
+    monkeypatch.setattr(api, "answer_query", fake_answer)
+    app = api.create_app(
+        object(), object(), FakeStore(336), FakeStore(600), llm_name="fake:model",
+        resolve_principal=resolve,
+    )
+    return TestClient(app), seen
+
+
+def test_as_person_is_resolved_and_passed_to_the_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tessera.principal import Principal
+
+    cleared = Principal("c0048", frozenset({"halcyon"}))
+    client, seen = _principal_client(monkeypatch, lambda pid: cleared if pid == "c0048" else None)
+
+    ok = client.post("/api/ask", json={"question": "halcyon?", "as_person": "c0048"})
+    assert ok.status_code == 200 and seen["principal"] == cleared
+
+    plain = client.post("/api/ask", json={"question": "halcyon?"})
+    assert plain.status_code == 200 and seen["principal"] is None  # internal only
+
+
+def test_unknown_or_unsupported_as_person_is_a_400(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _ = _principal_client(monkeypatch, lambda pid: None)
+    no_resolver, _ = _principal_client(monkeypatch, None)
+
+    unknown = client.post("/api/ask", json={"question": "q", "as_person": "c9999"})
+    disabled = no_resolver.post("/api/ask", json={"question": "q", "as_person": "c0048"})
+
+    assert unknown.status_code == 400 and "c9999" in unknown.json()["error"]
+    assert disabled.status_code == 400
+
+
+def test_the_askers_trace_hides_how_much_restricted_material_was_withheld() -> None:
+    record = {"trace_id": "t", "removed": {"superseded": 2, "restricted": 5}}
+
+    view = api.asker_view(record)
+
+    assert view["removed"] == {"superseded": 2}
+    assert record["removed"]["restricted"] == 5  # the operator's log keeps it

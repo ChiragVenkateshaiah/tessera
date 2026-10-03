@@ -524,6 +524,7 @@ def _passing_report(**overrides: object) -> EvalReport:
         mean_relevance=4.9,
         mean_latency_by_archetype={},
         superseded_cited_cases=[],
+        access_cases=29, leakage_set_size=13, authorized_recall=1.0, injection_pass_rate=1.0,
     )
     defaults.update(overrides)
     return EvalReport(**defaults)  # type: ignore[arg-type]
@@ -901,30 +902,40 @@ def _access_case(access: str, principal: str, **kw) -> EvalCase:
     )
 
 
-def test_a_walled_principal_seeing_a_restricted_chunk_is_a_leak() -> None:
-    store = FakeVectorStore([_restricted("data/corpus/engagements/h.md", 0.8, "halcyon")])
-    case = _access_case("leakage", "c0014", forbidden_markers=["£340m"])
+def test_leak_detection_flags_uncleared_chunks_and_markers() -> None:
+    # The detector itself, on a result as an unfiltered store (P4-5's
+    # baseline) produced it: retrieval no longer lets this happen.
+    from evals.harness import leaks
 
-    result = run_case(
-        case, _access_llm("Halcyon recovered £340m [1]."), FakeEmbedder(), store, CORPUS_DIR,
-        walls=_walls(),
+    case = _access_case("leakage", "c0014", forbidden_markers=["£340m"])
+    seen = CaseResult(
+        case_id=case.id, query=case.query, expected_archetype=Archetype.LOOKUP,
+        actual_archetype=Archetype.LOOKUP, routing_correct=True,
+        retrieved_documents=["engagements/h.md"], recall=None, precision=None,
+        reciprocal_rank_score=None, answer="Halcyon recovered £340m [1].", judge=None,
+        latency_seconds=0.0, restricted_seen=["halcyon"],
     )
 
-    assert result.leaked == ["chunk:halcyon", "marker:£340m"]
-    assert result.judge is None  # access cases are not judged
+    assert leaks(case, seen, _walls()) == ["chunk:halcyon", "marker:£340m"]
+    cleared = _access_case("authorized", "c0048", forbidden_markers=[])
+    assert leaks(cleared, seen, _walls()) == []
+    assert leaks(cleared, seen, None) == ["chunk:halcyon"]  # no walls: fail closed
 
 
-def test_a_cleared_principal_is_no_leak_and_no_walls_fails_closed() -> None:
+def test_a_walled_principal_is_filtered_and_a_cleared_one_is_not() -> None:
     store = FakeVectorStore([_restricted("data/corpus/engagements/h.md", 0.8, "halcyon")])
-    case = _access_case(
+    walled = _access_case("leakage", "c0014", forbidden_markers=["£340m"])
+    cleared = _access_case(
         "authorized", "c0048", relevant_sources=["engagements/h.md"], forbidden_markers=[]
     )
 
-    cleared = run_case(case, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
-    no_walls = run_case(case, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR)
+    w = run_case(walled, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
+    c = run_case(cleared, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
+    no_walls = run_case(cleared, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR)
 
-    assert cleared.leaked == [] and cleared.recall == 1.0
-    assert no_walls.leaked == ["chunk:halcyon"]
+    assert w.retrieved_documents == [] and w.leaked == [] and w.judge is None
+    assert c.leaked == [] and c.recall == 1.0
+    assert no_walls.recall == 0.0  # no walls: cleared for nothing
 
 
 def test_injection_contract_needs_citations_when_sources_were_shown() -> None:
@@ -938,7 +949,7 @@ def test_injection_contract_needs_citations_when_sources_were_shown() -> None:
     assert grounded.contract_held is True
 
 
-def test_access_cases_are_kept_out_of_the_main_metrics_and_reported_provisionally() -> None:
+def test_access_cases_are_kept_out_of_the_main_metrics_and_gated() -> None:
     restricted = _restricted("data/corpus/engagements/h.md", 0.8, "halcyon")
     store = FakeVectorStore([restricted])
     cases = [
@@ -952,20 +963,21 @@ def test_access_cases_are_kept_out_of_the_main_metrics_and_reported_provisionall
 
     assert report.access_cases == 3
     assert report.mean_recall == 0.0  # only q1 counts, and it missed
-    assert report.leakage_set_leaked == ["ac-leakage"] and report.leakage_set_size == 1
-    assert report.leaking_cases == ["ac-injection", "ac-leakage", "q1"]
+    assert report.leakage_set_leaked == [] and report.leakage_set_size == 1
+    assert report.leaking_cases == []
     assert report.authorized_recall == 1.0
-    assert report.injection_pass_rate == 0.0
-    bar = evaluate_bar(report)
-    rows = {t.name: t for t in bar.thresholds}
-    assert rows["Restricted-content leaks"].gated is False
-    assert rows["Restricted-content leaks"].passed is False
-    assert "leakage set 1/1" in rows["Restricted-content leaks"].actual
-    assert "provisional" in rows["Prompt-injection cases passed"].requirement
+    assert report.injection_pass_rate == 1.0
+    rows = {t.name: t for t in evaluate_bar(report).thresholds}
+    for name in ("Restricted-content leaks", "Authorized recall (restricted)",
+                 "Prompt-injection cases passed"):
+        assert rows[name].gated and rows[name].passed, name
+    assert "leakage set 0/1" in rows["Restricted-content leaks"].actual
+
     from evals.harness import QualityBar
 
-    gated = evaluate_bar(report, QualityBar(gate_access=True))
-    assert "Restricted-content leaks" in [t.name for t in gated.gated_failures]
+    provisional = {t.name: t for t in evaluate_bar(report, QualityBar(gate_access=False)).thresholds}
+    assert provisional["Restricted-content leaks"].gated is False
+    assert "provisional" in provisional["Prompt-injection cases passed"].requirement
 
 
 def test_an_authorized_case_that_never_reaches_retrieval_counts_as_a_miss() -> None:
@@ -975,3 +987,28 @@ def test_an_authorized_case_that_never_reaches_retrieval_counts_as_a_miss() -> N
     report = run_harness([case], llm, FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR, walls=_walls())
 
     assert report.authorized_recall == 0.0  # refused = over-blocked, not skipped
+
+
+def test_access_rows_are_gated_and_fail_without_access_cases() -> None:
+    report = _passing_report(access_cases=0, authorized_recall=None, injection_pass_rate=None)
+
+    failed = [t.name for t in evaluate_bar(report).gated_failures]
+
+    assert failed == [
+        "Restricted-content leaks",
+        "Authorized recall (restricted)",
+        "Prompt-injection cases passed",
+    ]
+
+
+def test_run_case_scopes_retrieval_to_the_case_principal() -> None:
+    restricted = _restricted("data/corpus/engagements/h.md", 0.9, "halcyon")
+    store = FakeVectorStore([restricted, _result("data/corpus/methodology/a.md", 0.6)])
+    walled = _access_case("leakage", "c0014", forbidden_markers=[])
+    cleared = _access_case("authorized", "c0048", relevant_sources=["engagements/h.md"])
+
+    w = run_case(walled, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
+    c = run_case(cleared, _access_llm("See [1]."), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
+
+    assert w.retrieved_documents == ["methodology/a.md"] and w.leaked == []
+    assert c.retrieved_documents[0] == "engagements/h.md" and c.leaked == []

@@ -146,12 +146,12 @@ def test_superseded_exclusion_is_traced_as_a_removal_count() -> None:
 
     result = answer_query("pricing framework?", llm, FakeEmbedder(), store)
 
-    assert result.trace.removed == {"superseded": 1}
+    assert result.trace.removed == {"superseded": 1, "restricted": 0}
     assert result.trace.superseded == ("data/corpus/old.md",)
     assert "data/corpus/old.md" not in [i.document_path for i in result.trace.retrieved]
     record = trace_record(
         "t", result, timestamp=datetime(2026, 10, 3, tzinfo=timezone.utc),
         latency_s=1.0, prices={}, llm="fake",
     )
-    assert record["removed"] == {"superseded": 1}
+    assert record["removed"] == {"superseded": 1, "restricted": 0}
     assert record["superseded"] == ["data/corpus/old.md"]

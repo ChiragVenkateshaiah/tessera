@@ -53,6 +53,9 @@ class Trace:
     # the answer's note pointed away from.
     removed: dict[str, int] = field(default_factory=dict)
     superseded: tuple[str, ...] = ()
+    # Who document retrieval was scoped to (a demo identity), or None for
+    # internal-only.
+    principal: str | None = None
 
 
 def trace_record(
@@ -85,6 +88,7 @@ def trace_record(
         ],
         "floors": dict(trace.floors),
         "fixed_response": trace.fixed_response,
+        "principal": trace.principal,
         "removed": dict(trace.removed),
         "superseded": list(trace.superseded),
         "citations": [c.document_path for c in result.citations],

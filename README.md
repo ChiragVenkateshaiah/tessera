@@ -252,7 +252,7 @@ replaced them, and quarantined documents awaiting human review
 (`review_status: pending` — never embedded). Reads the corpus directly,
 embeds locally, zero LLM calls.
 
-**Restricted tier (Phase 4, data only so far).** `data/corpus/engagements/`
+**Restricted tier and permission-aware retrieval (Phase 4).** `data/corpus/engagements/`
 holds 12 fictional, codenamed client-engagement summaries labelled
 `sensitivity: restricted` and `engagement: <codename>`; everything in
 `methodology/` and `thought_leadership/` is internal, and an unlabelled
@@ -262,8 +262,30 @@ document anywhere else is treated as restricted (fail closed).
 plus three demo personas. Two anonymized case studies in
 `data/corpus/case_studies/` wait behind a human review gate
 (`review_status: pending`) and are never embedded. The access eval sets
-(`evals/cases/access.yaml`) run today and **fail** the leak check by design:
-permission-aware retrieval is the next task (P4-6).
+(`evals/cases/access.yaml`) are gated in the quality bar.
+
+Ask as someone with `--as` (a **demo identity, not authentication** —
+Tessera takes the caller at their word):
+
+```sh
+uv run tessera query "What did we find on Project Halcyon?" --as c0048   # cleared partner
+uv run tessera query "What did we find on Project Halcyon?" --as c0014   # walled analyst
+uv run tessera chat --as c0065                                           # cleared for Kestrel only
+```
+
+The same field on the API is `POST /api/ask {"question", "as_person"}`.
+The person is resolved against the walls into a `Principal` (person_id +
+cleared engagements) that is passed into `answer_query()` as a parameter
+(CLAUDE.md constraint #6). Retrieval adds a permission filter to every
+store query — internal documents, plus restricted ones from the
+principal's engagements — so a restricted chunk never enters an
+unauthorized candidate set, prompt, citation or trace, and every result
+is re-checked after the store returns it. No `--as` means internal
+documents only. The trace records how many restricted chunks the filter
+withheld; that count stays in the operator's trace log and is removed
+from the trace returned to the asker (`include_trace`), since it would
+tell a walled user that restricted material exists. The expertise path is
+unaffected: the people index holds no engagement or client data.
 
 **Freshness (Phase 4).** A document can be marked `status: superseded`
 with `superseded_by: <corpus-relative path>` in its front matter

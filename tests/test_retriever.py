@@ -11,6 +11,7 @@ from tessera.retrieval.retriever import (
     LOOKUP_EXPAND_DOCUMENTS,
     CURRENT_ONLY,
     LOOKUP_TOP_K,
+    permission_filter,
     SUPERSEDED_ONLY,
     SYNTHESIS_CANDIDATE_K,
     SYNTHESIS_MAX_PER_DOCUMENT,
@@ -77,6 +78,17 @@ def _matches(result: SearchResult, where: dict[str, object] | None) -> bool:
         return result.status == status
     path = where.get("document_path")
     return path is None or result.document_path == path
+
+
+def _contains(where: object, clause: dict[str, object]) -> bool:
+    """True if ``clause`` appears anywhere inside a nested where."""
+    if where == clause:
+        return True
+    if isinstance(where, dict):
+        return any(_contains(v, clause) for v in where.values())
+    if isinstance(where, list):
+        return any(_contains(v, clause) for v in where)
+    return False
 
 
 class FakeVectorStore(VectorStore):
@@ -185,9 +197,14 @@ def test_synthesis_uses_broader_candidate_k() -> None:
     retrieve("get me up to speed on pricing strategy", Archetype.SYNTHESIS, FakeEmbedder(), store)
 
     assert store.first_k == SYNTHESIS_CANDIDATE_K
-    # Synthesis doesn't expand: the candidate query and the superseded
-    # probe, nothing narrowed to one document.
-    assert [where for _, where in store.calls] == [CURRENT_ONLY, SUPERSEDED_ONLY]
+    # Synthesis doesn't expand: the candidate query, the superseded probe
+    # and the removal-count probe — nothing narrowed to one document.
+    internal_only = permission_filter(None)
+    assert [where for _, where in store.calls] == [
+        {"$and": [internal_only, CURRENT_ONLY]},
+        {"$and": [internal_only, SUPERSEDED_ONLY]},
+        {"sensitivity": {"$ne": "internal"}},
+    ]
 
 
 def test_same_query_returns_visibly_different_breadth_under_a_vs_c() -> None:
@@ -251,13 +268,16 @@ def test_where_filter_passed_through_to_store() -> None:
         where={"doc_type": "methodology"},
     )
 
+    caller = {"doc_type": "methodology"}
     first_where = store.calls[0][1]
-    assert first_where == {"$and": [{"doc_type": "methodology"}, CURRENT_ONLY]}
-    # Every later query (the superseded probe, expansion narrowing to one
-    # document) keeps the caller's filter — P4-6's permission filter will
-    # ride on this.
-    for _, where in store.calls[1:]:
-        assert where["$and"][0] == {"doc_type": "methodology"}
+    assert first_where == {"$and": [{"$and": [caller, permission_filter(None)]}, CURRENT_ONLY]}
+    # Every query keeps the caller's filter, and every one that can return
+    # content (all but the removal-count probe) carries the permission
+    # filter too.
+    for _, where in store.calls:
+        assert _contains(where, caller)
+    for _, where in store.calls[:-1]:
+        assert _contains(where, permission_filter(None))
 
 
 @pytest.mark.parametrize("archetype", [Archetype.EXPERTISE, Archetype.COMPARATIVE])
@@ -314,7 +334,7 @@ def test_superseded_chunks_never_reach_the_results(archetype: Archetype) -> None
     result = retrieve("market sizing", archetype, FakeEmbedder(), store)
 
     assert all(r.status == "current" for r in result.results)
-    assert result.removed == {"superseded": 2}
+    assert result.removed["superseded"] == 2
 
 
 def test_a_superseded_document_that_would_have_ranked_is_reported() -> None:
@@ -338,7 +358,7 @@ def test_a_superseded_document_below_the_cutoff_is_not_reported() -> None:
     assert result.superseded == ()
     # Its first chunk was still inside the 30-candidate pool (weakest 0.71),
     # so it counts as removed — its weaker chunk (0.5) was not.
-    assert result.removed == {"superseded": 1}
+    assert result.removed["superseded"] == 1
 
 
 def test_the_current_version_takes_the_superseded_slot_when_it_did_not_rank() -> None:
@@ -361,7 +381,7 @@ def test_no_superseded_documents_leaves_retrieval_unchanged() -> None:
     )
 
     assert plain.superseded == ()
-    assert plain.removed == {"superseded": 0}
+    assert plain.removed == {"superseded": 0, "restricted": 0}
 
 
 def test_with_room_left_a_superseded_match_must_still_reach_the_candidate_pool() -> None:
@@ -374,3 +394,72 @@ def test_with_room_left_a_superseded_match_must_still_reach_the_candidate_pool()
 
     assert len(result.results) == 2 * SYNTHESIS_MAX_PER_DOCUMENT
     assert result.superseded == ()
+
+
+# --- Permissions (Phase 4, P4-6) ---
+
+
+def _restricted(chunk_id: str, document_path: str, score: float, engagement: str) -> SearchResult:
+    return SearchResult(
+        **{**_result(chunk_id, document_path, score).__dict__,
+           "sensitivity": "restricted", "engagement": engagement}
+    )
+
+
+def _mixed_store() -> FakeVectorStore:
+    """Two restricted engagements scoring above every internal chunk."""
+    return FakeVectorStore(
+        [
+            _restricted("h::0", "halcyon.md", 2.0, "halcyon"),
+            _restricted("k::0", "kestrel.md", 1.9, "kestrel"),
+            *_spread_candidates(30, docs=10),
+        ]
+    )
+
+
+def test_permission_filter_is_deny_by_default() -> None:
+    from tessera.principal import Principal
+
+    assert permission_filter(None) == {"sensitivity": "internal"}
+    assert permission_filter(Principal("c0014")) == {"sensitivity": "internal"}
+    cleared = permission_filter(Principal("c0048", frozenset({"halcyon"})))
+    assert cleared["$or"][0] == {"sensitivity": "internal"}
+    assert {"engagement": {"$in": ["halcyon"]}} in cleared["$or"][1]["$and"]
+
+
+@pytest.mark.parametrize("archetype", [Archetype.LOOKUP, Archetype.SYNTHESIS])
+def test_a_walled_principal_never_gets_a_restricted_chunk_even_from_a_leaky_store(
+    archetype: Archetype,
+) -> None:
+    from tessera.principal import Principal
+
+    # This fake ignores the sensitivity filter, like a store whose filter
+    # failed: the re-check still keeps every restricted chunk out.
+    result = retrieve("q", archetype, FakeEmbedder(), _mixed_store(), principal=Principal("c0014"))
+
+    assert all(r.sensitivity == "internal" for r in result.results)
+
+
+def test_a_cleared_principal_gets_their_engagement_and_only_theirs() -> None:
+    from tessera.principal import Principal
+
+    result = retrieve(
+        "q", Archetype.LOOKUP, FakeEmbedder(), _mixed_store(),
+        principal=Principal("c0048", frozenset({"halcyon"})),
+    )
+
+    engagements = {r.engagement for r in result.results if r.sensitivity == "restricted"}
+    assert engagements == {"halcyon"}
+    assert result.results[0].document_path == "halcyon.md"
+
+
+def test_withheld_restricted_chunks_are_counted_not_returned() -> None:
+    from tessera.principal import Principal
+
+    result = retrieve(
+        "q", Archetype.LOOKUP, FakeEmbedder(), _mixed_store(),
+        principal=Principal("c0048", frozenset({"halcyon"})),
+    )
+
+    assert result.removed["restricted"] == 1  # kestrel's chunk, withheld
+    assert "kestrel.md" not in {r.document_path for r in result.results}

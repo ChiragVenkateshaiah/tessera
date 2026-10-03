@@ -9,7 +9,7 @@ call, subprocess, or HTTP wrapper without this module changing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from tessera.embedding.base import Embedder
 from tessera.generation.answer import (
@@ -26,6 +26,7 @@ from tessera.generation.expertise import (
     generate_expertise_answer,
 )
 from tessera.generation.usage import UsageRecorder, UsageSummary, combine
+from tessera.principal import Principal
 from tessera.retrieval.expertise import find_experts
 from tessera.retrieval.retriever import retrieve
 from tessera.retrieval.router import Archetype, route, terminal_response_for
@@ -70,6 +71,7 @@ def answer_query(
     expertise_store: ExpertiseStore | None = None,
     *,
     router_llm: LLMClient | None = None,
+    principal: Principal | None = None,
 ) -> AnswerResult:
     """Run a query through the full pipeline: route, then return a
     terminal response (D), find and describe people (B), or retrieve and
@@ -81,6 +83,12 @@ def answer_query(
     router_llm, when given, makes the routing call (a cheap classification
     — Haiku on Bedrock) while ``llm`` writes the answer; by default one
     client does both.
+
+    principal is who the question is asked as (a demo identity, resolved
+    by the caller — Phase 4, plan §3.5.4): document retrieval returns
+    internal documents plus restricted ones from engagements they are
+    cleared for. None means internal documents only. The expertise path
+    is unaffected — the people index holds no engagement or client data.
     """
     answer_llm = UsageRecorder(llm)
     routing_llm = UsageRecorder(router_llm) if router_llm is not None else answer_llm
@@ -100,7 +108,7 @@ def answer_query(
             citations=citations or [],
             experts=experts or [],
             usage=combine([routing_llm, answer_llm]),
-            trace=trace,
+            trace=replace(trace, principal=principal.person_id if principal else None),
         )
 
     terminal = terminal_response_for(decision.archetype)
@@ -133,7 +141,7 @@ def answer_query(
         )
         return result(generated.answer, trace, experts=generated.experts)
 
-    retrieval = retrieve(query, decision.archetype, embedder, store)
+    retrieval = retrieve(query, decision.archetype, embedder, store, principal=principal)
     generated = generate_answer(retrieval, answer_llm)
     shown_chunks = {r.chunk_id for r in filter_relevant(retrieval.results)}
     trace = Trace(

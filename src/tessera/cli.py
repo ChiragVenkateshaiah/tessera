@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,7 @@ from tessera.ingestion.data_quality import (
 from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
+from tessera.principal import Principal
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
 from tessera.trace import trace_record
@@ -266,6 +268,40 @@ def _load_walls(settings: Settings) -> Walls:
     return load_walls(settings.access_file, person_ids=people, engagements=engagements)
 
 
+def _principal_resolver(settings: Settings) -> Callable[[str], Principal | None]:
+    """person_id -> Principal with the engagements they are cleared for,
+    or None for someone not in the people dataset. A DEMO identity: the
+    caller is taken at their word (Phase 4 plan §6).
+    """
+    walls = _load_walls(settings)
+    people = {p.person_id for p in load_expertise(settings.expertise_dir)}
+
+    def resolve(person_id: str) -> Principal | None:
+        if person_id not in people:
+            return None
+        return Principal(person_id, walls.engagements_for(person_id))
+
+    return resolve
+
+
+def _require_principal(settings: Settings, person_id: str | None) -> Principal | None:
+    if person_id is None:
+        return None
+    principal = _principal_resolver(settings)(person_id)
+    if principal is None:
+        typer.echo(f"No person {person_id!r} in {settings.expertise_dir}.", err=True)
+        raise typer.Exit(code=1)
+    return principal
+
+
+def principal_line(principal: Principal | None) -> str:
+    """Who answers are scoped to, as `query` and `chat` print it."""
+    if principal is None:
+        return "(internal documents only — pass --as PERSON_ID to ask as someone; demo identity)"
+    cleared = ", ".join(sorted(principal.engagements)) or "no restricted engagements"
+    return f"(asking as {principal.person_id} — demo identity; cleared for: {cleared})"
+
+
 def _open_stores(
     settings: Settings,
 ) -> tuple[ChromaVectorStore, ChromaExpertiseStore | None]:
@@ -332,9 +368,20 @@ def _record_trace(
 
 
 @app.command()
-def query(text: str) -> None:
+def query(
+    text: str,
+    as_person: str | None = typer.Option(
+        None,
+        "--as",
+        help="Ask as this person_id (e.g. c0014). A DEMO identity, not "
+        "authentication: restricted engagement documents are searched only "
+        "for the engagements that person is cleared for. Default: internal "
+        "documents only.",
+    ),
+) -> None:
     """Answer a query against the persisted index, with citations."""
     settings = _load_settings()
+    principal = _require_principal(settings, as_person)
     store, expertise_store = _open_stores(settings)
 
     embedder = LocalEmbedder()
@@ -342,12 +389,19 @@ def query(text: str) -> None:
 
     start = time.perf_counter()
     result = answer_query(
-        text, llms.answer, embedder, store, expertise_store, router_llm=llms.router
+        text,
+        llms.answer,
+        embedder,
+        store,
+        expertise_store,
+        router_llm=llms.router,
+        principal=principal,
     )
     trace_id = _record_trace(settings, result, time.perf_counter() - start, llms.name)
 
     typer.echo(
         f"\n{render_answer(result)}\n\n({usage_line(result)} · trace {trace_id})"
+        f"\n{principal_line(principal)}"
     )
 
 
@@ -358,6 +412,14 @@ def chat(
         "--transcript",
         help="Append every question and answer to this Markdown file.",
     ),
+    as_person: str | None = typer.Option(
+        None,
+        "--as",
+        help="Ask as this person_id (e.g. c0014). A DEMO identity, not "
+        "authentication: restricted engagement documents are searched only "
+        "for the engagements that person is cleared for. Default: internal "
+        "documents only.",
+    ),
 ) -> None:
     """Ask questions one after another in an interactive session.
 
@@ -367,6 +429,7 @@ def chat(
     Ctrl-D) to leave.
     """
     settings = _load_settings()
+    principal = _require_principal(settings, as_person)
     store, expertise_store = _open_stores(settings)
 
     typer.echo("Loading the embedding model…")
@@ -382,6 +445,7 @@ def chat(
         f"Tessera — {store.count()} document chunks indexed, people search {people}.\n"
         "Ask a question, or type `exit` to leave."
     )
+    typer.echo(principal_line(principal))
 
     asked = 0
     while True:
@@ -398,7 +462,13 @@ def chat(
         start = time.perf_counter()
         try:
             result = answer_query(
-                text, llms.answer, embedder, store, expertise_store, router_llm=llms.router
+                text,
+                llms.answer,
+                embedder,
+                store,
+                expertise_store,
+                router_llm=llms.router,
+                principal=principal,
             )
         except KeyboardInterrupt:
             typer.echo("  (cancelled)")
@@ -463,6 +533,7 @@ def serve(
         prices=MODEL_PRICES,
         trace_log=JsonlTraceLog(settings.trace_log),
         feedback_store=JsonlFeedbackStore(settings.feedback_file),
+        resolve_principal=_principal_resolver(settings),
     )
     typer.echo(f"Tessera on http://{host}:{port}  (Ctrl-C to stop)")
     uvicorn.run(api, host=host, port=port)
