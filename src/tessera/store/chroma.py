@@ -7,7 +7,7 @@ from pathlib import Path
 import chromadb
 
 from tessera.ingestion.chunker import Chunk
-from tessera.ingestion.loader import STATUS_CURRENT
+from tessera.ingestion.loader import SENSITIVITY_RESTRICTED, STATUS_CURRENT
 from tessera.store.base import SearchResult, VectorStore
 
 DEFAULT_COLLECTION_NAME = "tessera_chunks"
@@ -28,6 +28,8 @@ def _serialize_metadata(chunk: Chunk) -> dict[str, str]:
         "heading_path": " > ".join(chunk.heading_path),
         "status": chunk.status,
         "superseded_by": chunk.superseded_by or "",
+        "sensitivity": chunk.sensitivity,
+        "engagement": chunk.engagement or "",
     }
 
 
@@ -53,6 +55,10 @@ def _result_from_row(
         # An index built before Phase 4 has no status: every chunk current.
         status=meta.get("status", STATUS_CURRENT),
         superseded_by=meta.get("superseded_by") or None,
+        # Fail closed: a chunk with no sensitivity label (an index built
+        # before Phase 4's access labels) reads as restricted — re-ingest.
+        sensitivity=meta.get("sensitivity", SENSITIVITY_RESTRICTED),
+        engagement=meta.get("engagement") or None,
     )
 
 

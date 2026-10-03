@@ -252,6 +252,19 @@ replaced them, and quarantined documents awaiting human review
 (`review_status: pending` — never embedded). Reads the corpus directly,
 embeds locally, zero LLM calls.
 
+**Restricted tier (Phase 4, data only so far).** `data/corpus/engagements/`
+holds 12 fictional, codenamed client-engagement summaries labelled
+`sensitivity: restricted` and `engagement: <codename>`; everything in
+`methodology/` and `thought_leadership/` is internal, and an unlabelled
+document anywhere else is treated as restricted (fail closed).
+`data/access/walls.yaml` — from a seeded generator, `data/access/generate.py`
+— lists who is cleared for each engagement, from the 600-person dataset,
+plus three demo personas. Two anonymized case studies in
+`data/corpus/case_studies/` wait behind a human review gate
+(`review_status: pending`) and are never embedded. The access eval sets
+(`evals/cases/access.yaml`) run today and **fail** the leak check by design:
+permission-aware retrieval is the next task (P4-6).
+
 **Freshness (Phase 4).** A document can be marked `status: superseded`
 with `superseded_by: <corpus-relative path>` in its front matter
 (validated at load: the target must exist and be current). Superseded

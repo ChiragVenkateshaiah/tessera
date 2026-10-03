@@ -13,6 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from tessera import cli
+from tessera.ingestion.access_loader import Walls
 from tessera.pipeline import AnswerResult
 from tessera.retrieval.router import Archetype
 
@@ -27,6 +28,8 @@ def _isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    # `eval` reads the walls from the corpus and people on disk; none here.
+    monkeypatch.setattr(cli, "_load_walls", lambda settings: Walls(cleared={}))
 
 
 def test_missing_config_reports_actionable_error_and_exits_nonzero(

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date as date_type
 from pathlib import Path
 
-from tessera.ingestion.loader import STATUS_CURRENT, Document
+from tessera.ingestion.loader import SENSITIVITY_RESTRICTED, STATUS_CURRENT, Document
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 FENCE_RE = re.compile(r"^```")
@@ -49,6 +49,10 @@ class Chunk:
     # replacing document's path in the same form as document_path.
     status: str = STATUS_CURRENT
     superseded_by: str | None = None
+    # Access labels (Phase 4): what P4-6's permission filter matches on.
+    # Restricted unless the document resolved to internal (fail closed).
+    sensitivity: str = SENSITIVITY_RESTRICTED
+    engagement: str | None = None
 
 
 @dataclass
@@ -197,6 +201,10 @@ def chunk_document(
                     superseded_by=str(doc.superseded_by_path)
                     if doc.superseded_by_path
                     else None,
+                    sensitivity=SENSITIVITY_RESTRICTED
+                    if doc.is_restricted
+                    else doc.sensitivity,
+                    engagement=doc.engagement,
                 )
             )
             index += 1

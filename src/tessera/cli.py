@@ -22,6 +22,7 @@ from tessera.generation.base import LLMClient
 from tessera.generation.bedrock import BedrockClient
 from tessera.generation.nvidia import NvidiaClient
 from tessera.generation.resilient import RetryingLLMClient
+from tessera.ingestion.access_loader import Walls, load_walls
 from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.data_quality import (
@@ -254,6 +255,15 @@ def data_report(
         stale_after_years=stale_years,
     )
     typer.echo(format_data_report(report, show_known=show_known))
+
+
+def _load_walls(settings: Settings) -> Walls:
+    """The ethical walls, validated against the corpus's restricted
+    engagements and the people dataset.
+    """
+    engagements = {d.engagement for d in load_corpus(settings.corpus_dir) if d.engagement}
+    people = [p.person_id for p in load_expertise(settings.expertise_dir)]
+    return load_walls(settings.access_file, person_ids=people, engagements=engagements)
 
 
 def _open_stores(
@@ -513,6 +523,7 @@ def eval_command(
         typer.echo(f"  [{done}/{total}] {getattr(result, 'case_id', '?')} {status}", err=True)
 
     cases = load_cases(EVAL_CASES_DIR)
+    walls = _load_walls(settings)
     report = run_harness(
         cases,
         llms.answer,
@@ -524,6 +535,7 @@ def eval_command(
         router_llm=llms.router,
         judge_llm=judge,
         prices=MODEL_PRICES,
+        walls=walls,
     )
 
     typer.echo(format_report(report))
