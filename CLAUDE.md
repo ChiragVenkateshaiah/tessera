@@ -205,6 +205,15 @@ These are reasons, not preferences:
   `docs/Tessera_Phase3_Plan.md` §5 for Phase 3, `docs/Tessera_Phase4_Plan.md`
   §5 for Phase 4. Stop after each task and
   report against its acceptance check before continuing.
+- **Phase plans get an independent review before adoption.** Run a
+  read-only `Plan` subagent against the draft *and the real code*. Fold
+  in every finding, and add a review section to the plan mapping each
+  finding to its fix. The Phase 5 reviews found real defects a docs-only
+  read would have missed.
+- **Portfolio depth over speed** (user, 2026-10-03). The thorough,
+  evidenced version is the default. Don't propose shrinkable scope or
+  time-boxed shortcuts to save time; still flag cost (Bedrock spend) and
+  anything on the do-not-build list.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
 - **Quality-bar regression check (Phase 2+).** Any PR that touches
