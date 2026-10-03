@@ -16,7 +16,7 @@ user decision (2026-10-03, tag with it recorded as a limit):** P4-2's
 live Bedrock sweep, blocked on the AWS account (see Notes). The chat-UI
 decision stays deferred until Bedrock latency is measured. **Next:
 Phase 4.5** (LangGraph + LangChain adapters + human-review interrupt) —
-plan and ADR 0005 to draft first.
+plan and ADR 0006 to draft first.
 
 Phase 4 = four production-readiness features aimed at the documented
 reasons GenAI projects stall after proof of concept
@@ -1640,7 +1640,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 **Phase 4.5 — LangGraph orchestrator + LangChain adapters** (user
 decision 2026-10-03: after `v0.4.0`, with the human-review interrupt).
-First step: draft `docs/Tessera_Phase4_5_Plan.md` and ADR 0005
+First step: draft `docs/Tessera_Phase4_5_Plan.md` and ADR 0006
 ("framework adoption: adapters, not core") for the user to review — no
 code before that. Shape agreed in discussion: a LangGraph `StateGraph`
 over the existing pure functions, selectable by config (native vs
@@ -1838,7 +1838,7 @@ replanned + re-adopted the same day (#57):
 - ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (#66)
 
 **Phase 4.5** — LangGraph orchestrator + LangChain adapters + human-review
-interrupt (user decision 2026-10-03; plan + ADR 0005 to draft first)
+interrupt (user decision 2026-10-03; plan + ADR 0006 to draft first)
 **← next**.
 
 **Phase 5** — ephemeral AWS deployment (plan §9; container image,
