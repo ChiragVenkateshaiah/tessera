@@ -15,8 +15,8 @@ criteria re-confirmed on a fresh clone. **One acceptance left open by
 user decision (2026-10-03, tag with it recorded as a limit):** P4-2's
 live Bedrock sweep, blocked on the AWS account (see Notes). The chat-UI
 decision stays deferred until Bedrock latency is measured. **Next:
-Phase 5** (LangChain / LangGraph / LangSmith, a parallel measured stack)
-— plan drafted in PR #67, awaiting adoption.
+Phase 4.5** (LangGraph + LangChain adapters + human-review interrupt) —
+plan and ADR 0005 to draft first.
 
 Phase 4 = four production-readiness features aimed at the documented
 reasons GenAI projects stall after proof of concept
@@ -1638,16 +1638,18 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
-**Phase 5 — LangChain, LangGraph, LangSmith** (plan `docs/Tessera_Phase5_Plan.md`,
-DRAFT in PR #67, awaiting user review/adoption; ADR 0006). User decisions
-2026-10-03: the goal is thorough hands-on learning of all three, used
-broadly; a **parallel LangChain stack** beside the untouched native core,
-measured per layer; agents/tool calling and conversation memory stay
-out; LangSmith with taint-based redaction; the phase renumbered to
-**Phase 5** (AWS → Phase 6, CI/CD → Phase 7). Reviewed twice by a Plan
-agent (plan §12/§13). First task after adoption: **P5-0** — the baseline
-at `v0.4.0` (`--json`, golden snapshot, baseline + noise-floor sweeps)
-*before* any dependency is added.
+**Phase 4.5 — LangGraph orchestrator + LangChain adapters** (user
+decision 2026-10-03: after `v0.4.0`, with the human-review interrupt).
+First step: draft `docs/Tessera_Phase4_5_Plan.md` and ADR 0005
+("framework adoption: adapters, not core") for the user to review — no
+code before that. Shape agreed in discussion: a LangGraph `StateGraph`
+over the existing pure functions, selectable by config (native vs
+langgraph), both held to the frozen `v0.4.0` bar; LangChain adapters
+behind the ports (an `LLMClient` over any LangChain chat model; Tessera
+retrieval, with the permission filter, as a `BaseRetriever`); a LangGraph
+`interrupt` for a reviewer to approve a quarantined case study before
+it's indexed. Out: checkpointer-as-conversation-memory (do-not-build),
+LangSmith replacing Tessera's traces.
 
 **Still open from P4-2 — the live Bedrock sweep (its acceptance):** a full
 `tessera eval --check` with answers on Bedrock, judge on Nemotron, passes
@@ -1835,9 +1837,9 @@ replanned + re-adopted the same day (#57):
   injection 100%)~~ — done (#65)
 - ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (#66)
 
-**Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
-stack (plan drafted, PR #67, awaiting adoption) **← next**. Phase 6 =
-ephemeral AWS deployment; Phase 7 = CI/CD + monitoring.
+**Phase 4.5** — LangGraph orchestrator + LangChain adapters + human-review
+interrupt (user decision 2026-10-03; plan + ADR 0005 to draft first)
+**← next**.
 
 **Phase 5** — ephemeral AWS deployment (plan §9; container image,
 Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
