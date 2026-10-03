@@ -31,4 +31,4 @@ lists upside isn't documenting a trade-off, it's marketing), and
 | [0003](0003-aws-serverless-foundation-stage1.md) | AWS serverless foundation (Stage 1) | Proposed — Phase 4+ |
 | [0004](0004-kubernetes-evolution-stage2.md) | Kubernetes evolution path (Stage 2) | Proposed — Phase 5+ |
 | [0005](0005-cicd-mlops-github-actions-terraform.md) | CI/CD and MLOps via GitHub Actions + Terraform | Proposed — Phase 5 |
-| [0006](0006-framework-adoption-adapters-not-core.md) | Framework adoption (LangChain, LangGraph): adapters, not core | Proposed — Phase 4.5 |
+| [0006](0006-framework-adoption-parallel-langchain-stack.md) | Framework adoption: a parallel LangChain / LangGraph / LangSmith stack beside the native core | Proposed — Phase 5 |
