@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from tessera.ingestion.chunker import Chunk
 from tessera.ingestion.expertise_loader import Person
-from tessera.ingestion.loader import STATUS_CURRENT
+from tessera.ingestion.loader import SENSITIVITY_INTERNAL, STATUS_CURRENT
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,10 @@ class SearchResult:
     # replacing document's path, in the same form as document_path.
     status: str = STATUS_CURRENT
     superseded_by: str | None = None
+    # Access labels (Phase 4): "internal" or "restricted", and the
+    # engagement codename a restricted chunk belongs to.
+    sensitivity: str = SENSITIVITY_INTERNAL
+    engagement: str | None = None
 
 
 class VectorStore(ABC):

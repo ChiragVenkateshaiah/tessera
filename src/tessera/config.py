@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     expertise_dir: Path = Field(
         default=Path("data/expertise/people"), validation_alias="TESSERA_EXPERTISE_DIR"
     )
+    # Ethical walls (Phase 4, plan §3.5.2): engagement -> cleared people.
+    access_file: Path = Field(
+        default=Path("data/access/walls.yaml"), validation_alias="TESSERA_ACCESS_FILE"
+    )
     # Phase 4 feedback loop. Runtime data, gitignored.
     trace_log: Path = Field(
         default=Path("data/traces/traces.jsonl"), validation_alias="TESSERA_TRACE_LOG"

@@ -10,7 +10,18 @@ from typing import Any
 import frontmatter
 
 REQUIRED_KEYS = {"title", "doc_type", "industry", "topics", "date"}
-VALID_DOC_TYPES = {"methodology", "thought_leadership"}
+VALID_DOC_TYPES = {"methodology", "thought_leadership", "engagement", "case_study"}
+
+# Access labels (Phase 4, plan §3.5.1). Ethical walls are per engagement:
+# a restricted document names its engagement, and only principals cleared
+# for that engagement may retrieve it. Internal documents are open to all.
+SENSITIVITY_INTERNAL = "internal"
+SENSITIVITY_RESTRICTED = "restricted"
+VALID_SENSITIVITIES = {SENSITIVITY_INTERNAL, SENSITIVITY_RESTRICTED}
+# The pilot corpus's two directories, low-sensitivity by construction: an
+# unlabelled document there is internal. Anywhere else an unlabelled
+# document is restricted — fail closed.
+OPEN_DIRECTORIES = frozenset({"methodology", "thought_leadership"})
 
 # Freshness (Phase 4, plan §3.3.1). A superseded document stays in the
 # corpus — it is still the record of what the firm used to do — but names
@@ -48,6 +59,11 @@ class Document:
     # ``path`` — what the chunks and the store carry. Set by load_corpus().
     superseded_by_path: Path | None = None
     review_status: str | None = None
+    # As labelled in front matter; load_corpus()/scan_corpus() resolve an
+    # absent label by directory (see OPEN_DIRECTORIES), so a loaded
+    # corpus never carries None here.
+    sensitivity: str | None = None
+    engagement: str | None = None
 
     @property
     def is_superseded(self) -> bool:
@@ -56,6 +72,11 @@ class Document:
     @property
     def is_quarantined(self) -> bool:
         return self.review_status == REVIEW_PENDING
+
+    @property
+    def is_restricted(self) -> bool:
+        # Fail closed: anything not positively internal is restricted.
+        return self.sensitivity != SENSITIVITY_INTERNAL
 
 
 def front_matter_problems(metadata: dict[str, Any]) -> list[str]:
@@ -94,6 +115,21 @@ def front_matter_problems(metadata: dict[str, Any]) -> list[str]:
     if superseded_by is not None and not isinstance(superseded_by, str):
         problems.append(f"superseded_by {superseded_by!r} is not a path")
 
+    sensitivity = metadata.get("sensitivity")
+    engagement = metadata.get("engagement")
+    if sensitivity is not None and sensitivity not in VALID_SENSITIVITIES:
+        problems.append(
+            f"sensitivity {sensitivity!r} not in {sorted(VALID_SENSITIVITIES)}"
+        )
+    if sensitivity == SENSITIVITY_RESTRICTED and not engagement:
+        problems.append("sensitivity is restricted but engagement is not set")
+    if engagement is not None and sensitivity != SENSITIVITY_RESTRICTED:
+        problems.append("engagement is set but sensitivity is not restricted")
+    if engagement is not None and not (
+        isinstance(engagement, str) and engagement.isidentifier() and engagement.islower()
+    ):
+        problems.append(f"engagement {engagement!r} is not a lowercase codename")
+
     review_status = metadata.get("review_status")
     if review_status is not None and review_status not in VALID_REVIEW_STATUSES:
         problems.append(
@@ -126,6 +162,8 @@ def load_document(path: Path) -> Document:
         status=post.get("status", STATUS_CURRENT),
         superseded_by=post.get("superseded_by"),
         review_status=post.get("review_status"),
+        sensitivity=post.get("sensitivity"),
+        engagement=post.get("engagement"),
     )
 
 
@@ -160,12 +198,24 @@ def load_corpus(corpus_dir: Path) -> list[Document]:
     problems = supersession_problems(documents, corpus_dir)
     if problems:
         raise CorpusError("; ".join(problems))
-    return [
-        replace(d, superseded_by_path=corpus_dir / d.superseded_by)
-        if d.superseded_by
-        else d
-        for d in documents
-    ]
+    return [_resolved(d, corpus_dir) for d in documents]
+
+
+def _resolved(doc: Document, corpus_dir: Path) -> Document:
+    """Fill in what needs the corpus root: the replacement's path, and a
+    missing sensitivity label from the document's directory.
+    """
+    sensitivity = doc.sensitivity
+    if sensitivity is None:
+        top = doc.path.relative_to(corpus_dir).parts[0]
+        sensitivity = (
+            SENSITIVITY_INTERNAL if top in OPEN_DIRECTORIES else SENSITIVITY_RESTRICTED
+        )
+    return replace(
+        doc,
+        sensitivity=sensitivity,
+        superseded_by_path=corpus_dir / doc.superseded_by if doc.superseded_by else None,
+    )
 
 
 def indexable(documents: list[Document]) -> list[Document]:
@@ -198,4 +248,4 @@ def scan_corpus(corpus_dir: Path) -> tuple[list[Document], dict[str, list[str]]]
     for problem in supersession_problems(documents, corpus_dir):
         rel, _, detail = problem.partition(": ")
         problems.setdefault(rel, []).append(detail)
-    return documents, problems
+    return [_resolved(d, corpus_dir) for d in documents], problems

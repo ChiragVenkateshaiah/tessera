@@ -91,6 +91,7 @@ def test_report_lists_every_category(tmp_path: Path) -> None:
         ("methodology/old.md", "superseded by methodology/new.md")
     ]
     assert [e.path for e in report.quarantined] == ["methodology/pending.md"]
+    assert report.restricted == []  # everything here sits in an open directory
     assert report.near_duplicates == []
     assert len(report.known_near_duplicates) == 3  # aging~new, aging~old, new~old
     assert sum(p.involves_superseded for p in report.known_near_duplicates) == 2
@@ -114,3 +115,18 @@ def test_near_duplicates_skip_same_document_pairs_and_flag_other_sections(tmp_pa
 
     assert [(p.chunk_a, p.chunk_b, p.similarity) for p in found] == [("a::0", "b::0", 1.0)]
     assert known == []  # a::1~b::1 is 0.8, under the threshold
+
+
+def test_report_lists_restricted_documents_and_unlabelled_defaults(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    _write(root, "engagements/a.md", extra="sensitivity: restricted\nengagement: halcyon")
+    _write(root, "inbox/b.md")  # unlabelled, outside the open directories
+    documents, problems = scan_corpus(root)
+
+    report = build_report(documents, problems, [], [], root, date(2026, 10, 3))
+
+    assert [(e.path, e.detail) for e in report.restricted] == [
+        ("engagements/a.md", "engagement: halcyon"),
+        ("inbox/b.md", "no sensitivity label outside the open directories — restricted by default"),
+    ]
+    assert "Restricted (ethical walls; cleared principals only): 2" in format_data_report(report)

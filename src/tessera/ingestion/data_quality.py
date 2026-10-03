@@ -11,7 +11,7 @@ what it is given and returns data.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
@@ -74,6 +74,9 @@ class DataQualityReport:
     stale: list[DocumentEntry]
     superseded: list[DocumentEntry]
     quarantined: list[DocumentEntry]
+    # Restricted documents (Phase 4, §3.5.1), detail = engagement or a note
+    # that the document is restricted only because it has no label.
+    restricted: list[DocumentEntry] = field(default_factory=list)
     near_duplicate_threshold: float = NEAR_DUPLICATE_THRESHOLD
     stale_after_years: int = STALE_AFTER_YEARS
 
@@ -176,6 +179,16 @@ def build_report(
             entry(d, f"superseded by {d.superseded_by}") for d in documents if d.is_superseded
         ],
         quarantined=[entry(d, "review_status: pending") for d in documents if d.is_quarantined],
+        restricted=[
+            entry(
+                d,
+                f"engagement: {d.engagement}"
+                if d.engagement
+                else "no sensitivity label outside the open directories — restricted by default",
+            )
+            for d in documents
+            if d.is_restricted
+        ],
         near_duplicate_threshold=near_duplicate_threshold,
         stale_after_years=stale_after_years,
     )
@@ -230,5 +243,9 @@ def format_data_report(report: DataQualityReport, *, show_known: bool = False) -
     section(
         "Quarantined (awaiting human review; not embedded)",
         [f"{e.date.isoformat()}  {e.path} — {e.detail}" for e in report.quarantined],
+    )
+    section(
+        "Restricted (ethical walls; cleared principals only)",
+        [f"{e.path} — {e.detail}" for e in report.restricted],
     )
     return "\n".join(lines).rstrip()
