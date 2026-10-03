@@ -4,12 +4,15 @@ Internal knowledge assistant pilot for Meridian Advisory — helping consultants
 find prior work, frameworks, and internal expertise instead of losing hours
 searching for it.
 
-**Status: Phase 3 complete** (`v0.3.0`). The local ingestion/retrieval core,
-the grounded-generation path, archetype B (expertise-finding) over a
-synthesized firm expertise dataset, the CLI below, and a populated + tuned
-evaluation harness held to a documented quality bar (A/C and B) are all
-built and working. Everything past the local pilot — AWS, CI/CD, real HR
-integration — is still ahead; see the phase table below.
+**Status: Phase 4 complete** (`v0.4.0`). On top of the grounded,
+archetype-routed RAG core (Phases 1–3), Phase 4 built four
+production-readiness features, each measured in the eval harness: Claude
+on Bedrock with cost accounting, request traces and a feedback-to-eval
+loop, document freshness with a data-quality report, and
+permission-aware retrieval over a restricted tier, proven by a gated
+leakage eval. Everything still runs locally; the AWS deployment (Phase 5)
+and CI/CD (Phase 6) are ahead — see the phase table and "Honest limits"
+below.
 
 ## Phase boundary — what's built vs. designed
 
@@ -17,26 +20,71 @@ integration — is still ahead; see the phase table below.
 |---|---|---|
 | **Phase 1** | ✅ Complete (`v0.1.0`) | Local ingestion + retrieval core over a synthetic corpus. Archetypes A (lookup) and C (synthesis) only. Grounded generation with citations. Eval harness runnable end-to-end via `tessera eval`. |
 | **Phase 2** | ✅ Complete (`v0.2.0`) | Eval set populated to 50 cases against the synthetic corpus and retrieval/generation tuned against it; a documented internal quality bar (`evals/QUALITY_BAR.md`) enforced via `tessera eval --check` on every retrieval/prompt PR. The consultant query log Discovery described is fictional and will never arrive — `evals/cases/query_log.yaml` is a deliberately, transparently synthesized stand-in. |
-| **Phase 3** | ✅ Complete (`v0.3.0`, this repo) | Archetype B (expertise-finding) built end to end: a seeded, synthesized 600-consultant expertise dataset (`data/expertise/` — the HR data is fictional, like the corpus) indexed behind an `ExpertiseStore` port, evidence-ranked people retrieval, grounded "who should I talk to" answers, and B metrics (person recall/MRR, a no-match refusal set) gated in the quality bar. |
-| Phase 4 | Documented, not built | Move off local: Bedrock, OpenSearch Serverless, S3, Lambda. |
-| Phase 5 | Documented, not built | MLOps: Terraform, CI/CD with eval gate, monitoring. |
+| **Phase 3** | ✅ Complete (`v0.3.0`) | Archetype B (expertise-finding) built end to end: a seeded, synthesized 600-consultant expertise dataset (`data/expertise/` — the HR data is fictional, like the corpus) indexed behind an `ExpertiseStore` port, evidence-ranked people retrieval, grounded "who should I talk to" answers, and B metrics (person recall/MRR, a no-match refusal set) gated in the quality bar. |
+| **Phase 4** | ✅ Complete (`v0.4.0`, this repo) | Production readiness, built and evaluated locally: Claude on Bedrock + model routing + per-answer cost, an HTTP API, request traces + a feedback-to-eval loop, superseded-document handling + `tessera data-report`, and permission-aware retrieval over a synthetic restricted tier with gated leakage / authorized-recall / prompt-injection evals. See "Phase 4 — production readiness" below. |
+| Phase 4.5 | Planned | LangGraph as an alternative orchestrator over the same pure core (held to the same bar), LangChain adapters behind the existing ports, and a human-review interrupt for quarantined documents. |
+| Phase 5 | Documented, not built | An **ephemeral** AWS deployment for a demo: container image, Terraform, one Lambda — deployed, recorded, destroyed, teardown verified. |
+| Phase 6 | Documented, not built | CI/CD with the eval gate, monitoring, real identity. |
 
-**Deliberately not in Phases 1–3:** archetype D (comparative — refusal
+**Deliberately not built (yet):** archetype D (comparative — refusal
 guardrail only, confidentiality-sensitive), real HR-system integration
-(Workday / SSO directory — the expertise dataset is a dated static
-snapshot whose age the answer surfaces, with no live sync),
-access-control enforcement (pilot corpus and expertise dataset are
-low-sensitivity by construction), PowerPoint ingestion, any AWS
-deployment, a web UI. Full reasoning: [`CLAUDE.md`](CLAUDE.md),
-[`docs/Tessera_Phase1_Build_Plan.md`](docs/Tessera_Phase1_Build_Plan.md),
-[`docs/Tessera_Phase2_Plan.md`](docs/Tessera_Phase2_Plan.md), and
-[`docs/Tessera_Phase3_Plan.md`](docs/Tessera_Phase3_Plan.md).
+(the expertise dataset is a dated static snapshot whose age the answer
+surfaces), real authentication (`--as` is a demo identity), automated
+detection of anonymized-but-identifiable content (a human review gate
+instead — Discovery §4), conversation memory, PowerPoint ingestion, a
+chat UI (decision deferred until Bedrock latency is measured), and any
+AWS deployment. Full reasoning: [`CLAUDE.md`](CLAUDE.md) and the phase
+plans in [`docs/`](docs/).
 
 Background reading:
 - [`docs/Tessera_Discovery_Findings.md`](docs/Tessera_Discovery_Findings.md) — the problem, the four query archetypes, the confidentiality model.
 - [`docs/Tessera_Solution_Design.md`](docs/Tessera_Solution_Design.md) — full architecture including the Phase 4/5 AWS target.
 
-## Architecture — local (Phases 1–3)
+## Phase 4 — production readiness
+
+Phases 1–3 showed Tessera answers well: grounded, cited, routed by
+archetype, held to an evaluated bar. Phase 4 goes after what actually
+stops enterprise GenAI from reaching production. Gartner found over half
+of GenAI projects abandoned after proof of concept, citing **poor data
+quality, inadequate risk controls, escalating costs and unclear business
+value**; MIT's 2025 *GenAI Divide* study attributes most failed pilots to
+a **learning gap** — tools that don't capture feedback or improve. And
+Tessera's own Discovery named client confidentiality as the defining
+risk. Each feature answers one of those causes and carries its own
+evidence in the eval harness
+([`docs/Tessera_Phase4_Plan.md`](docs/Tessera_Phase4_Plan.md)):
+
+| Failure cause | Feature | Evidence |
+|---|---|---|
+| Escalating costs | Claude on Bedrock (Haiku routes, Opus answers) behind the `LLMClient` port; tokens and cost per answer in every trace, report and API response | Cost per answer by archetype in `tessera eval` (provisional row) — **live Bedrock sweep pending account access** |
+| Learning gap, unclear value | A trace per request; thumbs up/down via the API or CLI; `tessera feedback to-cases` turns thumbs-down into *candidate* eval cases a human labels | One loop closed end to end: a thumbs-down became `fb001`, which drove a retrieval fix (parent-document expansion) and now scores relevance 5 |
+| Poor data quality | Superseded document versions excluded in the store query, with a fixed note pointing to the current version; `tessera data-report` | Gated: superseded document cited as current = **0** on 7 cases worded to match the old version |
+| Inadequate risk controls / confidentiality | Ethical walls over a synthetic restricted tier; a typed `Principal` passed into the query path; the permission filter in every store query, before ranking; a human review gate for anonymized material | Gated: leaks **0/13** (13/13 before the filter), authorized recall **1.00**, prompt-injection **100%** |
+
+### Honest limits
+
+- **Bedrock is built but not yet measured live.** The Bedrock client,
+  model routing and cost accounting are unit-tested against the real SDK
+  signature, but the AWS account can't call Claude yet, so every sweep so
+  far ran on NVIDIA NIM. Prices in `config.MODEL_PRICES` are Anthropic's
+  first-party rates, unverified for Bedrock.
+- **Identity is a demo device.** `--as c0014` is taken at its word; there
+  is no authentication. Phase 6+ replaces it with SSO.
+- **Walls are synthetic and static** — a seeded generator, not an
+  entitlement system, and there is no live sync.
+- **The review gate is not a detector.** Pending anonymized documents are
+  held out until a human marks them reviewed; nothing claims to detect
+  identifiability (Discovery §4 says it must not).
+- **The prompt-injection set is small** (4 cases) and its contract check
+  is deterministic string matching, not a judge.
+- **The router is unstable on named-project questions:** "What did Project
+  Cobalt recommend…" has been routed to the comparative refusal on some
+  sweeps and not others. Harmless for walled users (a refusal reveals
+  nothing), but it can over-block a cleared one.
+- **Everything is synthetic** — corpus, people, walls and query log.
+  Meridian Advisory is fictional.
+
+## Architecture — local (Phases 1–4)
 
 This is what's actually built, not the eventual AWS target. Every
 box on the left of a dashed interface boundary is swappable without touching
@@ -49,7 +97,7 @@ own `ExpertiseStore` port (reusing the same `Embedder`).
 ```mermaid
 flowchart TB
     subgraph ingest["Ingestion"]
-        corpus["data/corpus/<br/>synthetic markdown<br/>(methodology + thought leadership)"]
+        corpus["data/corpus/<br/>synthetic markdown<br/>(methodology + thought leadership,<br/>restricted engagements, superseded versions)"]
         loader["loader.py<br/>reads corpus + front-matter metadata"]
         chunker["chunker.py<br/>section-aware chunking"]
         corpus --> loader --> chunker
@@ -58,13 +106,13 @@ flowchart TB
     subgraph embed["Embedding"]
         embedIface["Embedder interface"]
         embedImpl["local.py<br/>sentence-transformers"]
-        embedIface -.swap in Phase 4.-> embedImpl
+        embedIface -.swappable.-> embedImpl
     end
 
     subgraph store["Vector store"]
         storeIface["VectorStore interface"]
         storeImpl["chroma.py<br/>local, persistent"]
-        storeIface -.swap in Phase 4.-> storeImpl
+        storeIface -.swappable.-> storeImpl
         persisted[("data/vectorstore/<br/>(gitignored)")]
         storeImpl --> persisted
     end
@@ -75,7 +123,7 @@ flowchart TB
         peopleIface["ExpertiseStore interface"]
         peopleImpl["chroma_expertise.py<br/>separate tessera_people collection"]
         peopleData --> peopleLoader
-        peopleIface -.swap in Phase 4.-> peopleImpl
+        peopleIface -.swappable.-> peopleImpl
         peopleImpl --> persisted
     end
 
@@ -87,10 +135,10 @@ flowchart TB
     subgraph query["Query time"]
         cli["cli.py<br/>tessera query \"...\""]
         router["router.py<br/>archetype classifier: A / B / C / D"]
-        retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow, one chunk per source; C: broad multi-source)"]
+        retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow, one chunk per source; C: broad multi-source)<br/>permission + freshness filters in every store query"]
         experts["retrieval/expertise.py<br/>B: candidate pool → evidence re-rank<br/>→ top 5 people with evidence"]
         genIface["LLMClient interface"]
-        genImpl["nvidia.py<br/>NVIDIA NIM API"]
+        genImpl["nvidia.py · bedrock.py<br/>NVIDIA NIM / Claude on Bedrock"]
         prompts["prompts.py<br/>grounded-answer prompts,<br/>per-archetype shapes"]
         cli --> router --> retriever
         router --> experts
@@ -98,13 +146,13 @@ flowchart TB
         experts -->|reads| peopleImpl
         retriever --> genIface
         experts --> genIface
-        genIface -.swap in Phase 4.-> genImpl
+        genIface -.swappable.-> genImpl
         prompts -.-> genImpl
         genImpl --> answer["cited answer / named experts with evidence,<br/>or 'we don't have anything on that' / 'no obvious expert'"]
     end
 
     subgraph evalh["Evaluation harness"]
-        cases["evals/cases/*.yaml<br/>(55 synthesized cases incl. B + no-match set,<br/>+ 1 from feedback; placeholder.yaml held out)"]
+        cases["evals/cases/*.yaml<br/>(92 synthesized cases: A/B/C/D, no-match,<br/>feedback, freshness, access sets)"]
         harness["harness.py<br/>+ quality-bar check"]
         metrics["metrics.py<br/>recall@k, precision@k, MRR, person recall/MRR,<br/>groundedness, relevance, routing acc., latency"]
         cases --> harness
@@ -131,13 +179,19 @@ flowchart TB
 - **D (comparative)** — not attempted; router returns a confidentiality
   refusal.
 
-**Phase 4 target** (documented, not built — see
-[`docs/Tessera_Solution_Design.md` §4](docs/Tessera_Solution_Design.md)):
-the `Embedder`, `VectorStore`, and `LLMClient` interfaces above get Bedrock
-Titan/Cohere, OpenSearch Serverless, and Claude-via-Bedrock implementations
-respectively, with S3 backing the corpus and Lambda fronting query handling.
-Nothing in the Phase 1 pipeline shape needs to change for that swap — that's
-the point of building it this way.
+**Phase 4 additions on the query path:** `LLMClient` now has a Bedrock
+implementation (`generation/bedrock.py`) alongside NIM; retrieval takes a
+`Principal` and filters every store query by permission and freshness;
+`api.py` is a second composition root beside `cli.py`; and every answer
+carries a trace and token usage as data.
+
+**Later targets** (documented, not built — see
+[`docs/Tessera_Solution_Design.md` §4](docs/Tessera_Solution_Design.md)
+and `docs/adr/`): OpenSearch Serverless behind `VectorStore` (with
+document-level security in place of the Chroma `where` permission
+filter), Bedrock embeddings behind `Embedder`, and S3 for the corpus.
+Nothing in the pipeline shape needs to change for those swaps — that's the
+point of building it this way.
 
 ## The quality bar
 
@@ -147,33 +201,39 @@ retrieval/prompt change is measured against; Phase 3 extended it with
 archetype-B rows. Full definition and rationale:
 [`evals/QUALITY_BAR.md`](evals/QUALITY_BAR.md).
 
-Latest: the Phase 3 exit sweep — full clean `tessera eval --check`,
-2026-10-01, **55/55 cases, zero errors, `=> PASS`**.
+Latest: the Phase 4 exit sweep — full clean `tessera eval --check`,
+2026-10-03, **92/92 cases, zero errors, `=> PASS`** (answers and judge on
+NVIDIA NIM).
 
 | Metric | Threshold | Gated? | Latest |
 |---|---|---|---|
 | Routing accuracy | ≥ 95% | yes | 100% |
-| Mean recall@k (A/C) | ≥ 0.80 | yes | 0.95 |
+| Mean recall@k (A/C) | ≥ 0.80 | yes | 0.96 |
 | Mean MRR (A/C) | ≥ 0.90 | yes | 0.97 |
-| Mean groundedness (1–5, A/C) | ≥ 4.5 | yes | 4.83 |
-| Mean relevance (1–5, A/C) | ≥ 4.5 | yes | 4.60 |
-| Per-case recall (A/C) | > 0.00 | yes | pass (min 0.50) |
-| Mean precision@k (A/C) | reported | no | 0.42 |
+| Mean groundedness (1–5, A/C) | ≥ 4.5 | yes | 4.98 |
+| Mean relevance (1–5, A/C) | ≥ 4.5 | yes | 4.95 |
+| Per-case recall (A/C) | > 0.00 | yes | pass |
+| Superseded cited as current (A/C) | 0 | yes | 0 |
+| Mean precision@k (A/C) | reported | no | 0.40 |
 | Person recall@k (B) | ≥ 0.90 | yes | 0.91 |
 | Person MRR (B) | ≥ 0.90 | yes | 1.00 |
 | B groundedness (1–5) | ≥ 4.5 | yes | 5.00 |
-| B relevance (1–5) | ≥ 4.5 | yes | 4.89 |
-| Per-case person recall (B) | > 0.00 | yes | pass (min 0.60) |
+| B relevance (1–5) | ≥ 4.5 | yes | 4.78 |
+| Per-case person recall (B) | > 0.00 | yes | pass |
 | No-match correct-refusal rate (B) | 100% | yes | 100% |
 | Person precision@k (B) | reported | no | 0.91 |
+| Restricted-content leaks | 0 | yes | 0 (leakage set 0/13) |
+| Authorized recall (restricted) | ≥ 0.80 | yes | 1.00 |
+| Prompt-injection cases passed | 100% | yes | 100% |
+| Mean cost per answer | budget not agreed | provisional | n/a (NIM unpriced) |
 
 `k` = 5. Precision is reported but not gated — it is confounded by
 relevant-source labeling completeness (a genuinely relevant retrieved
 chunk that just isn't listed in a case's `relevant_sources` counts
 against it), and the corpus deliberately contains near-duplicate adjacent
-documents as retrieval hard-negatives. See `QUALITY_BAR.md`. The two
-thinnest margins — A/C relevance (+0.10) and B person recall (+0.01, on
-9 labelled cases) — are tracked there.
+documents as retrieval hard-negatives. See `QUALITY_BAR.md`. The
+thinnest margin — B person recall (+0.01, on 9 labelled cases) — is
+tracked there.
 
 ## Setup and usage
 
@@ -319,7 +379,7 @@ An interactive session over the same pipeline: it loads the indexes and
 embedding model once, then answers each question exactly as `tessera
 query` does, labelled with its archetype and latency. Each question is
 answered independently — earlier questions aren't used as context
-(conversation memory is part of the Phase 4+ session design, ADR 0003).
+(conversation memory is a later session design, ADR 0003).
 A question that fails (e.g. an LLM error after retries) is reported and
 the session carries on; `exit` or Ctrl-D leaves.
 
@@ -382,26 +442,28 @@ routing accuracy, mean recall/precision/MRR@5, mean groundedness/relevance
 judge scores, no-match refusal rate), per-archetype latency, tokens and
 cost per answer by archetype (routing + answer calls, judge excluded),
 and the quality-bar PASS/FAIL block. Requires both `ingest` and `index-people`.
-`evals/cases/` holds **56 cases** — `query_log.yaml` (41, the synthesized
+`evals/cases/` holds **92 cases** — `query_log.yaml` (41, the synthesized
 stand-in for the fictional consultant query log; the tuning set),
 `placeholder.yaml` (8, held out as an overfitting check-set),
 `expertise_nomatch.yaml` (6 B queries with no qualifying expert, which
-must get the fixed refusal) and `feedback.yaml` (1, promoted from a
-thumbs-down — see below). A full sweep costs roughly 2-3 NVIDIA NIM
-calls per case — well within the 10,000/day free-tier limit.
+must get the fixed refusal), `feedback.yaml` (1, promoted from a
+thumbs-down), `freshness.yaml` (7, worded to match a superseded document)
+and `access.yaml` (29: leakage, authorized and prompt-injection cases,
+each asked as a demo principal). A full sweep costs roughly 2-3 NVIDIA
+NIM calls per case — well within the 10,000/day free-tier limit.
 
 In practice NVIDIA's free tier throttles well below its documented 40
 rpm, so `tessera eval` paces calls 3 s apart and retries 429/5xx with
 exponential backoff (`generation/resilient.py`), printing `[n/total]`
-progress to stderr; a full sweep takes roughly 1–1.5 hours. A case that
+progress to stderr; a full 92-case sweep has taken 15–45 minutes. A case that
 still fails after its retries is reported as an `ERROR` row and excluded
 from the aggregates rather than aborting the run.
 
-`--check` is the manual regression gate (the precursor to the Phase 5 CI
+`--check` is the manual regression gate (the precursor to the Phase 6 CI
 gate): any change touching `retrieval/` (`retriever.py`, `router.py`,
-`expertise.py`), `chunker.py`, `generation/`, the expertise dataset or
-its generator, or the eval set must paste a fresh `--check` report into
-its PR. The bar itself lives in
+`expertise.py`), `chunker.py`, `generation/`, `pipeline.py`, the corpus,
+the access data, the expertise dataset or its generator, or the eval set
+must paste a fresh `--check` report into its PR. The bar itself lives in
 [`evals/QUALITY_BAR.md`](evals/QUALITY_BAR.md).
 
 ### Tests

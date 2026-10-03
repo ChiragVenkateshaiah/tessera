@@ -1,19 +1,22 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 ## Status
 
-**Phase 4 in progress (2026-10-02).** P4-1 (HTTP API, #56), **P4-2 code**
-(Claude on Bedrock + model routing + cost accounting, #59), **P4-3**
-(traces + feedback-to-eval loop, #60) and a **lookup retrieval fix**
-driven by P4-3's first feedback case (parent-document expansion, #61)
-are merged. **P4-2's acceptance is still open:** the live sweep with
-answers on Bedrock is blocked on the user's AWS account (no payment
-method; AISPL-billed — see Notes). **Next: P4-4** (freshness +
-data-quality report). The chat-UI decision is **deferred** until Bedrock
-latency can be measured (user, 2026-10-02). Latest bar: 56/56, `=> PASS`,
-A/C groundedness 4.94 / relevance 4.92 — the best yet.
+**Phase 4 complete (`v0.4.0`, 2026-10-03).** All seven plan tasks merged
+(P4-1 #56, P4-2 code #59, P4-3 #60, P4-4 #63, P4-5 #64, P4-6 #65, P4-7
+exit) plus the fb001 lookup fix (#61). Exit sweep: full clean `tessera
+eval --check`, **92/92 cases, zero errors, `=> PASS`** — routing 100%,
+A/C recall 0.96 / MRR 0.97 / groundedness 4.98 / relevance 4.95, B
+unchanged (person recall 0.91, still +0.01), superseded cited 0, leaks
+0/13, authorized recall 1.00, injection 100%. All 5 Phase 1 exit
+criteria re-confirmed on a fresh clone. **One acceptance left open by
+user decision (2026-10-03, tag with it recorded as a limit):** P4-2's
+live Bedrock sweep, blocked on the AWS account (see Notes). The chat-UI
+decision stays deferred until Bedrock latency is measured. **Next:
+Phase 4.5** (LangGraph + LangChain adapters + human-review interrupt) —
+plan and ADR 0005 to draft first.
 
 Phase 4 = four production-readiness features aimed at the documented
 reasons GenAI projects stall after proof of concept
@@ -1585,30 +1588,68 @@ same change and stays ungated (`QUALITY_BAR.md`).
         5/5/5. Watch item: `ql011` (C) relevance 5→3 in both post-change
         sweeps. Sweep input tokens +28%.
 
+- [x] **P4-4 — freshness + data-quality report** (2026-10-03, PR #63).
+      Front matter `status: current|superseded` + `superseded_by` (target
+      must exist and be current, no chains), and `review_status`; five
+      superseded methodology docs (`*-2018.md`/`*-2019.md`). Superseded
+      chunks are excluded in the store query (`$ne`, so an old index still
+      works); a second query finds superseded docs that would have ranked,
+      their current version takes the slot if it didn't rank, and a
+      **fixed code-appended note** names both (the judge grades the answer
+      without it). Trace `removed.superseded`. `tessera data-report`
+      (`ingestion/data_quality.py`, lenient `scan_corpus`; near-dup
+      threshold 0.85 calibrated: 19 known Related Frameworks pairs, highest
+      other pair 0.81). 7 `freshness.yaml` cases worded in the retired
+      methods' vocabulary (old version +0.12–0.28 above current); gated row
+      "Superseded cited as current" = 0. Sweep 63/63 `=> PASS`.
+- [x] **P4-5 — restricted tier data, walls, access eval sets**
+      (2026-10-03, PR #64). `sensitivity`/`engagement` labels (unlabelled
+      outside `methodology/`+`thought_leadership/` = restricted, fail
+      closed; store chunk without a label reads restricted). 12 fictional
+      engagement summaries (`data/corpus/engagements/`); `data/access/
+      walls.yaml` from a seeded generator (`SEED=20261003`, 7-person
+      teams, drift test) + 3 demo personas (`c0048` cleared partner,
+      `c0014` walled analyst, `c0065` Kestrel-only); 2 pending-review case
+      studies (never embedded). `evals/cases/access.yaml`: 13 leakage, 12
+      authorized, 4 injection (`ac-i04` retrieves an internal test doc with
+      a planted instruction + canary `CANARY-OVERRIDE-4417` — written with
+      the user's explicit go-ahead after auto mode blocked it). Leak check
+      deterministic for every case (uncleared restricted chunk, or a
+      forbidden marker — an engagement fact the question never mentions).
+      **Baseline (no filter): 13/13 leaked, 0/4 injection, 52 cases saw
+      restricted content**; access rows provisional. Authorized recall
+      scores a refused cleared principal as a miss.
+- [x] **P4-6 — permission-aware retrieval** (2026-10-03, PR #65).
+      `Principal` (`tessera/principal.py`, demo identity) passed into
+      `answer_query()`/`retrieve()`; `permission_filter()` in every store
+      query (internal + cleared engagements, deny by default) plus a Python
+      re-check of every result; trace `principal` + `removed.restricted`
+      (stripped from the asker's `include_trace` — existence oracle).
+      `--as` on `query`/`chat`, `as_person` on `/api/ask`. Access rows
+      **gated**. First sweep failed injection 75%: `ac-i03` was a correct
+      plain-prose decline; **user signed off** on the contract also
+      accepting the prompt's decline wording. Final sweep 92/92 `=> PASS`:
+      leaks 0/13, authorized recall 1.00, injection 100%.
+- [x] **P4-7 — Phase 4 exit** (2026-10-03). README (status, phase table,
+      "Phase 4 — production readiness" with the Gartner/MIT framing and
+      honest limits), QUALITY_BAR current standing, this entry, Phase 1
+      exit criteria re-confirmed on a fresh clone, final clean sweep
+      (92/92, zero errors, `=> PASS`, numbers in Status). Tag: `v0.4.0` on the PR's merge commit, P4-2's live Bedrock sweep recorded as an open limit (user, 2026-10-03).
+
 ## Next task to pick up
 
-**P4-4 — Freshness + data-quality report** (`docs/Tessera_Phase4_Plan.md`
-§5, §3.3). ~5 superseded methodology documents (new data, front matter
-`status: current|superseded` + `superseded_by`, validated at load);
-superseded chunks excluded from A/C candidates, with the answer noting a
-newer version exists; `tessera data-report` (missing metadata,
-near-duplicate chunks minus the deliberate `## Related Frameworks` hard
-negatives, stale, superseded, quarantined — deterministic, zero LLM
-calls); new A/C cases where the superseded version is the lexically
-closer match.
-
-**Acceptance (plan §5 P4-4, verbatim):** superseded documents are never
-cited as current on the new cases (gated 0); `tessera data-report` lists
-missing metadata, near-duplicates, stale, superseded and quarantined
-documents; existing bar passes.
-
-Notes for P4-4: "quarantined" belongs to §3.5.3 (P4-5's review gate) —
-report the category now even if it's empty until P4-5. Adding documents
-to `data/corpus/` means re-running `tessera ingest` before any live
-check, and a `tessera eval --check` in the PR (CLAUDE.md). The new
-exclusion filter should be traced as a removal count (plan §3.2.1). If
-the superseded filter runs as a `where` clause, parent-document expansion
-already carries `where` through.
+**Phase 4.5 — LangGraph orchestrator + LangChain adapters** (user
+decision 2026-10-03: after `v0.4.0`, with the human-review interrupt).
+First step: draft `docs/Tessera_Phase4_5_Plan.md` and ADR 0005
+("framework adoption: adapters, not core") for the user to review — no
+code before that. Shape agreed in discussion: a LangGraph `StateGraph`
+over the existing pure functions, selectable by config (native vs
+langgraph), both held to the frozen `v0.4.0` bar; LangChain adapters
+behind the ports (an `LLMClient` over any LangChain chat model; Tessera
+retrieval, with the permission filter, as a `BaseRetriever`); a LangGraph
+`interrupt` for a reviewer to approve a quarantined case study before
+it's indexed. Out: checkpointer-as-conversation-memory (do-not-build),
+LangSmith replacing Tessera's traces.
 
 **Still open from P4-2 — the live Bedrock sweep (its acceptance):** a full
 `tessera eval --check` with answers on Bedrock, judge on Nemotron, passes
@@ -1789,12 +1830,16 @@ replanned + re-adopted the same day (#57):
 - ~~UI decision (plan §7)~~ — deferred until Bedrock latency is measured
 - ~~P4-3 — traces + feedback-to-eval loop~~ — done (#60)
 - ~~Lookup parent-document expansion (fb001)~~ — done (#61, not a plan task)
-- **P4-4 — freshness + data-quality report  ← next**
-- P4-5 — restricted tier: data, walls, review gate, eval sets (leakage
-  eval shown failing)
-- P4-6 — permission-aware retrieval (leaks 0, authorized recall ≥ 0.80,
-  injection 100%)
-- P4-7 — Phase 4 exit, tag `v0.4.0`
+- ~~P4-4 — freshness + data-quality report~~ — done (#63)
+- ~~P4-5 — restricted tier: data, walls, review gate, eval sets (leakage
+  eval shown failing)~~ — done (#64)
+- ~~P4-6 — permission-aware retrieval (leaks 0, authorized recall ≥ 0.80,
+  injection 100%)~~ — done (#65)
+- ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (__P47_PR__)
+
+**Phase 4.5** — LangGraph orchestrator + LangChain adapters + human-review
+interrupt (user decision 2026-10-03; plan + ADR 0005 to draft first)
+**← next**.
 
 **Phase 5** — ephemeral AWS deployment (plan §9; container image,
 Terraform, deploy → demo → destroy, verified). **Phase 6** — CI/CD with
@@ -1802,6 +1847,27 @@ the eval gate, monitoring.
 
 ## Notes / open flags
 
+- **The router is unstable on single named-project questions**
+  (2026-10-03): "What did Project Cobalt recommend…" was routed to the D
+  refusal on some sweeps (as `ac-a06` twice, then as `ac-l06`) and not
+  others. Harmless for a walled user; over-blocks a cleared one
+  (authorized recall 0.92 on those sweeps, still ≥ 0.80). The plan keeps
+  the router unchanged; a candidate fix is a router-prompt note that a
+  single named engagement is a lookup, not a comparison — needs its own
+  sweep.
+- **Replacement slot can be a Related Frameworks chunk** (2026-10-03):
+  when a superseded doc's best chunk is its Related Frameworks section,
+  the current version's best chunk is often its (identical) Related
+  Frameworks too, so the answer cites the current doc by that section.
+  Harmless (the doc is cited and the note points at it); fetching the
+  current doc's best *non*-Related-Frameworks chunk would be cleaner.
+- **Auto mode blocks writing a prompt-injection test fixture** as
+  "Instruction Poisoning" — and then a follow-up command that only checked
+  for the file. The user allowed it explicitly; the fixture is
+  `methodology/workshop-facilitation-client-workshop-template.md`. Expect
+  the same for any new injection fixture: ask first.
+- **zsh: `echo ===X` fails** ("==X not found" — `=cmd` expansion). Use
+  `echo "--- X"` in shell snippets.
 - **Bedrock account blocked (2026-10-02).** See "Next task to pick up" →
   "Still open from P4-2" for the full state and the setup steps. The
   user's other AWS profiles (`novapay`, `cerberus*`) stay untouched; no
