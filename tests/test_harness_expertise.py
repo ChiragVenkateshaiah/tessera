@@ -225,7 +225,7 @@ def _b_report(**overrides) -> EvalReport:
         mean_latency_by_archetype={}, expertise_scored=True,
         mean_person_recall=0.95, mean_person_precision=0.8, mean_person_mrr=1.0,
         mean_expertise_groundedness=4.8, mean_expertise_relevance=4.7,
-        no_match_rate=1.0, superseded_cited_cases=[],
+        no_match_rate=1.0, superseded_cited_cases=[], access_cases=29, leakage_set_size=13, authorized_recall=1.0, injection_pass_rate=1.0,
     )
     d.update(overrides)
     return EvalReport(**d)

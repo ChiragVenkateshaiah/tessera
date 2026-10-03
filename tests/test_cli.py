@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 
 from tessera import cli
 from tessera.ingestion.access_loader import Walls
+from tessera.principal import Principal
 from tessera.pipeline import AnswerResult
 from tessera.retrieval.router import Archetype
 
@@ -818,3 +819,55 @@ def test_data_report_reads_the_corpus_and_prints_every_section(
     assert "Data-Quality Report" in result.output
     assert "Quarantined (awaiting human review; not embedded): 1" in result.output
     assert "0 chunks embedded" in result.output  # the quarantined doc is not embedded
+
+
+def _stub_query_deps(monkeypatch: pytest.MonkeyPatch, seen: dict) -> None:
+    class NonEmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
+    monkeypatch.setattr(
+        cli,
+        "_principal_resolver",
+        lambda settings: lambda pid: Principal(pid, frozenset({"halcyon"})) if pid == "c0048" else None,
+    )
+
+    def fake_answer(*a, **kw):
+        seen["principal"] = kw.get("principal")
+        return AnswerResult(query="q", archetype=Archetype.LOOKUP, answer="A [1].", citations=[])
+
+    monkeypatch.setattr(cli, "answer_query", fake_answer)
+
+
+def test_query_as_a_person_scopes_the_answer_and_says_it_is_a_demo_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict = {}
+    _stub_query_deps(monkeypatch, seen)
+
+    result = runner.invoke(cli.app, ["query", "halcyon?", "--as", "c0048"])
+
+    assert result.exit_code == 0, result.output
+    assert seen["principal"] == Principal("c0048", frozenset({"halcyon"}))
+    assert "asking as c0048 — demo identity; cleared for: halcyon" in result.output
+
+
+def test_query_without_as_is_internal_only_and_unknown_people_are_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict = {}
+    _stub_query_deps(monkeypatch, seen)
+
+    plain = runner.invoke(cli.app, ["query", "q"])
+    unknown = runner.invoke(cli.app, ["query", "q", "--as", "c9999"])
+
+    assert plain.exit_code == 0 and seen["principal"] is None
+    assert "internal documents only" in plain.output
+    assert unknown.exit_code == 1 and "No person 'c9999'" in unknown.output

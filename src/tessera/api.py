@@ -28,6 +28,7 @@ from tessera.generation.base import LLMClient
 from tessera.generation.usage import ModelPrice
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.pipeline import AnswerResult, answer_query
+from tessera.principal import Principal
 from tessera.store.base import ExpertiseStore, VectorStore
 from tessera.trace import trace_record
 
@@ -56,6 +57,15 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
     # Return the full trace record with the answer, not just its trace_id.
     include_trace: bool = False
+    # Ask as this person_id (Phase 4). A DEMO identity, not authentication:
+    # anyone can claim anyone. Restricted engagement documents are searched
+    # only for engagements that person is cleared for; omitted, internal
+    # documents only.
+    as_person: str | None = Field(
+        default=None,
+        max_length=64,
+        description="DEMO identity, not authentication: the person_id to ask as.",
+    )
 
     @field_validator("question")
     @classmethod
@@ -71,6 +81,17 @@ class FeedbackRequest(BaseModel):
     rating: Rating
     reason: str | None = Field(default=None, max_length=200)
     comment: str | None = Field(default=None, max_length=MAX_QUESTION_CHARS)
+
+
+def asker_view(record: dict[str, Any]) -> dict[str, Any]:
+    """The trace as returned to the person who asked. How many restricted
+    chunks the permission filter withheld stays in the operator's trace
+    log only: shown to a walled asker, it would tell them restricted
+    material on their question exists (plan §3.5.4).
+    """
+    view = dict(record)
+    view["removed"] = {k: v for k, v in record.get("removed", {}).items() if k != "restricted"}
+    return view
 
 
 def answer_to_dict(
@@ -147,6 +168,7 @@ def create_app(
     prices: Mapping[str, ModelPrice] | None = None,
     trace_log: TraceLog | None = None,
     feedback_store: FeedbackStore | None = None,
+    resolve_principal: Callable[[str], Principal | None] | None = None,
     new_trace_id: Callable[[], str] = lambda: uuid.uuid4().hex,
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> FastAPI:
@@ -158,6 +180,10 @@ def create_app(
     (None when a model is unpriced). Every answer gets a ``trace_id`` and
     its trace is written to trace_log; feedback on it goes to
     feedback_store (``/api/feedback`` answers 503 without both).
+
+    resolve_principal turns an ``as_person`` into a Principal (None for an
+    unknown person); without it, ``as_person`` is rejected. The identity
+    is a demo device, not authentication.
     """
     app = FastAPI(
         title="Tessera",
@@ -170,6 +196,17 @@ def create_app(
 
     @app.post("/api/ask")
     def ask(request: AskRequest) -> JSONResponse:
+        principal = None
+        if request.as_person is not None:
+            if resolve_principal is None:
+                return JSONResponse(
+                    status_code=400, content={"error": "as_person isn't enabled on this server."}
+                )
+            principal = resolve_principal(request.as_person)
+            if principal is None:
+                return JSONResponse(
+                    status_code=400, content={"error": f"No person {request.as_person!r}."}
+                )
         start = time.perf_counter()
         try:
             with pipeline_lock:
@@ -180,6 +217,7 @@ def create_app(
                     store,
                     expertise_store,
                     router_llm=router_llm,
+                    principal=principal,
                 )
         except Exception:  # the client gets a message, the log gets the trace
             logger.exception("answer_query failed for an /api/ask request")
@@ -202,7 +240,7 @@ def create_app(
         body = answer_to_dict(result, latency, prices)
         body["trace_id"] = trace_id
         if request.include_trace:
-            body["trace"] = record
+            body["trace"] = asker_view(record)
         return JSONResponse(body)
 
     @app.post("/api/feedback", status_code=201)

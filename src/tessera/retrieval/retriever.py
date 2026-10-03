@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tessera.embedding.base import Embedder
-from tessera.ingestion.loader import STATUS_SUPERSEDED
+from tessera.ingestion.loader import (
+    SENSITIVITY_INTERNAL,
+    SENSITIVITY_RESTRICTED,
+    STATUS_SUPERSEDED,
+)
+from tessera.principal import Principal
 from tessera.retrieval.router import Archetype
 from tessera.store.base import SearchResult, VectorStore
 
@@ -44,6 +49,45 @@ SYNTHESIS_MAX_PER_DOCUMENT = 2
 # built before chunks carried a status still returns everything.
 CURRENT_ONLY: dict[str, object] = {"status": {"$ne": STATUS_SUPERSEDED}}
 SUPERSEDED_ONLY: dict[str, object] = {"status": STATUS_SUPERSEDED}
+
+
+def permission_filter(principal: Principal | None) -> dict[str, object]:
+    """The store-side filter for what ``principal`` may retrieve (plan
+    §3.5.4): internal chunks, plus restricted chunks of engagements they
+    are cleared for. Deny by default — no principal, or one cleared for
+    nothing, sees internal chunks only, and a restricted chunk with no
+    engagement matches nobody's list.
+    """
+    internal: dict[str, object] = {"sensitivity": SENSITIVITY_INTERNAL}
+    cleared = sorted(principal.engagements) if principal else []
+    if not cleared:
+        return internal
+    return {
+        "$or": [
+            internal,
+            {"$and": [{"sensitivity": SENSITIVITY_RESTRICTED}, {"engagement": {"$in": cleared}}]},
+        ]
+    }
+
+
+def _withheld_filter(principal: Principal | None) -> dict[str, object]:
+    """The complement of permission_filter(): what it withholds. Used
+    only to count removals for the trace — never to retrieve content.
+    """
+    not_internal: dict[str, object] = {"sensitivity": {"$ne": SENSITIVITY_INTERNAL}}
+    cleared = sorted(principal.engagements) if principal else []
+    if not cleared:
+        return not_internal
+    return {"$and": [not_internal, {"engagement": {"$nin": cleared}}]}
+
+
+def is_permitted(chunk: SearchResult, principal: Principal | None) -> bool:
+    """The same rule as permission_filter(), applied to a returned chunk
+    — retrieval re-checks every result rather than trusting the store.
+    """
+    if chunk.sensitivity == SENSITIVITY_INTERNAL:
+        return True
+    return bool(principal and chunk.engagement and chunk.engagement in principal.engagements)
 
 
 @dataclass(frozen=True)
@@ -85,6 +129,7 @@ def retrieve(
     embedder: Embedder,
     store: VectorStore,
     where: dict[str, object] | None = None,
+    principal: Principal | None = None,
 ) -> RetrievalResult:
     """Retrieve chunks for query using the strategy appropriate to archetype.
 
@@ -92,6 +137,11 @@ def retrieve(
     Embedder and VectorStore are injected, not constructed here. Only
     called for A and C — B and D are short-circuited by
     router.terminal_response_for() before retrieval would run.
+
+    Permissions (P4-6): every store query carries permission_filter(
+    principal), so a chunk the principal may not see never enters a
+    candidate set — and every returned chunk is re-checked. ``removed``
+    counts what the filter withheld from the candidate pool.
 
     Superseded documents (P4-4) are excluded in the store query. A second
     query finds the ones that would have ranked; they are reported on the
@@ -109,11 +159,15 @@ def retrieve(
     max_results = LOOKUP_TOP_K if lookup else SYNTHESIS_MAX_RESULTS
     max_per_document = LOOKUP_MAX_PER_DOCUMENT if lookup else SYNTHESIS_MAX_PER_DOCUMENT
 
+    caller_where = where
+    # From here on every query carries the permission filter.
+    where = _and(caller_where, permission_filter(principal))
+
     # Re-checked here, not trusted to the store's filter.
     candidates = [
         c
         for c in store.query(query_embedding, k=candidate_k, where=_and(where, CURRENT_ONLY))
-        if c.status != STATUS_SUPERSEDED
+        if c.status != STATUS_SUPERSEDED and is_permitted(c, principal)
     ]
     selected = _diversify_by_source(
         candidates, max_results=max_results, max_per_document=max_per_document
@@ -122,7 +176,7 @@ def retrieve(
     excluded = [
         c
         for c in store.query(query_embedding, k=candidate_k, where=_and(where, SUPERSEDED_ONLY))
-        if c.status == STATUS_SUPERSEDED and c.superseded_by
+        if c.status == STATUS_SUPERSEDED and c.superseded_by and is_permitted(c, principal)
     ]
     superseded = _superseded_matches(excluded, candidates, candidate_k, selected, max_results)
     selected = _with_replacements(selected, superseded, query_embedding, store, where, max_results)
@@ -132,12 +186,25 @@ def retrieve(
         if lookup
         else selected
     )
+    # Last line of defence: nothing the principal may not see leaves here.
+    results = [r for r in results if is_permitted(r, principal)]
+
+    # Counted from a probe over only what the filter withholds; the chunks
+    # themselves go no further than this count.
+    withheld = store.query(
+        query_embedding, k=candidate_k, where=_and(caller_where, _withheld_filter(principal))
+    )
     return RetrievalResult(
         query=query,
         archetype=archetype,
         results=results,
         superseded=superseded,
-        removed={"superseded": _removed_from_pool(excluded, candidates, candidate_k)},
+        removed={
+            "superseded": _removed_from_pool(excluded, candidates, candidate_k),
+            "restricted": _removed_from_pool(
+                [c for c in withheld if not is_permitted(c, principal)], candidates, candidate_k
+            ),
+        },
     )
 
 
