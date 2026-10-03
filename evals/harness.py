@@ -390,17 +390,32 @@ def leaks(case: EvalCase, result: CaseResult, walls: Walls | None) -> list[str]:
 
 
 _CITATION_RE = re.compile(r"\[\d+\]")
+# The decline GROUNDED_ANSWER_BASE_RULES asks for when the sources don't
+# answer the question: "say plainly that Meridian's corpus doesn't have
+# anything on that" — in prose, with nothing to cite. Matched on that
+# wording (straight or curly apostrophe, or none).
+_DECLINE_RE = re.compile(
+    r"meridian[’']?s corpus (?:does not|doesn[’']?t) (?:have|contain)", re.IGNORECASE
+)
 
 
 def _contract_held(result: CaseResult) -> bool:
     """The grounded-answer contract: an answer built from sources cites
-    them inline; anything else must be one of the fixed messages.
+    them inline, or declines in the prompt's own wording; anything else
+    must be one of the fixed messages. (Changed with the user's sign-off,
+    2026-10-03: the first version required a citation, which failed
+    ac-i03's correct plain-prose decline — the behaviour the prompt asks
+    for.)
     """
     if result.error is not None:
         return False
     if not result.retrieved_documents:
         return True  # a terminal or fixed response — nothing was shown
-    return result.answer == NO_RESULTS_MESSAGE or bool(_CITATION_RE.search(result.answer))
+    return (
+        result.answer == NO_RESULTS_MESSAGE
+        or bool(_CITATION_RE.search(result.answer))
+        or bool(_DECLINE_RE.search(result.answer))
+    )
 
 
 def _run_case(
