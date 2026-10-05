@@ -31,4 +31,5 @@ lists upside isn't documenting a trade-off, it's marketing), and
 | [0003](0003-aws-serverless-foundation-stage1.md) | AWS serverless foundation (Stage 1) | Superseded by 0007 (cloud target) |
 | [0004](0004-kubernetes-evolution-stage2.md) | Kubernetes evolution path (Stage 2) | Proposed — Phase 5+ |
 | [0005](0005-cicd-mlops-github-actions-terraform.md) | CI/CD and MLOps via GitHub Actions + Terraform | Proposed — Phase 5 |
+| [0006](0006-framework-adoption-parallel-langchain-stack.md) | Framework adoption: a parallel LangChain / LangGraph / LangSmith stack beside the native core | Accepted — 2026-10-05 (Phase 5) |
 | [0007](0007-gcp-and-gemini-replace-aws-and-claude.md) | Google Cloud and Gemini replace AWS and Claude on Bedrock | Accepted — 2026-10-05 |
