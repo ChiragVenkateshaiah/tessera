@@ -20,6 +20,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "anthropic[bedrock]>=1.0",
+    "google-genai>=2.28.0",
 ]
 
 [project.optional-dependencies]

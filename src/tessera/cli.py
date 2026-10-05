@@ -21,6 +21,7 @@ from tessera.feedback.candidates import candidate_cases, render_candidates
 from tessera.feedback.local import JsonlFeedbackStore, JsonlTraceLog
 from tessera.generation.base import LLMClient
 from tessera.generation.bedrock import BedrockClient
+from tessera.generation.gemini import GeminiClient
 from tessera.generation.nvidia import NvidiaClient
 from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.access_loader import Walls, load_walls
@@ -80,7 +81,7 @@ def _load_settings() -> Settings:
 
 
 def _announce_retry(attempt: int, delay: float, error: BaseException) -> None:
-    code = getattr(error, "status_code", "error")
+    code = getattr(error, "status_code", None) or getattr(error, "code", "error")
     typer.echo(
         f"  LLM returned {code}; retrying in {delay:.0f}s (attempt {attempt})",
         err=True,
@@ -134,6 +135,46 @@ def _build_bedrock(
     return RetryingLLMClient(inner, on_retry=_announce_retry)
 
 
+def _require_gcp(settings: Settings) -> str:
+    """Fail before the first question, not on it (as for AWS): a missing
+    project or missing Application Default Credentials would otherwise
+    turn every case of an eval sweep into an ERROR row.
+    """
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    try:
+        google.auth.default()
+    except DefaultCredentialsError:
+        typer.echo(
+            "No Google Cloud credentials found. Run `gcloud auth "
+            "application-default login` (the account needs the Agent Platform "
+            "User role on the project). TESSERA_LLM_PROVIDER=nvidia runs "
+            "without Google Cloud.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if not settings.gcp_project:
+        typer.echo(
+            "GOOGLE_CLOUD_PROJECT is not set: put the project id in .env.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    return settings.gcp_project
+
+
+def _build_gemini(
+    settings: Settings, project: str, model: str, *, thinking: str | None
+) -> RetryingLLMClient:
+    inner = GeminiClient(
+        model,
+        project=project,
+        location=settings.gcp_location,
+        thinking_level=thinking,
+    )
+    return RetryingLLMClient(inner, on_retry=_announce_retry)
+
+
 @dataclass(frozen=True)
 class LLMs:
     """The clients one command needs: ``answer`` writes answers, ``router``
@@ -148,8 +189,28 @@ class LLMs:
 
 def _build_llms(settings: Settings, *, min_interval: float = 0.0) -> LLMs:
     """Per TESSERA_LLM_PROVIDER. min_interval paces NIM calls (an eval
-    sweep); Bedrock isn't paced.
+    sweep); Gemini and Bedrock aren't paced.
     """
+    if settings.llm_provider == "gemini":
+        project = _require_gcp(settings)
+        return LLMs(
+            answer=_build_gemini(
+                settings,
+                project,
+                settings.gemini_answer_model,
+                thinking=settings.gemini_answer_thinking,
+            ),
+            router=_build_gemini(
+                settings,
+                project,
+                settings.gemini_router_model,
+                thinking=settings.gemini_router_thinking,
+            ),
+            name=(
+                f"gemini:{settings.gemini_answer_model} "
+                f"(router {settings.gemini_router_model})"
+            ),
+        )
     if settings.llm_provider == "bedrock":
         _require_aws_profile(settings.bedrock_aws_profile)
         return LLMs(

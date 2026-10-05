@@ -1,5 +1,15 @@
 # Tessera — Phase 4 Plan (Claude Code Brief)
 
+> **Update 2026-10-05 — ADR 0007.** The cloud is now Google Cloud and
+> the production LLM is Gemini on Agent Platform (formerly Vertex AI), not
+> Claude on Bedrock: the AWS account couldn't take payment from an
+> Indian-issued card, and Claude on GCP had zero partner-model quota.
+> P4-2's design carries over unchanged in shape (a fast model routes, a
+> stronger one answers, tokens and cost per answer, judge fixed on NIM);
+> its live acceptance sweep runs on Gemini. §9's ephemeral deployment
+> keeps its principles (deploy → record → destroy, verified; nothing
+> that bills while idle) on Cloud Run instead of Lambda.
+
 **Status: ADOPTED 2026-10-01** (replan, PR #57; CLAUDE.md updated per
 §10). Supersedes the version adopted earlier the same day (PR #55:
 "local chat UI + ephemeral AWS deployment"). What carries over from PR #55: P4-1 (HTTP API + `tessera serve`,
