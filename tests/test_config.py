@@ -94,7 +94,7 @@ def test_gemini_defaults_use_the_global_location(monkeypatch: pytest.MonkeyPatch
 
     assert settings.gcp_project is None
     assert settings.gcp_location == "global"
-    assert settings.gemini_router_thinking == "minimal"
+    assert settings.gemini_router_thinking == "low"
     assert settings.gemini_answer_thinking == "low"
 
 
@@ -111,3 +111,11 @@ def test_gemini_provider_project_and_models_come_from_env(
     assert settings.llm_provider == "gemini"
     assert settings.gcp_project == "tessera-123"
     assert settings.gemini_answer_model == "gemini-3.6-flash"
+
+
+def test_every_default_gemini_model_has_a_price() -> None:
+    from tessera.config import MODEL_PRICES
+
+    defaults = Settings.model_fields
+    for name in ("gemini_router_model", "gemini_answer_model"):
+        assert defaults[name].default in MODEL_PRICES

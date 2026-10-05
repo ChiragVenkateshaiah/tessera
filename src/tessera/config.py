@@ -30,6 +30,13 @@ MODEL_PRICES: dict[str, ModelPrice] = {
     "anthropic.claude-sonnet-5-5": ModelPrice(2.00, 10.00),
     "anthropic.claude-opus-4-8": ModelPrice(5.00, 25.00),
     "anthropic.claude-opus-5-5": ModelPrice(4.00, 20.00),
+    # Gemini: Google's published paid-tier rates (ai.google.dev pricing,
+    # checked 2026-10-05; output includes thinking tokens). The Agent
+    # Platform pricing page didn't render, so reconcile against the GCP
+    # billing report after the first sweep. Flash is an introductory rate
+    # until 2026-12-31 and doubles to 1.50 / 7.50 from 2027-01-01.
+    "gemini-3.8-flash": ModelPrice(0.75, 3.75),
+    "gemini-3.1-pro-preview": ModelPrice(2.00, 12.00),
 }
 
 
@@ -50,9 +57,12 @@ class Settings(BaseSettings):
     # Credentials; no key in config.
     gcp_project: str | None = Field(default=None, validation_alias="GOOGLE_CLOUD_PROJECT")
     gcp_location: str = Field(default="global", validation_alias="GOOGLE_CLOUD_LOCATION")
-    gemini_router_model: str = "gemini-3.6-flash"
-    gemini_router_thinking: str | None = "minimal"
-    gemini_answer_model: str = "gemini-3.1-pro"
+    # Ids checked against the live model list 2026-10-05. 3.8 Flash
+    # rejects "minimal" thinking, and its default level took 28 s on a
+    # one-word reply vs 3 s at "low". Pro exists only as a preview.
+    gemini_router_model: str = "gemini-3.8-flash"
+    gemini_router_thinking: str | None = "low"
+    gemini_answer_model: str = "gemini-3.1-pro-preview"
     gemini_answer_thinking: str | None = "low"
     # Claude on Amazon Bedrock: built and unit-tested, kept as a dormant
     # provider (the AWS account can't pay for Marketplace models; ADR 0007).

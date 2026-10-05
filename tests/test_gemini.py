@@ -17,8 +17,8 @@ from tessera.generation.base import Usage
 from tessera.generation.gemini import GeminiClient, honours_temperature
 from tessera.generation.resilient import RetryingLLMClient
 
-FLASH = "gemini-3.6-flash"
-PRO = "gemini-3.1-pro"
+FLASH = "gemini-3.8-flash"
+PRO = "gemini-3.1-pro-preview"
 
 SDK_PARAMS = set(inspect.signature(Models.generate_content).parameters) - {"self"}
 
@@ -77,17 +77,17 @@ def test_honours_temperature_only_before_gemini_3() -> None:
     assert honours_temperature("gemini-2.5-flash")
 
 
-def test_router_request_sets_minimal_thinking_and_leaves_temperature_alone() -> None:
+def test_router_request_sets_low_thinking_and_leaves_temperature_alone() -> None:
     sdk = FakeSdk(_response('{"archetype": "A"}'))
 
-    _client(FLASH, sdk, thinking_level="minimal").complete("route this", "a question")
+    _client(FLASH, sdk, thinking_level="low").complete("route this", "a question")
 
     (request,) = sdk.requests
     config = request["config"]
     assert request["model"] == FLASH
     assert request["contents"] == "a question"
     assert config.system_instruction == "route this"
-    assert config.thinking_config.thinking_level == types.ThinkingLevel.MINIMAL
+    assert config.thinking_config.thinking_level == types.ThinkingLevel.LOW
     # Gemini 3 is left at its default temperature (Google's guidance).
     assert config.temperature is None
     assert config.automatic_function_calling.disable is True

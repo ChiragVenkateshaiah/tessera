@@ -638,7 +638,7 @@ def test_gemini_provider_builds_a_flash_router_and_a_pro_answerer(
 
     answer, router = built
     assert "pro" in answer["model"] and answer["thinking_level"] == "low"
-    assert "flash" in router["model"] and router["thinking_level"] == "minimal"
+    assert "flash" in router["model"] and router["thinking_level"] == "low"
     for client in built:
         assert client["project"] == "tessera-test"
         assert client["location"] == "global"
