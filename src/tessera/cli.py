@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 import uuid
@@ -608,12 +609,17 @@ def eval_command(
         help="Exit non-zero if any gated quality-bar threshold fails "
         "(evals/QUALITY_BAR.md). The report is printed either way.",
     ),
+    json_path: Path | None = typer.Option(
+        None,
+        "--json",
+        help="Also write every case's result and the aggregates as JSON here.",
+    ),
 ) -> None:
     """Run the eval harness against the persisted index and print a report."""
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
     try:
-        from evals.harness import format_report, load_cases, run_harness
+        from evals.harness import format_report, load_cases, report_to_dict, run_harness
     except ModuleNotFoundError as exc:
         typer.echo(
             "`evals` isn't importable — `tessera eval` only runs from a "
@@ -671,6 +677,17 @@ def eval_command(
     )
 
     typer.echo(format_report(report))
+    if json_path is not None:
+        meta = {
+            "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "commit": _git_commit(),
+            "provider": settings.llm_provider,
+            "answers": llms.name,
+            "judge": f"nvidia:{settings.nvidia_model}",
+        }
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(report_to_dict(report, meta), indent=1) + "\n")
+        typer.echo(f"Wrote {json_path}", err=True)
 
     if check:
         from evals.harness import evaluate_bar
@@ -680,6 +697,25 @@ def eval_command(
             failed = ", ".join(t.name for t in result.gated_failures)
             typer.echo(f"\nQuality bar FAILED: {failed}", err=True)
             raise typer.Exit(code=1)
+
+
+def _git_commit() -> str | None:
+    """The checked-out commit, for an eval export's provenance; None
+    outside a git checkout. A trailing "+dirty" flags uncommitted changes.
+    """
+    import subprocess
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, cwd=REPO_ROOT
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True, text=True, check=True, cwd=REPO_ROOT,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return f"{commit}+dirty" if dirty else commit
 
 
 feedback_app = typer.Typer(

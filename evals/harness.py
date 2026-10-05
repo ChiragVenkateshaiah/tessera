@@ -23,7 +23,7 @@ import re
 import time
 from collections import defaultdict
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -1048,6 +1048,30 @@ def evaluate_bar(
         thresholds=thresholds,
         passed=all(t.passed for t in thresholds if t.gated),
     )
+
+
+REPORT_JSON_VERSION = 1
+
+
+def report_to_dict(report: EvalReport, meta: Mapping[str, object] | None = None) -> dict:
+    """The whole report as JSON-ready data: every CaseResult field per case
+    plus the aggregates (Phase 5 plan §3.1.1, `tessera eval --json`).
+    ``meta`` is whatever the composition root knows about the run (models,
+    commit, time); this function adds nothing it would have to look up.
+    """
+
+    def plain(value: object) -> object:
+        if isinstance(value, Archetype):
+            return value.value
+        if isinstance(value, dict):
+            return {str(plain(k)): plain(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [plain(v) for v in value]
+        return value
+
+    data = plain(asdict(report))
+    assert isinstance(data, dict)
+    return {"version": REPORT_JSON_VERSION, "meta": dict(meta or {}), **data}
 
 
 def format_report(report: EvalReport) -> str:
