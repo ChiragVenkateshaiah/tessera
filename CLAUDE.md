@@ -104,11 +104,12 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 - Automated detection of anonymized-but-identifiable content — Discovery
   §4 says automated detection must not be presented as a solution.
   Phase 4 gates such material behind a human review flag instead.
-- A chat UI — **decision deferred** (user, 2026-10-02) until the cloud
-  LLM's latency can be measured (plan §7; the user noted a persona switcher
-  showing access control as the strongest demo shot). Prompt the user
-  for the decision once P4-2's live sweep (now on Gemini) has run. P4-1's
-  HTTP API (`tessera serve`) is built.
+- A chat UI — **decided 2026-10-05 (user): yes, as a cloud-native app.**
+  A chat page served by the same FastAPI app (`api.py`, no Node
+  toolchain), deployed with the API on Cloud Run in the ephemeral stack,
+  and shown running on GCP in the final video. It includes the persona
+  switcher that shows access control (demo identities, labelled as
+  such). Built in the deployment phase's plan, not before.
 
 **Access-control enforcement** was on this list through Phase 3 (the
 pilot corpus was low-sensitivity by construction — "sidesteps the

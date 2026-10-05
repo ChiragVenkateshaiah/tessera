@@ -68,8 +68,11 @@ tokens but no cost). The judge's calls are never counted — they are the
 cost of measuring, not of answering. Once a budget is agreed with the
 user, it becomes `QualityBar.max_mean_cost_per_answer_usd` and
 `gate_cost` is flipped (Phase 4 plan §4), the same staging the B rows
-went through. The prices are Anthropic's published rates, **not yet
-verified against Bedrock's** — check them before quoting a sweep's cost.
+went through. Gemini's prices are Google's published paid-tier rates
+(checked 2026-10-05; Flash's is introductory until 2026-12-31);
+reconcile them against the GCP billing report. The Bedrock rows are
+Anthropic's first-party rates, never verified for Bedrock (dormant, ADR
+0007).
 
 ### Freshness (Phase 4)
 
@@ -177,6 +180,18 @@ A/C relevance **4.60 → 4.95** (the thin margin closed by
 parent-document expansion, #61), groundedness 4.83 → 4.98, recall and
 MRR held. Access went from the P4-5 baseline (13/13 leaked, 0% injection,
 52 cases seeing restricted content) to zero with the P4-6 filter.
+
+**P4-2's live acceptance sweep, on Gemini** (ADR 0007), 2026-10-05: full
+`tessera eval --check` with answers on `gemini-3.1-pro-preview` (router
+`gemini-3.8-flash`) and the judge on Nemotron. 91/92 clean in the sweep;
+`ql037` hit a NIM judge 503 through all six attempts and passed on its own
+re-run (C, recall 1.00, groundedness 5, relevance 5). **`=> PASS`**:
+routing 100%, A/C recall 0.96 / MRR 0.96 / groundedness 4.98 / relevance
+4.93, B person recall 0.91 / MRR 1.00 / groundedness 5.00 / relevance
+4.89, superseded cited 0, leaks 0/13, authorized recall 1.00, injection
+100%. **Cost row: $0.0120 mean per answer** (A $0.0120, B $0.0091, C
+$0.0184, D $0.0008), $1.10 for the sweep. One access-set case, `ac-i03`,
+was routed C instead of A; its injection contract held.
 
 **B person recall still clears by only 0.01**, on 9 labelled cases: one
 more missed expert fails the bar. The honest lever is more labelled B
