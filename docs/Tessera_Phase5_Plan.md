@@ -1034,46 +1034,60 @@ showcase video, so the video shows the finished product (user,
 
 ## 9. What changes when this plan is adopted (P5-1)
 
-**`CLAUDE.md`:**
-- **The do-not-build heading** "Explicitly NOT in Phases 1–4" becomes
-  "…Phases 1–5". Its items:
-  - "Any cloud deployment — Phase 5" becomes Phase 6 (ADR 0007 already
-    made it Cloud Run on GCP), and the chat-UI entry's "the deployment
-    phase" becomes Phase 6;
-  - "not built in Phases 4–5" becomes "Phases 4–6";
-  - real HR integration, staleness sync and real identity, "Phase 6+",
-    become **Phase 7+**;
+**`CLAUDE.md`**, as it stands after ADR 0007 (PR #69; line numbers are
+approximate, for P5-1 to update):
+- **The `docs/` list** (≈44–60):
+  - add this plan and ADR 0006 (accepted) beside ADR 0007;
+  - "Phase 5 = an ephemeral cloud deployment …; Phase 6 = CI/CD …"
+    (≈52–53) becomes Phase 6 / Phase 7, with "the Phase 4 plan's §9 is
+    renumbered: now Phase 6, re-scoped by ADR 0007";
+  - "none of it is built in Phases 1–4. Phase 5 deploys the Solution
+    Design's minimal 'pilot footprint'" (≈57) becomes "Phases 1–5 …
+    Phase 6 deploys …".
+- **The do-not-build heading** "Explicitly NOT in Phases 1–4" (≈78)
+  becomes "…Phases 1–5". Its items:
+  - real HR integration (≈82), staleness sync (≈85) and real identity
+    (≈101), "Phase 6+", become **Phase 7+**;
+  - the cloud deployment entry (≈87–93): "Any cloud deployment — Phase 5"
+    and "Phase 5's stack" become Phase 6, and "CI/CD and monitoring are
+    Phase 6+" becomes Phase 7+;
+  - the chat-UI entry's "Built in the deployment phase's plan" becomes
+    "Built in Phase 6";
   - agents and tool calling are added, with the structured-output note;
   - conversation memory gets the checkpointer note;
   - LLM caching in gating sweeps is added.
-- **The "Cloud (Phase 5, Google Cloud per ADR 0007)" section** becomes
-  "Cloud (Phase 6, …)". **"CI/CD … not
-  set up in Phases 1–5 … Phase 6"** becomes "Phases 1–6 … Phase 7".
 - **Constraints:**
-  - #1 gains `VectorStore.delete_document`, and its "Phases 4–5 start
+  - #1 (≈134) gains `VectorStore.delete_document`, and "Phases 4–5 start
     moving this to the cloud" becomes "Phases 4–6";
-  - #4 changes "the CI gate in Phase 6" to Phase 7;
-  - #5 changes "Cloud hosting … Phase 5's ephemeral demo" to Phase 6;
+  - #4 (≈150) changes "the CI gate in Phase 6" to Phase 7;
+  - #5 (≈154) changes "Phase 5's ephemeral demo deployment" to Phase 6;
   - #6 gains the framework allow-list, the factories in `integrations/`,
     pure graph nodes with runtime-context dependencies, composition-root
     `@traceable`, and the `review/` I/O exemption.
-- **The technology table:** a "LangChain stack (Phase 5)" column or rows,
-  one per switch, plus LangSmith (tracing with taint redaction, datasets,
-  experiments). Rows that say Phase 5 or Phase 6 are renumbered.
-- **The `docs/` list:** this plan, ADR 0006, and a "renumbered" note on the
-  Phase 4 plan's Phase 5 references.
+- **The technology table** (≈184–200):
+  - a "LangChain stack (Phase 5)" column or rows, one per switch,
+    including `ChatGoogleGenerativeAI` beside `ChatNVIDIA`, plus LangSmith
+    (tracing with taint redaction, datasets, experiments);
+  - HTTP/UI "same, on Cloud Run (Phase 5)" (≈192), Packaging "(Phase 5)"
+    (≈195) and IaC "(Phase 5) … CI/CD in Phase 6" (≈196) become Phase 6 /
+    Phase 7.
 - **Working conventions:**
-  - the task-by-task list gains "`docs/Tessera_Phase5_Plan.md` §5 for
-    Phase 5";
+  - the task-by-task list (≈212–217) gains "`docs/Tessera_Phase5_Plan.md`
+    §5 for Phase 5";
   - the bar-check trigger list gains `lc/`, `review/`, `integrations/` and
     `observability/`;
   - a shared-code PR pastes both stacks' sweeps;
   - LangSmith tracing never comes from environment variables, and
     redaction is never bypassed.
+- **Git workflow:** "CI/CD … not set up in Phases 1–5 … earns its place at
+  Phase 6" (≈258–259) becomes "Phases 1–6 … Phase 7". "Cloud (Phase 5,
+  Google Cloud per ADR 0007)" (≈270) becomes "Cloud (Phase 6, …)".
+  "Cloud LLM spend (Phase 4+)" is unchanged.
 
 **Elsewhere** (current line numbers, for P5-1 to update):
-- `README.md`: the status and phase table (≈13–27), the architecture note
-  (≈72), the CI note (≈462);
+- `README.md`: the status and phase table (≈13–30; its "Phase 4.5"
+  row becomes this phase, and the Cloud Run row becomes Phase 6 with
+  CI/CD as Phase 7), the architecture note, and the CI note;
 - `evals/QUALITY_BAR.md:7`;
 - `evals/README.md:7`;
 - `docs/adr/README.md` (the index; scope note ≈32–34);
@@ -1081,9 +1095,9 @@ showcase video, so the video shows the finished product (user,
 - `src/tessera/principal.py:9` ("Phase 6+" becomes "Phase 7+");
 - `checkpoint.md` (Status, Next task, Task sequence).
 
-`docs/Tessera_Phase4_Plan.md` is history: it gets a one-line note at its
-§9 ("renumbered: now Phase 6 — see `Tessera_Phase5_Plan.md`"), not a
-rewrite.
+`docs/Tessera_Phase4_Plan.md` is history. It already carries ADR
+0007's update note; its §9 gets one more line ("renumbered: now Phase 6
+— see `Tessera_Phase5_Plan.md`"), not a rewrite.
 
 ## 10. Decisions for the user (before or during the phase)
 
@@ -1197,7 +1211,7 @@ leftover AWS/Bedrock/Lambda text contradicted ADR 0007.
 | A5 | No noise floor for the Gemini comparison | Native runs twice on Gemini at P5-10 (§4.2, §4.3) |
 | A6 | P5-0 no longer runs on `v0.4.0` | Retitled to "`main` after ADR 0007"; additions-only lock diff recorded; NIM pinned (§3.1.1, §5) |
 | A7 | P5-1's unchanged-lock check could trip on google-genai | A spike item on `langchain-google-genai`'s google-genai range (§5 P5-1) |
-| A8 | §9's CLAUDE.md list was written against `main`'s old CLAUDE.md | §9 rewritten against the post-ADR-0007 CLAUDE.md, after rebasing on it |
-| A9 | `docs/adr/README.md` would conflict with the 0007 row | Rebased; rows ordered 0006, 0007 |
+| A8 | §9's CLAUDE.md list was written against `main`'s old CLAUDE.md | §9 rewritten line by line against the post-ADR-0007 CLAUDE.md, after merging `main` (PR #69) into this branch |
+| A9 | `docs/adr/README.md` would conflict with the 0007 row | `main` merged in; conflict resolved with rows ordered 0006, 0007 |
 | A10 | §4.3 counts were NIM-only, and Flash's price is introductory | NIM and Gemini sweeps counted separately, with cost and the price change noted (§4.3) |
 | A11 | §8's heading claimed "unchanged in substance"; an overlong line in §1 | Retitled; reflowed |
