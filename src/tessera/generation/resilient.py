@@ -1,7 +1,7 @@
 """Retry/backoff and call pacing for any LLMClient.
 
 A decorator over the LLMClient port rather than logic inside a concrete
-client, so the Phase 4 Bedrock client gets the same behaviour for free.
+client, so the Phase 4 Bedrock and Gemini clients get the same behaviour for free.
 Motivated by 2026-09-29: NVIDIA NIM throttled far below its documented
 40 rpm, an unpaced 55-case eval sweep cascaded into instant 429s after
 the first few calls, and nothing in the repo backed off (see
@@ -31,8 +31,13 @@ DEFAULT_MAX_ATTEMPTS = 6
 
 
 def _status_code(exc: BaseException) -> int | None:
-    code = getattr(exc, "status_code", None)
-    return code if isinstance(code, int) else None
+    # openai/anthropic errors carry `status_code`; google-genai's APIError
+    # carries the HTTP status as `code`.
+    for attr in ("status_code", "code"):
+        code = getattr(exc, attr, None)
+        if isinstance(code, int):
+            return code
+    return None
 
 
 def is_retryable(exc: BaseException) -> bool:

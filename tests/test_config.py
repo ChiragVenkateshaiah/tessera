@@ -83,3 +83,31 @@ def test_every_default_bedrock_model_has_a_price() -> None:
     defaults = Settings.model_fields
     for name in ("bedrock_router_model", "bedrock_answer_model"):
         assert defaults[name].default in MODEL_PRICES
+
+
+def test_gemini_defaults_use_the_global_location(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    for var in ("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION", "GEMINI_ANSWER_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gcp_project is None
+    assert settings.gcp_location == "global"
+    assert settings.gemini_router_thinking == "minimal"
+    assert settings.gemini_answer_thinking == "low"
+
+
+def test_gemini_provider_project_and_models_come_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "tessera-123")
+    monkeypatch.setenv("GEMINI_ANSWER_MODEL", "gemini-3.6-flash")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_provider == "gemini"
+    assert settings.gcp_project == "tessera-123"
+    assert settings.gemini_answer_model == "gemini-3.6-flash"

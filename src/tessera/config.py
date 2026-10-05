@@ -42,9 +42,20 @@ class Settings(BaseSettings):
     nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
     # Which provider answers questions. The eval judge stays on NVIDIA NIM
     # either way (plan §3.1.4), so NVIDIA_API_KEY is always required.
-    llm_provider: Literal["nvidia", "bedrock"] = Field(
+    llm_provider: Literal["nvidia", "gemini", "bedrock"] = Field(
         default="nvidia", validation_alias="TESSERA_LLM_PROVIDER"
     )
+    # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
+    # production provider since ADR 0007. Auth is Application Default
+    # Credentials; no key in config.
+    gcp_project: str | None = Field(default=None, validation_alias="GOOGLE_CLOUD_PROJECT")
+    gcp_location: str = Field(default="global", validation_alias="GOOGLE_CLOUD_LOCATION")
+    gemini_router_model: str = "gemini-3.6-flash"
+    gemini_router_thinking: str | None = "minimal"
+    gemini_answer_model: str = "gemini-3.1-pro"
+    gemini_answer_thinking: str | None = "low"
+    # Claude on Amazon Bedrock: built and unit-tested, kept as a dormant
+    # provider (the AWS account can't pay for Marketplace models; ADR 0007).
     bedrock_region: str = "us-east-1"
     # A dedicated profile, so Tessera never picks up another project's
     # default AWS credentials.
