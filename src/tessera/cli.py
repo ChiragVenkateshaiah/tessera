@@ -619,7 +619,7 @@ def eval_command(
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
     try:
-        from evals.harness import format_report, load_cases, report_to_dict, run_harness
+        from evals.harness import format_report, load_cases, run_harness
     except ModuleNotFoundError as exc:
         typer.echo(
             "`evals` isn't importable — `tessera eval` only runs from a "
@@ -678,6 +678,8 @@ def eval_command(
 
     typer.echo(format_report(report))
     if json_path is not None:
+        from evals.harness import report_to_dict
+
         meta = {
             "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git_commit(),
