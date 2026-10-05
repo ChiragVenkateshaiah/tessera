@@ -1,6 +1,8 @@
 # 0003 — AWS serverless foundation (Stage 1)
 
-**Status:** Proposed — Phase 4+, not built in Phase 1
+**Status:** Superseded by ADR 0007 (2026-10-05): the cloud target is now Google Cloud. Kept as the record of the AWS design.
+
+_Original status: Proposed — Phase 4+, not built in Phase 1_
 
 ## Context
 

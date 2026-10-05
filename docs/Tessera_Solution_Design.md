@@ -1,5 +1,10 @@
 # Project Tessera — Solution Design (v1)
 
+> **Update 2026-10-05 — ADR 0007.** §4's AWS architecture is kept as the
+> original production design. The implemented cloud target is now Google
+> Cloud: Gemini on Agent Platform as the LLM, and an ephemeral Cloud Run
+> deployment. See `docs/adr/0007-gcp-and-gemini-replace-aws-and-claude.md`.
+
 **Client:** Meridian Advisory
 **Engagement:** Internal knowledge assistant — retrieval, synthesis, citations
 **Author:** Chirag — Forward Deployed Engineer

@@ -1,5 +1,7 @@
 # 0005 — CI/CD and MLOps via GitHub Actions + Terraform
 
+> **2026-10-05:** the cloud target is now Google Cloud (ADR 0007). The AWS-specific parts below (EKS/Lambda/IAM/AWS deploy) are the original design; the principles stand.
+
 **Status:** Proposed — Phase 5, not built in Phase 1 (explicitly on the
 Phase 1 do-not-build list — see `CLAUDE.md`)
 
