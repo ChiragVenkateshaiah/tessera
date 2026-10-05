@@ -1,8 +1,22 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-04
+Last updated: 2026-10-06
 
 ## Status
+
+**Phase 5 adopted and started (2026-10-05).**
+- **Cloud and LLM moved to Google Cloud + Gemini** (ADR 0007, PR #69).
+  AWS couldn't take payment from an Indian-issued card, and Claude on GCP
+  had zero partner-model quota.
+- **P4-2's open acceptance is closed on Gemini.** Fresh `tessera eval
+  --check`, `=> PASS`, 92/92 after one NIM-judge 503 re-run. Cost
+  $0.012 per answer, $1.10 for the sweep.
+- **The Phase 5 plan + ADR 0006 are adopted** (PR #67), amended for ADR
+  0007 and reviewed a third time (plan §14).
+- **P5-0 is half done** on branch `feat/p5-0-baseline` (pushed, no PR
+  yet): the golden snapshot and `tessera eval --json` are built; the two
+  NIM baseline sweeps are not run yet.
+- **The chat UI is decided:** yes, on Cloud Run in Phase 6.
 
 **Phase 4 complete (`v0.4.0`, 2026-10-03).** All seven plan tasks merged
 (P4-1 #56, P4-2 code #59, P4-3 #60, P4-4 #63, P4-5 #64, P4-6 #65, P4-7
@@ -1635,40 +1649,75 @@ same change and stays ungated (`QUALITY_BAR.md`).
       honest limits), QUALITY_BAR current standing, this entry, Phase 1
       exit criteria re-confirmed on a fresh clone, final clean sweep
       (92/92, zero errors, `=> PASS`, numbers in Status). Tag: `v0.4.0` on the PR's merge commit, P4-2's live Bedrock sweep recorded as an open limit (user, 2026-10-03).
+- [x] **P4-2 closed on Gemini; ADR 0007** (2026-10-05, PR #69).
+      - **Why the move:** on AWS, Bedrock Haiku went from "not available"
+        to `INVALID PAYMENT` once a debit card was the default, then the
+        billing console warned that Indian-issued cards may fail. The
+        user stopped on AWS there. On GCP, Claude Opus 5.5 hit "project's
+        quota" (zero partner-model quota on new projects). The user chose
+        GCP-native Gemini.
+      - **The client:** `generation/gemini.py`, a `GeminiClient` using
+        google-genai with `enterprise=True` and ADC. Flash routes and Pro
+        answers, both at thinking `low`. Thinking tokens are billed as
+        output, and Gemini 3 is sent no temperature. Selected by
+        `TESSERA_LLM_PROVIDER=gemini`; the CLI fails fast without
+        credentials or a project.
+      - **Models, checked against the live model list:**
+        `gemini-3.8-flash` (rejects `minimal` thinking; its default
+        level took 28 s on a one-word reply vs 3 s at `low`) and
+        `gemini-3.1-pro-preview` (the only Gemini 3 Pro). Prices are
+        Google's published rates; Flash's is introductory until
+        2026-12-31.
+      - **Sweep, judge on NIM:** `=> PASS`. Routing 100%; A/C recall 0.96,
+        MRR 0.96, groundedness 4.98, relevance 4.93; B person recall
+        0.91, relevance 4.89; leaks 0/13; authorized recall 1.00;
+        injection 100%. Cost $0.0120 per answer (A .0120, B .0091,
+        C .0184, D .0008). Median latency A 11.8 s, B 11.3 s, C 15.5 s,
+        D 3.8 s.
+      - **Docs:** ADR 0007 written, ADR 0003 superseded, update notes on
+        ADRs 0004/0005, the Phase 4 plan and the Solution Design.
+        CLAUDE.md, README and QUALITY_BAR updated. Bedrock stays a
+        dormant provider.
+- [x] **Phase 5 plan + ADR 0006 adopted** (2026-10-05, PR #67), amended
+      for ADR 0007:
+      - `ChatGoogleGenerativeAI` instead of a Bedrock adapter;
+      - sweeps on NIM, plus 3 Gemini sweeps at P5-10 (≈ $6–9; user
+        decision);
+      - Phase 6 = Cloud Run + chat UI; the video after Phase 7.
+      A third Plan-agent review (§14) found 1 blocking and 8 should-fix
+      issues, all folded in. `main` was merged into the plan branch (not
+      rebased: the old draft commits touched `checkpoint.md`).
 
 ## Next task to pick up
 
-**Phase 5 — LangChain, LangGraph, LangSmith** (plan `docs/Tessera_Phase5_Plan.md`,
-DRAFT in PR #67, awaiting user review/adoption; ADR 0006). User decisions
-2026-10-03: the goal is thorough hands-on learning of all three, used
-broadly; a **parallel LangChain stack** beside the untouched native core,
-measured per layer; agents/tool calling and conversation memory stay
-out; LangSmith with taint-based redaction; the phase renumbered to
-**Phase 5** (AWS → Phase 6, CI/CD → Phase 7). Reviewed twice by a Plan
-agent (plan §12/§13). First task after adoption: **P5-0** — the baseline
-at `v0.4.0` (`--json`, golden snapshot, baseline + noise-floor sweeps)
-*before* any dependency is added.
+**P5-0 — Baseline at `main` after ADR 0007 (NIM path unchanged since
+`v0.4.0`)** (`docs/Tessera_Phase5_Plan.md` §3.1.1, §5). Branch
+`feat/p5-0-baseline`, pushed, no PR yet.
 
-**Still open from P4-2 — the live Bedrock sweep (its acceptance):** a full
-`tessera eval --check` with answers on Bedrock, judge on Nemotron, passes
-every existing gated row; the report shows cost per answer by archetype;
-the provisional cost row is reported. Blocked on the user (plan §8):
-1. The AWS account ("Project North Star", AISPL-billed) returns
-   `AccessDeniedException: … is not available for this account` for Haiku
-   4.5, Opus 4.8 and Opus 5.5 even after the Anthropic use-case form. **No
-   payment method is linked** — the user will add a card when this comes
-   up. If it still fails, AISPL Marketplace limits are the next suspect
-   (support case, Account and billing).
-2. Then: $10 monthly budget alert; IAM policy `tessera-bedrock-invoke`
-   (`bedrock-mantle:CreateInference`, `Resource: "*"` until the model
-   ARNs are confirmed from CloudTrail); IAM user `tessera-local` (no
-   console access); `aws configure --profile tessera` (region
-   us-east-1); `chmod 600 ~/.aws/credentials ~/.aws/config` (still 775).
-3. Smoke test (≈2 calls, < $0.01), then state the sweep's expected cost
-   before running it (CLAUDE.md). Verify `MODEL_PRICES` against Bedrock
-   pricing first. If Opus 5.5 stays unavailable, `BEDROCK_ANSWER_MODEL=
-   anthropic.claude-opus-4-8` is a drop-in (same Mantle endpoint).
-4. After that sweep: put the chat-UI decision to the user (deferred).
+**Done on the branch:**
+- `evals/snapshot.py` + `evals/snapshots/v0.4.0.json` (92 cases, zero
+  calls, fresh temporary index). A re-run is identical, and the same
+  script run against the `v0.4.0` tag is identical.
+- `tessera eval --json PATH` (`harness.report_to_dict`, provenance from
+  the CLI).
+- Tests: `tests/test_snapshot.py` plus an export test. Suite **438
+  passed, 8 skipped**.
+
+**Left:**
+1. Baseline sweep 1:
+   `TESSERA_LLM_PROVIDER=nvidia tessera eval --check --json evals/baselines/p5-0-native-1.json`
+   from a clean tree (the export records the commit, `+dirty` otherwise).
+2. Sweep 2, the same command to `…-2.json`, for the judge's noise floor.
+3. Compute the per-metric run-to-run spread between the two.
+4. Commit both exports and open the PR, with the noise floor and both
+   bar reports in its body. Then P5-1.
+
+Both sweeps are on free NIM; each takes 20–50 min.
+
+**Acceptance (plan §5, verbatim):**
+- the snapshot and both exports are committed;
+- the noise floor is recorded in the PR;
+- the suite is green.
 
 ---
 
@@ -1835,15 +1884,82 @@ replanned + re-adopted the same day (#57):
   injection 100%)~~ — done (#65)
 - ~~P4-7 — Phase 4 exit, tag `v0.4.0`~~ — done (#66)
 
-**Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
-stack (plan drafted, PR #67, awaiting adoption) **← next**. Phase 6 =
-ephemeral AWS deployment; Phase 7 = CI/CD + monitoring.
+- ~~P4-2 live acceptance sweep~~ — done on Gemini (#69, ADR 0007)
 
-(Until the Phase 5 plan is adopted, `CLAUDE.md` and the Phase 4 plan still
-call the AWS deployment "Phase 5" and CI/CD "Phase 6"; adoption renumbers
-them — Phase 5 plan §9 lists every place.)
+**Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
+stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
+- P5-0 — baseline (snapshot + `--json` done; two NIM sweeps left) **← next**
+- P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike
+- P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split
+- P5-3 — LangSmith tracing with taint redaction (native first)
+- P5-4 — LangChain ingestion and indexing
+- P5-5 — LangChain retrieval
+- P5-6 — generation, routing, retries, expertise
+- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API
+- P5-8 — human-review workflow
+- P5-9 — LangSmith datasets, experiments, feedback, prompt hub
+- P5-10 — comparison and exit, incl. 3 Gemini sweeps; tag `v0.5.0`
+
+**Phase 6** — ephemeral Google Cloud deployment: Cloud Run + chat UI,
+Terraform, project `tessera-510716`. **Phase 7** — CI/CD (GitHub Actions
+→ GCP via WIF) + monitoring. **Then** one final deploy → record →
+destroy for the LinkedIn video. CLAUDE.md still says Phase 5/6 for these
+until P5-1 applies plan §9.
 
 ## Notes / open flags
+
+- **Cloud is Google Cloud now (ADR 0007, 2026-10-05).**
+  - Project `tessera-510716`.
+  - `gcloud` 587.0.0 is installed at `~/.local/google-cloud-sdk`
+    (symlinked into `~/.local/bin`, no sudo).
+  - ADC is set up with the quota project. If a Gemini call fails on
+    auth: `gcloud auth application-default login`, **tick "Select all"**
+    on the consent page (the first try missed the cloud-platform scope),
+    then `gcloud auth application-default set-quota-project tessera-510716`.
+  - `.env` holds `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION=global`.
+  - The console says "Agent Platform" (Vertex AI was renamed in April
+    2026). The API is still `aiplatform.googleapis.com`.
+- **Bedrock is dormant, not deleted.**
+  - The AWS account has a UPI AutoPay mandate and an Indian debit card
+    (the default). The "not available for this account" message was
+    the pre-payment error, not proof that Opus is gated.
+  - If AWS is ever revisited, the user's own fallback ladder was a
+    credit card next.
+  - Don't spend time on it unless asked.
+- **Gemini quirks:**
+  - `gemini-3.8-flash` rejects `thinking_level=minimal` (400).
+  - At its default thinking level, Flash took 28 s on a one-word reply.
+  - The answer model is a *preview*.
+  - Flash's price doubles on 2027-01-01, so restate costs after that.
+  - The GCP billing report hasn't been reconciled with `MODEL_PRICES`
+    yet. Check it after a sweep or two.
+- **Always-on cloud rejected on cost** (user, 2026-10-05: "$170+/month
+  is too much"). Phases 6–7 stay ephemeral, and nothing that bills while
+  idle goes in without a stated monthly cost and approval.
+- **Showcase video:** recorded once, after Phase 7, showing the chat UI
+  running on Cloud Run. The draft storyboard has 6 scenes: the problem;
+  live on Cloud Run (lookup, expertise, D refusal, persona switch); under
+  the hood (LangGraph, LangSmith trace, review interrupt); evidence (eval
+  report, native-vs-LangChain comparison); ops (eval-gated PR, CI/CD
+  deploy); teardown verified. The persona switcher for access control is
+  the key shot. OBS for recording.
+- **Merging is the user's step.** Auto mode blocks `gh pr merge` ("Merge
+  Without Review"). Hand the user `! gh pr merge <n> --merge
+  --delete-branch`. `gh pr edit` still fails (Projects classic), so
+  retitle through `gh api -X PATCH`.
+- **`... | tail -1` hides pytest's exit code.** On 2026-10-05 a commit
+  chained after `pytest | tail -1 &&` went in with 7 failures (fixed on
+  the branch before end of day). Check the summary line, or use
+  `set -o pipefail`, before committing.
+- **CLI tests stub `evals.harness` in `sys.modules`.** Any new harness
+  function the `eval` command uses must be imported lazily inside its
+  branch (as `evaluate_bar` and `report_to_dict` are), or seven CLI
+  tests fail on ImportError.
+- **NIM / Gemini spend 2026-10-05:** one 92-case Gemini sweep ($1.10)
+  plus ~8 single Gemini calls (smoke tests, one live query, the `ql037`
+  re-run). NIM was used as judge only (~90 calls). The sweep took 51 min
+  with 40 transient 429/503s; one case (`ql037`) exhausted its retries
+  on a NIM 503 and passed on re-run.
 
 - **Plans get a Plan-agent review before adoption** (user practice,
   restated 2026-10-03: "Review the plan with planner review model"). Spawn
@@ -1890,10 +2006,10 @@ them — Phase 5 plan §9 lists every place.)
   the same for any new injection fixture: ask first.
 - **zsh: `echo ===X` fails** ("==X not found" — `=cmd` expansion). Use
   `echo "--- X"` in shell snippets.
-- **Bedrock account blocked (2026-10-02).** See "Next task to pick up" →
-  "Still open from P4-2" for the full state and the setup steps. The
-  user's other AWS profiles (`novapay`, `cerberus*`) stay untouched; no
-  `tessera` profile or IAM user exists yet.
+- **Bedrock account blocked (2026-10-02)** — superseded 2026-10-05 by
+  ADR 0007 (see the Bedrock-dormant note above). No `tessera` AWS profile
+  or IAM user was ever created; the user's other AWS profiles
+  (`novapay`, `cerberus*`) stay untouched.
 - **Anthropic SDK 1.x (installed 1.11) removed `temperature`/`top_p`/
   `top_k` from `messages.create()`** — passing one is a `TypeError`
   before any request. `BedrockClient` sends temperature only to Haiku 4.5,
