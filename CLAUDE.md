@@ -44,17 +44,24 @@ Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Phase4_Plan.md` — the authoritative brief for Phase 4 (the
   current phase, replanned 2026-10-01): four production-readiness
   features aimed at the documented reasons GenAI projects stall after
-  proof of concept — Claude on Bedrock with cost accounting, request
+  proof of concept — a cloud LLM with cost accounting (Gemini on
+  Google Cloud's Agent Platform since ADR 0007; the plan says Claude on
+  Bedrock), request
   traces + a feedback-to-eval loop, document freshness + a data-quality
   report, and permission-aware retrieval with a gated leakage eval. §5 is
-  the task sequence. Phase 5 = an **ephemeral** AWS deployment (deploy →
+  the task sequence. Phase 5 = an **ephemeral** cloud deployment (deploy →
   record a demo → destroy, verified; plan §9); Phase 6 = CI/CD with the
   eval gate + monitoring.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
   (e.g. the hybrid Go/Python production split). Documentation only; none
   of it is built in Phases 1–4. Phase 5 deploys the Solution Design's
-  minimal "pilot footprint" (one Python Lambda), not the ADR 0002/0003
-  Go edge + DynamoDB design.
+  minimal "pilot footprint" (one container service), not the ADR
+  0002/0003 Go edge + DynamoDB design. **ADR 0007 (2026-10-05) moved the
+  cloud from AWS to Google Cloud and the LLM from Claude on Bedrock to
+  Gemini on Agent Platform** — AWS couldn't take payment from an
+  Indian-issued card, and Claude on GCP had zero partner-model quota.
+  Where docs written before it say AWS/Bedrock/Lambda, read GCP/Gemini/
+  Cloud Run.
 
 ## Phase 1 objective and boundaries
 
@@ -77,15 +84,17 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
   documents.
 - Expertise staleness / live-sync mechanism — Phase 6+. Phase 3 ships a
   dated static snapshot whose age the answer surfaces.
-- Any AWS deployment — Phase 5. Phase 4 calls Bedrock from the local
-  machine and provisions nothing. Phase 5's stack (Terraform, one Lambda,
-  ECR, a Function URL) is ephemeral by design: deployed for a demo
+- Any cloud deployment — Phase 5. Phase 4 calls the cloud LLM from the
+  local machine and provisions nothing. Phase 5's stack (Terraform, one
+  Cloud Run service, Artifact Registry, in the dedicated GCP project
+  `tessera-510716`; ADR 0007) is ephemeral by design: deployed for a demo
   recording, then destroyed and the teardown verified — never left
-  running between sessions. An always-on deployment, CI/CD and
-  monitoring are Phase 6+.
+  running between sessions. An always-on deployment was rejected on
+  cost (user, 2026-10-05). CI/CD and monitoring are Phase 6+.
 - The Go edge layer, DynamoDB session state, Kubernetes (ADRs
   0002–0004), OpenSearch Serverless, Bedrock Titan embeddings, an
-  S3-hosted corpus — documented direction, not built in Phases 4–5.
+  S3-hosted corpus — documented AWS direction (superseded as the cloud
+  target by ADR 0007), not built.
 - Conversation memory / multi-turn context — each question is answered
   independently (CLI and UI alike).
 - PowerPoint/deck ingestion — not in the pilot corpus.
@@ -95,11 +104,12 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 - Automated detection of anonymized-but-identifiable content — Discovery
   §4 says automated detection must not be presented as a solution.
   Phase 4 gates such material behind a human review flag instead.
-- A chat UI — **decision deferred** (user, 2026-10-02) until Bedrock
-  latency can be measured (plan §7; the user noted a persona switcher
-  showing access control as the strongest demo shot). Prompt the user
-  for the decision once P4-2's live Bedrock sweep has run. P4-1's
-  HTTP API (`tessera serve`) is built.
+- A chat UI — **decided 2026-10-05 (user): yes, as a cloud-native app.**
+  A chat page served by the same FastAPI app (`api.py`, no Node
+  toolchain), deployed with the API on Cloud Run in the ephemeral stack,
+  and shown running on GCP in the final video. It includes the persona
+  switcher that shows access control (demo identities, labelled as
+  such). Built in the deployment phase's plan, not before.
 
 **Access-control enforcement** was on this list through Phase 3 (the
 pilot corpus was low-sensitivity by construction — "sidesteps the
@@ -121,7 +131,7 @@ pilot corpus and query log were.
 
 These are reasons, not preferences:
 
-1. **Swappable ports.** Phases 4–5 start moving this to AWS (Bedrock now; OpenSearch, S3 later).
+1. **Swappable ports.** Phases 4–5 start moving this to the cloud (Gemini on Agent Platform now, per ADR 0007; the original target was AWS).
    Every external dependency — embedding model, vector store, LLM client,
    document source — sits behind a thin interface so the swap is a config
    change, not a rewrite. The single most important structural decision in
@@ -140,8 +150,8 @@ These are reasons, not preferences:
    in Phase 6.
 5. **Local-first.** Local stays the development and evaluation
    environment; the only cloud dependency on the query path is the LLM
-   call (NVIDIA NIM by default, Claude on Bedrock when selected by
-   config). AWS hosting is used only for Phase 5's ephemeral demo
+   call (NVIDIA NIM by default, Gemini on Agent Platform when selected
+   by config). Cloud hosting is used only for Phase 5's ephemeral demo
    deployment.
 6. **The query path stays transport-agnostic.** `router.py`, `retriever.py`,
    `generation/`, and `pipeline.py` — everything between "a query came in"
@@ -178,13 +188,13 @@ These are reasons, not preferences:
 | Embeddings | `sentence-transformers` local model | Bedrock Titan / Cohere | Behind `Embedder` interface |
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
 | Expertise store (Phase 3) | Chroma collection, separate from documents | Real people-index / HR API | Behind `ExpertiseStore` interface; reuses the `Embedder` port |
-| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Claude via Bedrock | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from Gemini's 20/day tier, which was blocking eval-harness sweeps). Phase 4 adds Claude on Bedrock as a config-selected provider (Haiku for routing, a stronger model for answers) with token/cost accounting; NIM stays the eval judge |
-| HTTP / UI (Phase 4) | FastAPI, `tessera serve` (P4-1); a chat page only if chosen after P4-2 | same, on Lambda (Phase 5) | `api.py` is a composition root like `cli.py`; no Node toolchain |
+| LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Gemini on Agent Platform (ADR 0007) | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from the Gemini API's 20/day free tier, which was blocking eval-harness sweeps). Phase 4 adds config-selected cloud providers with token/cost accounting: `gemini` (`gemini-3.8-flash` routes, `gemini-3.1-pro-preview` answers, ADC auth) and `bedrock` (built, dormant — the AWS account can't pay). NIM stays the eval judge |
+| HTTP / UI (Phase 4) | FastAPI, `tessera serve` (P4-1); a chat page only if chosen after P4-2 | same, on Cloud Run (Phase 5) | `api.py` is a composition root like `cli.py`; no Node toolchain |
 | Feedback (Phase 4) | `FeedbackStore` port, local JSONL | a managed store | Feedback becomes *candidate* eval cases for human labelling, never auto-added |
 | Access data (Phase 4) | `data/access/walls.yaml` (seeded generator, synthetic) | a real entitlement / ethical-wall system | Deny-by-default; filtered in the store query, before ranking |
-| Packaging (Phase 5) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Lambda via the Lambda Web Adapter |
-| IaC (Phase 5) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 6 | Tagged `project=tessera`, `ephemeral=true`; `terraform destroy` after every demo |
-| Config | `pydantic-settings` + `.env` | same + Parameter Store | No hardcoded values |
+| Packaging (Phase 5) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Cloud Run |
+| IaC (Phase 5) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 6 | Labelled `project=tessera`, `ephemeral=true`, in the dedicated GCP project; `terraform destroy` after every demo |
+| Config | `pydantic-settings` + `.env` | same + Secret Manager | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
 
@@ -198,13 +208,22 @@ These are reasons, not preferences:
 - No secrets in the repo. No hardcoded paths.
 - Tests for chunking, routing, and metrics logic — the deterministic parts.
   Do not over-test LLM outputs; that is what the eval harness is for.
-- When a decision is ambiguous, prefer the option that keeps the AWS
+- When a decision is ambiguous, prefer the option that keeps the cloud
   migration cheap.
 - Work task by task per the current phase's plan — `docs/Tessera_Phase1_Build_Plan.md`
   §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2,
   `docs/Tessera_Phase3_Plan.md` §5 for Phase 3, `docs/Tessera_Phase4_Plan.md`
   §5 for Phase 4. Stop after each task and
   report against its acceptance check before continuing.
+- **Phase plans get an independent review before adoption.** Run a
+  read-only `Plan` subagent against the draft *and the real code*. Fold
+  in every finding, and add a review section to the plan mapping each
+  finding to its fix. The Phase 5 reviews found real defects a docs-only
+  read would have missed.
+- **Portfolio depth over speed** (user, 2026-10-03). The thorough,
+  evidenced version is the default. Don't propose shrinkable scope or
+  time-boxed shortcuts to save time; still flag cost (cloud LLM spend) and
+  anything on the do-not-build list.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
 - **Quality-bar regression check (Phase 2+).** Any PR that touches
@@ -244,13 +263,14 @@ Design §5). Until then, quality gating is manual: run `pytest` and
 bar-check result into the PR body for any retrieval/prompt change (see
 "Working conventions" above and `evals/QUALITY_BAR.md`).
 
-**Bedrock spend (Phase 4+):** a sweep with answers on Bedrock costs real
-money — state the expected cost before starting one, and keep the judge
-on NIM (free) unless the user decides otherwise.
+**Cloud LLM spend (Phase 4+):** a sweep with answers on Gemini (or
+Bedrock) costs real money — state the expected cost before starting one,
+and keep the judge on NIM (free) unless the user decides otherwise.
 
-**AWS (Phase 5):** every AWS change goes through Terraform in `infra/`,
+**Cloud (Phase 5, Google Cloud per ADR 0007):** every cloud change goes through Terraform in `infra/`,
 reviewed as a `terraform plan` before any `apply`. `apply` and `destroy`
 are run only with the user's explicit go-ahead for that specific run —
 they create and delete billed resources. After a demo, `terraform destroy`
-and verify nothing tagged `project=tessera` remains. `/end-day` checks for
-live tagged resources whenever a deploy happened that session.
+and verify nothing labelled `project=tessera` remains in project
+`tessera-510716`. `/end-day` checks for live resources whenever a deploy
+happened that session.

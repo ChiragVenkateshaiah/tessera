@@ -6,12 +6,14 @@ searching for it.
 
 **Status: Phase 4 complete** (`v0.4.0`). On top of the grounded,
 archetype-routed RAG core (Phases 1–3), Phase 4 built four
-production-readiness features, each measured in the eval harness: Claude
-on Bedrock with cost accounting, request traces and a feedback-to-eval
+production-readiness features, each measured in the eval harness: a
+cloud LLM with cost accounting (Gemini on Google Cloud's Agent Platform),
+request traces and a feedback-to-eval
 loop, document freshness with a data-quality report, and
 permission-aware retrieval over a restricted tier, proven by a gated
-leakage eval. Everything still runs locally; the AWS deployment (Phase 5)
-and CI/CD (Phase 6) are ahead — see the phase table and "Honest limits"
+leakage eval. Everything still runs locally apart from the LLM call;
+the ephemeral Google Cloud deployment (Phase 5) and CI/CD (Phase 6) are
+ahead — see the phase table and "Honest limits"
 below.
 
 ## Phase boundary — what's built vs. designed
@@ -21,9 +23,9 @@ below.
 | **Phase 1** | ✅ Complete (`v0.1.0`) | Local ingestion + retrieval core over a synthetic corpus. Archetypes A (lookup) and C (synthesis) only. Grounded generation with citations. Eval harness runnable end-to-end via `tessera eval`. |
 | **Phase 2** | ✅ Complete (`v0.2.0`) | Eval set populated to 50 cases against the synthetic corpus and retrieval/generation tuned against it; a documented internal quality bar (`evals/QUALITY_BAR.md`) enforced via `tessera eval --check` on every retrieval/prompt PR. The consultant query log Discovery described is fictional and will never arrive — `evals/cases/query_log.yaml` is a deliberately, transparently synthesized stand-in. |
 | **Phase 3** | ✅ Complete (`v0.3.0`) | Archetype B (expertise-finding) built end to end: a seeded, synthesized 600-consultant expertise dataset (`data/expertise/` — the HR data is fictional, like the corpus) indexed behind an `ExpertiseStore` port, evidence-ranked people retrieval, grounded "who should I talk to" answers, and B metrics (person recall/MRR, a no-match refusal set) gated in the quality bar. |
-| **Phase 4** | ✅ Complete (`v0.4.0`, this repo) | Production readiness, built and evaluated locally: Claude on Bedrock + model routing + per-answer cost, an HTTP API, request traces + a feedback-to-eval loop, superseded-document handling + `tessera data-report`, and permission-aware retrieval over a synthetic restricted tier with gated leakage / authorized-recall / prompt-injection evals. See "Phase 4 — production readiness" below. |
+| **Phase 4** | ✅ Complete (`v0.4.0`, this repo) | Production readiness, built and evaluated locally: Gemini on Agent Platform (ADR 0007; Claude on Bedrock built but dormant) + model routing + per-answer cost, an HTTP API, request traces + a feedback-to-eval loop, superseded-document handling + `tessera data-report`, and permission-aware retrieval over a synthetic restricted tier with gated leakage / authorized-recall / prompt-injection evals. See "Phase 4 — production readiness" below. |
 | Phase 4.5 | Planned | LangGraph as an alternative orchestrator over the same pure core (held to the same bar), LangChain adapters behind the existing ports, and a human-review interrupt for quarantined documents. |
-| Phase 5 | Documented, not built | An **ephemeral** AWS deployment for a demo: container image, Terraform, one Lambda — deployed, recorded, destroyed, teardown verified. |
+| Phase 5 | Documented, not built | An **ephemeral** Google Cloud deployment for a demo (ADR 0007): container image, Terraform, one Cloud Run service with a chat UI — deployed, recorded, destroyed, teardown verified. |
 | Phase 6 | Documented, not built | CI/CD with the eval gate, monitoring, real identity. |
 
 **Deliberately not built (yet):** archetype D (comparative — refusal
@@ -56,18 +58,22 @@ evidence in the eval harness
 
 | Failure cause | Feature | Evidence |
 |---|---|---|
-| Escalating costs | Claude on Bedrock (Haiku routes, Opus answers) behind the `LLMClient` port; tokens and cost per answer in every trace, report and API response | Cost per answer by archetype in `tessera eval` (provisional row) — **live Bedrock sweep pending account access** |
+| Escalating costs | Gemini on Agent Platform (3.8 Flash routes, 3.1 Pro answers) behind the `LLMClient` port; tokens and cost per answer in every trace, report and API response | Live sweep 2026-10-05: **$0.012 per answer** (A $0.012 · B $0.009 · C $0.018 · D $0.001), $1.10 for 92 cases, every gated row passing |
 | Learning gap, unclear value | A trace per request; thumbs up/down via the API or CLI; `tessera feedback to-cases` turns thumbs-down into *candidate* eval cases a human labels | One loop closed end to end: a thumbs-down became `fb001`, which drove a retrieval fix (parent-document expansion) and now scores relevance 5 |
 | Poor data quality | Superseded document versions excluded in the store query, with a fixed note pointing to the current version; `tessera data-report` | Gated: superseded document cited as current = **0** on 7 cases worded to match the old version |
 | Inadequate risk controls / confidentiality | Ethical walls over a synthetic restricted tier; a typed `Principal` passed into the query path; the permission filter in every store query, before ranking; a human review gate for anonymized material | Gated: leaks **0/13** (13/13 before the filter), authorized recall **1.00**, prompt-injection **100%** |
 
 ### Honest limits
 
-- **Bedrock is built but not yet measured live.** The Bedrock client,
-  model routing and cost accounting are unit-tested against the real SDK
-  signature, but the AWS account can't call Claude yet, so every sweep so
-  far ran on NVIDIA NIM. Prices in `config.MODEL_PRICES` are Anthropic's
-  first-party rates, unverified for Bedrock.
+- **The cloud LLM moved from Claude on Bedrock to Gemini** (ADR 0007):
+  the AWS account couldn't take payment from an Indian-issued card, and
+  Claude on Google Cloud had zero partner-model quota. The Bedrock client
+  stays, unit-tested but never run live. The answer model,
+  `gemini-3.1-pro-preview`, is a preview release; Flash's price is
+  introductory until 2026-12-31.
+- **Answers take seconds, not milliseconds.** Median end-to-end latency
+  on Gemini: A 11.8 s, B 11.3 s, C 15.5 s, D 3.8 s (2026-10-05 sweep;
+  the means are higher because a few cases waited out retry backoff).
 - **Identity is a demo device.** `--as c0014` is taken at its word; there
   is no authentication. Phase 6+ replaces it with SSO.
 - **Walls are synthetic and static** — a seeded generator, not an
@@ -138,7 +144,7 @@ flowchart TB
         retriever["retriever.py<br/>archetype-aware retrieval<br/>(A: narrow, one chunk per source; C: broad multi-source)<br/>permission + freshness filters in every store query"]
         experts["retrieval/expertise.py<br/>B: candidate pool → evidence re-rank<br/>→ top 5 people with evidence"]
         genIface["LLMClient interface"]
-        genImpl["nvidia.py · bedrock.py<br/>NVIDIA NIM / Claude on Bedrock"]
+        genImpl["nvidia.py · gemini.py · bedrock.py<br/>NVIDIA NIM / Gemini on Agent Platform / Claude on Bedrock (dormant)"]
         prompts["prompts.py<br/>grounded-answer prompts,<br/>per-archetype shapes"]
         cli --> router --> retriever
         router --> experts
@@ -179,13 +185,15 @@ flowchart TB
 - **D (comparative)** — not attempted; router returns a confidentiality
   refusal.
 
-**Phase 4 additions on the query path:** `LLMClient` now has a Bedrock
-implementation (`generation/bedrock.py`) alongside NIM; retrieval takes a
+**Phase 4 additions on the query path:** `LLMClient` now has Gemini
+(`generation/gemini.py`) and Bedrock (`generation/bedrock.py`)
+implementations alongside NIM; retrieval takes a
 `Principal` and filters every store query by permission and freshness;
 `api.py` is a second composition root beside `cli.py`; and every answer
 carries a trace and token usage as data.
 
-**Later targets** (documented, not built — see
+**Later targets** (documented AWS direction, superseded as the cloud
+target by ADR 0007 — see
 [`docs/Tessera_Solution_Design.md` §4](docs/Tessera_Solution_Design.md)
 and `docs/adr/`): OpenSearch Serverless behind `VectorStore` (with
 document-level security in place of the Chroma `where` permission
@@ -414,15 +422,18 @@ the eval loader refuses — a human labels each one from the corpus,
 removes that line and moves it into `evals/cases/`. The first one is
 `evals/cases/feedback.yaml`.
 
-**Claude on Bedrock (Phase 4).** `TESSERA_LLM_PROVIDER=bedrock` answers
-with Claude on Amazon Bedrock instead of NVIDIA NIM: Haiku 4.5 routes
-(`BEDROCK_ROUTER_MODEL`) and Opus 5.5 writes the answer
-(`BEDROCK_ANSWER_MODEL`, effort `medium`). Credentials come from a
-dedicated AWS profile (`BEDROCK_AWS_PROFILE`, default `tessera`) that
-needs only `bedrock-mantle:CreateInference`; nothing AWS-related goes in
-`.env` beyond its name. `query`, `chat` and the API report tokens and,
-from the price table in `config.py`, cost per answer. The eval judge
-stays on NVIDIA NIM either way.
+**Gemini on Agent Platform (Phase 4, ADR 0007).** `TESSERA_LLM_PROVIDER=gemini`
+answers with Gemini on Google Cloud's Agent Platform (formerly Vertex
+AI) instead of NVIDIA NIM: `gemini-3.8-flash` routes
+(`GEMINI_ROUTER_MODEL`) and `gemini-3.1-pro-preview` writes the answer
+(`GEMINI_ANSWER_MODEL`), both at thinking level `low`. Credentials are
+Application Default Credentials (`gcloud auth application-default
+login`); `.env` holds only the project id (`GOOGLE_CLOUD_PROJECT`).
+`query`, `chat` and the API report tokens and, from the price table in
+`config.py`, cost per answer. The eval judge stays on NVIDIA NIM either
+way. `TESSERA_LLM_PROVIDER=bedrock` (Claude on Bedrock, Haiku routes and
+Opus answers, via a dedicated AWS profile) is built and unit-tested but
+dormant.
 
 Each archetype-A/B/C query costs 2 NVIDIA NIM calls (route + generate),
 or 1 when nothing clears the relevance/evidence floor; D costs 1 (route

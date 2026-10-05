@@ -615,11 +615,116 @@ def test_bedrock_provider_builds_a_haiku_router_and_an_opus_answerer(
     assert "opus-5-5" in llms.name and "haiku-4-5" in llms.name
 
 
+def _record_gemini(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    built: list[dict] = []
+    monkeypatch.setattr(cli, "_require_gcp", lambda settings: "tessera-test")
+
+    def fake_gemini(model, **kw):
+        built.append({"model": model, **kw})
+        return object()
+
+    monkeypatch.setattr(cli, "GeminiClient", fake_gemini)
+    return built
+
+
+def test_gemini_provider_builds_a_flash_router_and_a_pro_answerer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "gemini")
+    built = _record_gemini(monkeypatch)
+    monkeypatch.setattr(cli, "NvidiaClient", lambda *a, **kw: pytest.fail("NIM not expected"))
+
+    llms = cli._build_llms(cli._load_settings())
+
+    answer, router = built
+    assert "pro" in answer["model"] and answer["thinking_level"] == "low"
+    assert "flash" in router["model"] and router["thinking_level"] == "low"
+    for client in built:
+        assert client["project"] == "tessera-test"
+        assert client["location"] == "global"
+    assert llms.answer is not llms.router
+    assert llms.name.startswith("gemini:")
+
+
+def test_eval_on_gemini_keeps_the_judge_on_nvidia(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "gemini")
+    _record_gemini(monkeypatch)
+    settings = cli._load_settings()
+    nvidia_built: list[str] = []
+    monkeypatch.setattr(
+        cli, "NvidiaClient", lambda api_key, model, **kw: nvidia_built.append(model) or object()
+    )
+
+    llms = cli._build_llms(settings)
+    judge = cli._build_nvidia(settings)
+
+    assert nvidia_built == [settings.nvidia_model]
+    assert judge is not llms.answer
+
+
+def _gemini_query(monkeypatch: pytest.MonkeyPatch) -> object:
+    class Store:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    monkeypatch.setenv("TESSERA_LLM_PROVIDER", "gemini")
+    monkeypatch.setattr(cli, "ChromaVectorStore", Store)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", Store)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    return runner.invoke(cli.app, ["query", "pricing?"])
+
+
+def test_gemini_provider_without_credentials_exits_with_instructions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    def no_credentials():
+        raise DefaultCredentialsError("none")
+
+    monkeypatch.setattr(google.auth, "default", no_credentials)
+
+    result = _gemini_query(monkeypatch)
+
+    assert result.exit_code == 1
+    assert "gcloud auth application-default login" in result.output
+
+
+def test_gemini_provider_without_a_project_exits_with_instructions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import google.auth
+
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), None))
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.setattr(cli, "Settings", _settings_without_env_file(cli.Settings))
+
+    result = _gemini_query(monkeypatch)
+
+    assert result.exit_code == 1
+    assert "GOOGLE_CLOUD_PROJECT is not set" in result.output
+
+
+def _settings_without_env_file(settings_cls):
+    """The real .env may name a project; this test needs none."""
+
+    class NoEnvFile(settings_cls):
+        def __init__(self, **kw):
+            super().__init__(_env_file=None, **kw)
+
+    return NoEnvFile
+
+
 def test_nvidia_provider_uses_one_client_for_routing_and_answers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
     monkeypatch.setattr(cli, "BedrockClient", lambda *a, **kw: pytest.fail("Bedrock not expected"))
+    monkeypatch.setattr(cli, "GeminiClient", lambda *a, **kw: pytest.fail("Gemini not expected"))
 
     llms = cli._build_llms(cli._load_settings())
 
