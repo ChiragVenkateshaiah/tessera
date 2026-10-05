@@ -1,7 +1,7 @@
 # 0006 — Framework adoption: a parallel LangChain / LangGraph / LangSmith stack beside the native core
 
-**Status:** Proposed — Phase 5 (`docs/Tessera_Phase5_Plan.md`), not yet
-built. It becomes Accepted when that plan is adopted.
+**Status:** Accepted — 2026-10-05, with `docs/Tessera_Phase5_Plan.md`.
+Not yet built.
 
 ## Context
 

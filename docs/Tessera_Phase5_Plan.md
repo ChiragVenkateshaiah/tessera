@@ -1,9 +1,13 @@
 # Tessera — Phase 5 Plan: LangChain, LangGraph, LangSmith (Claude Code Brief)
 
-**Status: DRAFT 2026-10-03, for user review.** Not adopted; nothing in it
-is built. It has been through two independent plan reviews (Plan-agent
-passes against the real code). Every finding from both is addressed, and
-§12 and §13 map each one to the place in this plan that deals with it.
+**Status: ADOPTED 2026-10-05** (user). Nothing in it is built yet. It
+has been through two independent plan reviews (Plan-agent passes against
+the real code). Every finding from both is addressed, and §12 and §13 map
+each one to the place in this plan that deals with it. **Amended at
+adoption for ADR 0007** (2026-10-05): the cloud is Google Cloud and the
+production LLM is Gemini on Agent Platform, so the Bedrock pieces became
+Gemini ones, and Phase 6 deploys to Cloud Run with a chat UI (§8, §11).
+§14 reviews the amendments.
 
 **History.** This began as a narrow "Phase 4.5" draft: the frameworks
 only where they earn their place. After its first review, the user reset
@@ -13,12 +17,14 @@ as a full phase. Everything from the first draft and its review that
 still applies is carried into this one. The rescoped draft was then
 reviewed again (§12).
 
-Phase 4 is complete and tagged `v0.4.0`. One acceptance check stays open
-by user decision: P4-2's live Bedrock sweep, blocked on the AWS account.
+Phase 4 is complete and tagged `v0.4.0`. Its one open acceptance check,
+P4-2's live sweep, was blocked on the AWS account and runs on Gemini
+instead (ADR 0007).
 Numbering after this plan:
 - **Phase 5** is this plan (`v0.5.0`);
-- **Phase 6** is the ephemeral AWS deployment (`Tessera_Phase4_Plan.md`
-  §9, unchanged in substance);
+- **Phase 6** is the ephemeral Google Cloud deployment (Cloud Run, with
+  a chat UI; `Tessera_Phase4_Plan.md` §9's principles, on GCP per ADR
+  0007);
 - **Phase 7** is CI/CD with the eval gate, plus monitoring.
 
 Companion documents:
@@ -97,9 +103,9 @@ frameworks make it easy to lose:
   (ADR 0006).
 - **Automated identifiability detection.** The review shows similarity
   evidence without a verdict (§3.8.3).
-- **AWS** (Phase 6), **CI/CD** (Phase 7), archetype D, real authentication,
-  a chat UI, and **LLM caching** in any gating sweep (`set_llm_cache` is
-  never used there).
+- **The cloud deployment and the chat UI** (Phase 6), **CI/CD**
+  (Phase 7), archetype D, real authentication, and **LLM caching** in
+  any gating sweep (`set_llm_cache` is never used there).
 
 ## 2. What does not change
 
@@ -128,7 +134,13 @@ docstring). Scoring a second stack needs one interface that both
 implement.
 
 #### 3.1.1 The baseline, before anything changes (P5-0)
-Taken at `v0.4.0`, **before** P5-1 adds any dependency, because the new
+Taken on `main` after ADR 0007's merge, whose NIM path is unchanged since
+`v0.4.0`: the lock gained packages (google-genai and its dependencies)
+but changed or removed none, and the only change on the shared path
+(`resilient._status_code` also reading `code`) leaves openai errors as
+they were. Every P5-0 sweep pins `TESSERA_LLM_PROVIDER=nvidia`. P4-2's
+live Gemini sweep (2026-10-05) is the Gemini reference point.
+It runs **before** P5-1 adds any dependency, because the new
 packages may move `transformers` (5.15), `sentence-transformers` (5.7) or
 `chromadb` (1.5.9) in the lock and change embeddings:
 - **`tessera eval --json PATH`** writes every `CaseResult` field per case.
@@ -216,7 +228,7 @@ else held native.
 | `retriever` | native · lc · parent-doc · hybrid · multiquery · +rerank | retrieval-only (multiquery: live) | generation native |
 | `router` | native JSON · lc structured output | live | generation native |
 | `prompt_chain` | native · LCEL | live | model client native |
-| `model_client` | `NvidiaClient` · `ChatNVIDIA` | live | prompt_chain lc |
+| `model_client` | `NvidiaClient`/`GeminiClient` · `ChatNVIDIA`/`ChatGoogleGenerativeAI`, chosen by `TESSERA_LLM_PROVIDER` | live | prompt_chain lc |
 | `retry` | `RetryingLLMClient` · `with_retry` · `InMemoryRateLimiter` · LangGraph `RetryPolicy` | live + fault-injected tests | — |
 | `orchestration` | native · LangGraph | fakes + replay (exact); live | all components native |
 | `corrective` | off · score · llm | live | chosen defaults |
@@ -382,8 +394,8 @@ layer passes its check.
   A **`RunnableBranch`** routing variant (archetype → chain) is compared
   with LangGraph's conditional edges, so the same decision is seen in two
   idioms. `.batch` and `astream_events` are exercised. **Time to first
-  token** is measured with streaming, which feeds the deferred chat-UI
-  decision. Fixed messages and the superseded note stay deterministic,
+  token** is measured with streaming, which informs whether Phase 6's
+  chat UI streams. Fixed messages and the superseded note stay deterministic,
   outside the model.
 - **Structured routing.** `with_structured_output(RouteDecision)` (Pydantic,
   JSON-schema or guided-JSON mode preferred) with **`include_raw=True`**.
@@ -397,14 +409,25 @@ layer passes its check.
     default;
   - the same temperature.
 
-  `ChatBedrockConverse` is written and unit-tested only. It uses the
-  bedrock-runtime **Converse** API, which needs different IAM actions and
-  possibly different model availability from Tessera's Mantle endpoint,
-  and the code says so.
+  **`ChatGoogleGenerativeAI`** (Agent Platform mode, ADC) sends what
+  `GeminiClient` sends: the same model ids, `thinking_level` "low", no
+  temperature on Gemini 3, and thinking tokens counted as output. It is
+  unit-tested always and run live in P5-10's exit sweeps (§4.3).
+  Parity also covers `location="global"`, the same `max_output_tokens`
+  (16,000 — unlike NIM, native sets one), and **SDK retries off**
+  (`max_retries=0`), because `GeminiClient` makes one attempt and leaves
+  retries to `RetryingLLMClient`. Otherwise the `retry` switch would
+  measure two retry layers stacked.
+  Bedrock has no LangChain adapter: the provider is dormant (ADR 0007).
 - **Usage and cost.** A **custom callback handler**, one instance per
   invocation, records tokens *and* per-call latency. The stock
   `UsageMetadataCallbackHandler` has no latency. The values are mapped
   into Tessera's `Usage`, so `cost_usd` and traces work unchanged.
+  For Gemini, thinking tokens must be counted **once**: native adds
+  `thoughts_token_count` to the output count, and LangChain's
+  `usage_metadata.output_tokens` may already include them. A unit test
+  feeds one raw response to both paths and asserts equal `Usage`. The
+  price lookup uses the configured model id, not `response_metadata`.
 - **Retries and pacing, compared explicitly** (`retry` switch). Tessera's
   `RetryingLLMClient` honours `Retry-After` with backoff. The comparison
   sets it against three LangChain mechanisms:
@@ -413,8 +436,10 @@ layer passes its check.
   - LangGraph's `RetryPolicy`.
 
   Each is tested with fault injection (fake 429/503 sequences), then live.
-  ChatNVIDIA's exceptions are translated, so whichever mechanism is chosen
-  sees status codes.
+  ChatNVIDIA's and ChatGoogleGenerativeAI's exceptions are translated
+  to carry the attribute `resilient._status_code` reads (`status_code`,
+  or google-genai's `code`), so whichever mechanism is chosen sees status
+  codes.
 - **Evidence:**
   - the prompt-identity and fake-chat-model tests;
   - live sweeps per switch (`router`, `prompt_chain`, `model_client`,
@@ -733,6 +758,11 @@ Phase 6. A layer whose LangChain version fails a gated row stays native in
 - **Retrieval-only switches** (splitter, prefix, store, retrievers,
   reranker) are deterministic, so they need no noise floor. They are tuned
   on `query_log.yaml` and reported on held-out `placeholder.yaml`.
+- **Gemini has its own noise floor.** Gemini 3 runs at its default
+  temperature (1.0, ADR 0007), so NIM's floor doesn't carry over. P5-10
+  runs native on Gemini twice; their spread is the floor for judging the
+  LangChain Gemini sweep. Below it, differences are reported as "within
+  noise".
 - **Latency** is measured per LLM call from the usage records, excluding
   the 3 s eval pacing and retry backoff. Orchestration overhead is measured
   with a fake LLM.
@@ -748,12 +778,25 @@ the judge's ~90; 21–46 minutes each:
 - **P5-7:** each corrective variant, `lc-defaults` and `all-lc`;
 - **P5-8:** native and LangChain after the context-marker gate;
 - **P5-9:** experiments built from harness output where possible;
-- **P5-10:** both exit sweeps.
+- **P5-10:** both exit sweeps on NIM, plus **three on Gemini**: native
+  twice (its noise floor, §4.2) and LangChain once.
 
-That is about **18–22 full sweeps** across the phase. Spread over many
+That is about **18–22 full sweeps on NIM plus 3 on Gemini** across the
+phase. The NIM limit (10,000 calls/day) applies only to the NIM sweeps.
+The Gemini sweeps cost about $2–3 each, **≈ $6–9 in total**, at Flash's
+introductory rate. That rate doubles after 2026-12-31 (ADR 0007), so
+the estimate is restated when P5-10 runs. Spread over many
 sessions they stay well inside the 10,000/day limit, and each one is
 recorded. Retrieval-only checks, snapshots, replay, leak tests and review
-scenarios make zero calls. A Bedrock sweep states its cost first.
+scenarios make zero calls.
+
+**Which model answers (user, 2026-10-05):** every sweep above runs on
+**NIM** (free). The comparison is native vs LangChain on the same model,
+so a free model keeps it fair and costs nothing. **P5-10's exit adds one
+sweep per stack on Gemini** (`gemini-3.8-flash` routes,
+`gemini-3.1-pro-preview` answers), which is the configuration Phase 6
+deploys. That's about $2–3 per sweep. Its cost is stated before it runs,
+and the judge stays on NIM.
 
 CLAUDE.md's rule applies to both stacks: a PR touching either query path
 pastes a fresh `tessera eval --check`. A change to shared code pastes
@@ -761,7 +804,7 @@ sweeps on **both** stacks.
 
 ## 5. Task sequence
 
-### P5-0 — Baseline at `v0.4.0` (before any change)
+### P5-0 — Baseline at `main` after ADR 0007 (NIM path unchanged since `v0.4.0`)
 §3.1.1: `--json`, the golden snapshot, a baseline sweep, and a
 noise-floor repeat. This is the only code added at this point; it is
 eval tooling, not pipeline code.
@@ -776,7 +819,7 @@ This plan and ADR 0006 adopted; CLAUDE.md updated (§9). Dependencies are
 added as chosen in §10.2:
 - `langchain-core`, `langchain-classic`, `langchain-community`;
 - `langchain-text-splitters`, `langchain-chroma`, `langchain-huggingface`;
-- `langchain-nvidia-ai-endpoints`, `langchain-aws`;
+- `langchain-nvidia-ai-endpoints`, `langchain-google-genai`;
 - `rank-bm25`;
 - `langgraph` and `langgraph-checkpoint-sqlite`;
 - `langsmith`.
@@ -807,6 +850,15 @@ The 1.x `langchain` package itself is mostly `create_agent` and is
   - its default `max_tokens` behaviour;
   - exceptions on 429/5xx;
   - `with_structured_output` modes and `include_raw`.
+- **ChatGoogleGenerativeAI** (added 2026-10-05, ADR 0007):
+  - Agent Platform mode with ADC (no API key), project and location;
+  - `thinking_level`, and that Gemini 3 isn't sent a temperature;
+  - `usage_metadata` and whether thinking tokens are in its output count;
+  - exceptions on 429/5xx, for the `retry` switch;
+  - `with_structured_output` modes and `include_raw`;
+  - **its `google-genai` version range admits the existing 2.28.0 pin**.
+    The "lock entries unchanged" check covers google-genai too, so any
+    change to it is surfaced for the user's approval.
 - **The vector store:** `langchain_chroma.Chroma` accepts the existing
   `$and` / `$or` / `$ne` / `$in` / `$nin` filters; adding precomputed
   embeddings (the prefix mechanism, §3.3).
@@ -916,6 +968,10 @@ sweeps on both stacks.
 
 **Acceptance:**
 - both exit sweeps pass the bar;
+- the Gemini exit sweeps are run, each with its cost stated first (§4.3).
+  The stack Phase 6 deploys must pass every gated row on Gemini, because
+  that is the deployed configuration; the other stack's Gemini result is
+  reported in the comparison;
 - the comparison is written;
 - the user has decided the default stack and the one Phase 6 deploys
   (§10.1);
@@ -955,36 +1011,49 @@ sweeps on both stacks.
 - **A LangSmith account and API key** (free developer tier), for the live
   steps of P5-3 and P5-9. Everything is built and tested against a
   mocked-HTTP real client first, so a missing key pauses only those steps.
-- **None on AWS.** The Bedrock and Converse adapters are unit-tested only.
-  If the account unblocks, P4-2's live sweep runs as a side task with its
-  cost stated first, and Bedrock latency feeds the chat-UI decision.
+- **Google Cloud: done (2026-10-05).** Project `tessera-510716`,
+  Agent Platform enabled, and Application Default Credentials on this
+  machine (`gcloud auth application-default login`). Nothing on AWS.
 
-## 8. Phase 6 and Phase 7 (renumbered, unchanged in substance)
+## 8. Phase 6 and Phase 7 (renumbered; Phase 6 re-scoped by ADR 0007)
 
-**Phase 6** is the ephemeral AWS deployment (`Tessera_Phase4_Plan.md` §9):
-a container image, Terraform, one Lambda, then deploy → demo → destroy,
-with the teardown verified. It deploys the stack the user picks at P5-10.
-**Phase 7** is CI/CD with the eval gate, plus monitoring.
+**Phase 6** is the ephemeral Google Cloud deployment (ADR 0007;
+`Tessera_Phase4_Plan.md` §9's principles). It ships one container on
+Cloud Run serving the API **and a chat UI** (FastAPI-served, with the
+persona switcher for access control; user, 2026-10-05), built into
+Artifact Registry and provisioned by Terraform in project
+`tessera-510716`. The cycle is deploy → demo → destroy, with the teardown
+verified. Nothing bills while idle unless its monthly cost is stated and
+approved; an always-on footprint was rejected on cost. It deploys the
+stack the user picks at P5-10.
+**Phase 7** is CI/CD with the eval gate (GitHub Actions to GCP via
+Workload Identity Federation), plus monitoring.
+**After Phase 7**, one final deploy → record → destroy produces the
+showcase video, so the video shows the finished product (user,
+2026-10-05).
 
 ## 9. What changes when this plan is adopted (P5-1)
 
 **`CLAUDE.md`:**
 - **The do-not-build heading** "Explicitly NOT in Phases 1–4" becomes
   "…Phases 1–5". Its items:
-  - "Any AWS deployment — Phase 5" becomes Phase 6;
+  - "Any cloud deployment — Phase 5" becomes Phase 6 (ADR 0007 already
+    made it Cloud Run on GCP), and the chat-UI entry's "the deployment
+    phase" becomes Phase 6;
   - "not built in Phases 4–5" becomes "Phases 4–6";
   - real HR integration, staleness sync and real identity, "Phase 6+",
     become **Phase 7+**;
   - agents and tool calling are added, with the structured-output note;
   - conversation memory gets the checkpointer note;
   - LLM caching in gating sweeps is added.
-- **The "AWS (Phase 5)" section** becomes "AWS (Phase 6)". **"CI/CD … not
+- **The "Cloud (Phase 5, Google Cloud per ADR 0007)" section** becomes
+  "Cloud (Phase 6, …)". **"CI/CD … not
   set up in Phases 1–5 … Phase 6"** becomes "Phases 1–6 … Phase 7".
 - **Constraints:**
   - #1 gains `VectorStore.delete_document`, and its "Phases 4–5 start
-    moving this to AWS" becomes "Phases 4–6";
+    moving this to the cloud" becomes "Phases 4–6";
   - #4 changes "the CI gate in Phase 6" to Phase 7;
-  - #5 changes "AWS hosting … Phase 5's ephemeral demo" to Phase 6;
+  - #5 changes "Cloud hosting … Phase 5's ephemeral demo" to Phase 6;
   - #6 gains the framework allow-list, the factories in `integrations/`,
     pure graph nodes with runtime-context dependencies, composition-root
     `@traceable`, and the `review/` I/O exemption.
@@ -1037,7 +1106,7 @@ rewrite.
 
 ## 11. Decisions made before drafting (user, 2026-10-03)
 
-1. **Phase 5 comes after `v0.4.0`** and before the AWS deployment, which
+1. **Phase 5 comes after `v0.4.0`** and before the cloud deployment, which
    becomes Phase 6; CI/CD and monitoring become Phase 7.
 2. **The goal is thorough, hands-on learning of LangChain, LangGraph and
    LangSmith**, using them broadly across Tessera whether or not a layer
@@ -1051,6 +1120,16 @@ rewrite.
    The corrective loop is also in, as a measured variant.
 7. **Portfolio quality over speed:** no task is shrunk to save time.
 8. **Plans are reviewed by a Plan-agent pass before adoption** (§12, §13).
+
+**Added at adoption (user, 2026-10-05):**
+9. **Google Cloud and Gemini replace AWS and Claude on Bedrock** (ADR
+   0007). AWS couldn't take payment from an Indian-issued card, and
+   Claude on GCP had zero partner-model quota.
+10. **Sweeps run on NIM; the exit adds Gemini** (§4.3).
+11. **Phase 6 includes a chat UI on Cloud Run**, shown running on GCP in
+    the video. The video is recorded once, after Phase 7.
+12. **An always-on cloud footprint is rejected on cost.** Phase 6 stays
+    ephemeral.
 
 ## 12. Review of this rescoped draft (2026-10-03) and where each fix lives
 
@@ -1097,7 +1176,28 @@ one task-ordering bug.
 | S5 | Resume semantics, thread ids, rejection, I/O exemption | §3.8.2 |
 | S6 | Unscoped near-duplicate evidence | Reviewer-scoped; on-the-fly embedding (§3.8.3–3.8.4) |
 | S7 | Unfair ChatNVIDIA comparison; retries that wouldn't fire | Parity (now corrected for `max_tokens`) and error translation (§3.5) |
-| S8 | Converse is not like-for-like with Mantle | Stated; fake chat models (§3.5) |
+| S8 | Converse is not like-for-like with Mantle | Stated; fake chat models (§3.5). Superseded 2026-10-05: no Bedrock adapter; `ChatGoogleGenerativeAI` vs `GeminiClient` instead (§14) |
 | S9 | A deny-list import test | An allow-list plus a subprocess test (§3.2.2) |
 | S10 | `TesseraRetriever` would pass below-floor chunks | Floor by default (§3.4) |
 | N | Replay; one-time checks vs rows; budget; small fixes | §3.7, §4, `tessera corpus review` |
+
+## 14. Review of the adoption amendments (2026-10-05) and where each fix lives
+
+A third Plan-agent pass reviewed only the ADR 0007 amendments, against
+the code branch that adds `GeminiClient`. Verdict: *fix before
+adoption*. The provider swap was correct where it had been made; no
+leftover AWS/Bedrock/Lambda text contradicted ADR 0007.
+
+| # | Finding | Fix |
+|---|---|---|
+| A1 | Blocking: §14 was cited but didn't exist | This section |
+| A2 | The `model_client` switch and P5-10's acceptance were NIM-only | Both providers in the switch row (§3.2.1); a P5-10 Gemini acceptance bullet (§5) |
+| A3 | Gemini parity incomplete: output limit, SDK retries, error translation, location | `max_output_tokens`, `max_retries=0`, `location`, and `code`/`status_code` translation (§3.5) |
+| A4 | Thinking tokens could be counted twice on the LangChain path | A same-raw-response `Usage` equality test; price by configured model id (§3.5) |
+| A5 | No noise floor for the Gemini comparison | Native runs twice on Gemini at P5-10 (§4.2, §4.3) |
+| A6 | P5-0 no longer runs on `v0.4.0` | Retitled to "`main` after ADR 0007"; additions-only lock diff recorded; NIM pinned (§3.1.1, §5) |
+| A7 | P5-1's unchanged-lock check could trip on google-genai | A spike item on `langchain-google-genai`'s google-genai range (§5 P5-1) |
+| A8 | §9's CLAUDE.md list was written against `main`'s old CLAUDE.md | §9 rewritten against the post-ADR-0007 CLAUDE.md, after rebasing on it |
+| A9 | `docs/adr/README.md` would conflict with the 0007 row | Rebased; rows ordered 0006, 0007 |
+| A10 | §4.3 counts were NIM-only, and Flash's price is introductory | NIM and Gemini sweeps counted separately, with cost and the price change noted (§4.3) |
+| A11 | §8's heading claimed "unchanged in substance"; an overlong line in §1 | Retitled; reflowed |
