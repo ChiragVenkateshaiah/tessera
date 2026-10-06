@@ -6,7 +6,7 @@ never read from a session, a header or a global (CLAUDE.md constraint
 ethical-wall data and hand the core the engagements they are cleared for.
 
 This is a DEMO identity, not authentication: Tessera takes whoever the
-caller says they are at their word. Real identity (SSO) is Phase 6+.
+caller says they are at their word. Real identity (SSO) is Phase 7+.
 """
 
 from __future__ import annotations

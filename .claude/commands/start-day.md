@@ -33,13 +33,16 @@ this command reads; if something here seems missing, check whether
 ## 2. Confirm the environment is actually usable
 
 - `.venv` exists? `source .venv/bin/activate`. If missing, flag it before
-  continuing — `uv sync --extra dev` rebuilds it. This should be fast:
+  continuing — `uv sync --extra dev --extra lc` rebuilds it (Phase 5+;
+  `uv sync` is exact, so leaving out `--extra lc` uninstalls the
+  LangChain stack — do that only to test a native-only install). This should be fast:
   torch is pinned to the CPU-only wheel index in `pyproject.toml`. If a
   sync is slow or pulls a lot, that pin may have regressed — check with
-  `grep -c 'nvidia-' uv.lock` (should be `0`; this checks for accidental
-  CUDA GPU wheel packages, unrelated to the `openai` package used to talk
-  to the NVIDIA NIM API — that dependency has no `nvidia-*`-named
-  transitive packages).
+  `grep -cE '^name = "nvidia-' uv.lock` (should be `0`; this checks for
+  accidental CUDA GPU wheel packages, which are named `nvidia-*`). Match
+  the package-name line only: a bare `grep -c 'nvidia-'` also counts
+  `langchain-nvidia-ai-endpoints` (Phase 5's `lc` extra), which talks to
+  the NIM API and is not a GPU package.
 - `.env` exists with `NVIDIA_API_KEY` filled in? (Gitignored, never in
   git — check locally only.) Nothing auto-loads it into the environment —
   `NvidiaClient` takes `api_key` as a constructor parameter rather than

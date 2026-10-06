@@ -4,7 +4,7 @@ The bar every retrieval- or prompt-affecting change is measured against.
 Agreed with the user 2026-09-02; adopted with the Phase 2 plan
 (`docs/Tessera_Phase2_Plan.md` §2) on 2026-09-04.
 
-This is the **manual** precursor to the Phase 5 CI gate (Solution Design
+This is the **manual** precursor to the Phase 7 CI gate (Solution Design
 §5). Until CI exists, enforcement is: run `tessera eval --check` locally
 and paste the result into the PR (see "Regression discipline" below).
 

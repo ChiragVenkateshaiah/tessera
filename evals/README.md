@@ -4,7 +4,7 @@ The evaluation harness runs a set of query/expected-answer cases through
 Tessera's full query path (route → retrieve → generate) and reports
 retrieval, generation, and routing metrics. It's built now, in Phase 1,
 even though real test cases arrive later — see CLAUDE.md constraint #4:
-this becomes the CI quality gate in Phase 5.
+this becomes the CI quality gate in Phase 7.
 
 ## Running it
 

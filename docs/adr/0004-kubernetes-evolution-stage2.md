@@ -2,7 +2,7 @@
 
 > **2026-10-05:** the cloud target is now Google Cloud (ADR 0007). The AWS-specific parts below (EKS/Lambda/IAM/AWS deploy) are the original design; the principles stand.
 
-**Status:** Proposed — Phase 5+, not built in Phase 1
+**Status:** Proposed — Phase 7+ (renumbered by ADR 0006; was Phase 5+), not built in Phase 1
 
 ## Context
 
