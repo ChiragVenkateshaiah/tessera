@@ -85,12 +85,14 @@ Cases live in `evals/cases/*.yaml`, one list of entries per file:
   `freshness.yaml`. Separately, every A/C case is checked for any
   superseded document among the sources shown to the model — the gated
   "Superseded cited as current" row (`evals/QUALITY_BAR.md`).
-- `principal`, `access`, `restricted_engagement`, `forbidden_markers`
-  (Phase 4 P4-5, `access.yaml`): the person_id the question is asked as
-  (a demo identity from `data/access/walls.yaml`), the access set
-  (`leakage` / `authorized` / `injection`), the engagement it targets, and
-  facts from that engagement's document that must not appear in the
-  answer. Access cases are not judged and are kept out of routing accuracy
+- `principal`, `access`, `restricted_engagement`, `forbidden_markers`,
+  `canary_markers` (Phase 4 P4-5, `access.yaml`; markers split in Phase 5
+  P5-2): the person_id the question is asked as (a demo identity from
+  `data/access/walls.yaml`), the access set (`leakage` / `authorized` /
+  `injection`), the engagement it targets, a mapping of engagement → facts
+  from its document that must not reach a principal not cleared for it
+  (checked in the answer and in every retrieved chunk), and phrases
+  checked in the answer only (`ac-i04`'s canary). Access cases are not judged and are kept out of routing accuracy
   and the A/C and B means; they have their own rows in the bar.
 
 `evals/cases/placeholder.yaml` holds the 8 workshop queries from
