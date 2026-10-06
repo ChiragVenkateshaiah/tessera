@@ -279,6 +279,12 @@ These are reasons, not preferences:
   the merge. The bar lives in `evals/QUALITY_BAR.md` /
   `evals.harness.QualityBar`. A PR that changes code both stacks share
   pastes a sweep for each stack.
+- **Sweep ERROR rows (user, 2026-10-06).** A case that exhausts its
+  retries (an NVIDIA NIM 503, most often) stays an `ERROR` row in the
+  committed `--json` export — re-run results are never merged into an
+  export. Re-run the failed cases alone through the same `run_harness`
+  path at the same commit, put their scores in the PR body, and compare
+  stacks or sweeps only on cases scored in both.
 - **LangSmith (Phase 5+).** Tracing is enabled only by Tessera's config,
   through its redacting client passed explicitly
   (`tracing_context(client=…)`); `LANGSMITH_TRACING` / `LANGCHAIN_TRACING_V2`

@@ -1,19 +1,25 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-06
+Last updated: 2026-10-06 (end of day)
 
 ## Status
 
-**Phase 5 in progress — P5-0 and P5-1 done (2026-10-06).**
+**Phase 5 in progress — P5-0, P5-1 and P5-2 done (2026-10-06).**
 - **P5-0** (#71): golden snapshot, `tessera eval --json`, two NIM
   baseline sweeps (both `=> PASS`). Judge noise floor: A/C relevance
   ±0.03, B relevance ±0.11; routing, retrieval and groundedness exact.
-- **P5-1**: plan + ADR 0006 adopted into CLAUDE.md, README, ADRs and the
+- **P5-1** (#72): plan + ADR 0006 adopted into CLAUDE.md, README, ADRs and the
   evals docs (§9; Phase 6 = deploy, Phase 7 = CI/CD). The frameworks are
   an **optional extra** (`uv sync --extra lc`, user decision); lock
   checks pass (0 existing entries changed, 0 `nvidia-*`). The spike
   found 10 places the plan's assumptions differ — see P5-1 in Done.
-- **Next: P5-2** (the `Pipeline` protocol refactor).
+- **P5-2** (#73): the `Pipeline` protocol, `PipelineRun`, the marker
+  split + context-marker check (reported), `--stack native|lc`. Proven
+  neutral: snapshot identical to P5-0's on all 92 cases; live sweep
+  `=> PASS`; 0 deterministic differences on route-matched cases.
+- **Next: P5-3** (LangSmith tracing with taint-based redaction, native
+  stack first). Its live step needs a LangSmith key (pending; doesn't
+  block).
 - **Earlier (2026-10-05):** cloud and LLM moved to Google Cloud + Gemini
   (ADR 0007, #69); P4-2's live acceptance closed on Gemini ($1.10 sweep);
   the chat UI decided (yes, on Cloud Run in Phase 6).
@@ -1847,23 +1853,92 @@ same change and stays ungated (`QUALITY_BAR.md`).
       Spike scripts were scratchpad one-offs (no LLM except items 6–7:
       ~8 NIM calls, ~8 Flash calls).
 
+- [x] **P5-2 — the `Pipeline` protocol, `PipelineRun`, the marker split,
+      the harness through it** (2026-10-06, PR #73).
+      - `pipeline.py`: `Pipeline` protocol (`run(query, principal) ->
+        PipelineRun`) and `NativePipeline`. `PipelineRun` = the
+        `AnswerResult` + every retrieval attempt, the chunks shown, the
+        generator's output, the expertise shortlist, and routing /
+        generation usage **always metered apart** (`generation_calls`).
+        Ports and step functions are constructor parameters, defaulting to
+        the core functions **looked up at run time** (monkeypatching
+        `tessera.pipeline.find_experts` still works; P5-3 can wrap a step
+        with `@traceable` in the composition root). `answer_query()` is a
+        thin wrapper, signature unchanged (a test pins it equal to
+        `NativePipeline.run().answer`).
+      - Harness: every case runs through `Pipeline.run()` and is scored by
+        `score_run()` from the `PipelineRun`; `_CountingLLM` is gone.
+        `run_case`/`run_harness` take `pipeline=` (default native). Metrics
+        read the **final** retrieval attempt; `restricted_seen` and the
+        context check read **every** attempt.
+      - Markers (§3.1.3): `forbidden_markers` is now `engagement → facts`
+        and counts only for an engagement the principal isn't cleared for;
+        `canary_markers` are answer-only (`ac-i04`). `access.yaml` was
+        rewritten from its own leakage cases (12 engagements × 4 facts);
+        every case keeps the same markers. A list-shaped
+        `forbidden_markers` is now a load error. Leak strings:
+        `chunk:<e>`, `marker:<fact>`, `canary:<phrase>` (was
+        `marker:CANARY…`).
+      - Context-marker check: zero-call, every chunk of every attempt,
+        `CaseResult.context_marker_hits` (`<engagement>:<fact>`),
+        `EvalReport.context_marker_checked/_cases`, bar row **reported**
+        (`QualityBar.gate_context_markers=False`; gating needs sign-off,
+        plan §10.5). It is **not** added to `leaked`.
+      - Snapshot: runs through `NativePipeline` with routing forced by an
+        injected `route_fn`; records `context_marker_hits`;
+        `--check … --allow-added FIELD`. New reference
+        `evals/snapshots/p5-2.json` (use it, not `v0.4.0.json`, from P5-3
+        on).
+      - CLI: `--stack native|lc` on `query`/`chat`/`serve`/`eval`,
+        `TESSERA_STACK` default (`Settings.stack`); `lc` exits 2 ("isn't
+        built yet") until P5-4..P5-7. The `--json` meta records `stack`.
+        `query`/`chat`/`serve` still call `answer_query()` for native (the
+        API needs no change); `eval` builds a `NativePipeline`.
+      - **Proofs:** (1) snapshot identical to `v0.4.0.json` on 92 cases
+        with `--allow-added context_marker_hits` (strictly: 92 diffs, all
+        `None -> []`); (2) live sweep `evals/baselines/p5-2-native.json`
+        at `94bc58c`, `=> PASS` — routing 100%, recall 0.99, MRR 0.97,
+        groundedness 4.97, relevance 4.97, person recall 0.93, leaks 0/13,
+        authorized recall 0.92, injection 100%, context-marker hits 0/16;
+        (3) route-matched diff vs both P5-0 sweeps: 82 cases routed the
+        same, **0 deterministic differences**, judge means within the
+        noise floor (only `ql019` B relevance 4→3, as in P5-0); re-routed
+        `ac-l06` D→A and `ac-a06` A→D (the Cobalt router instability —
+        `ac-a06` refused is the 0.92 authorized recall). Person recall
+        0.93 is `ql042` (the B miss) erroring out of the mean, not a gain.
+      - 6 ERROR rows on NIM 503s (`ac-i04`, `q005`, `ql011`, `ql015`,
+        `ql016`, `ql042`); 5 passed re-run alone, each identical to P5-0
+        deterministically — incl. **`ac-i04` live: contract held, no
+        leak, no canary**. **`ql016` failed four times** (sweep + 3
+        re-runs) and is unscored in P5-2. Suite 456 passed (18 new).
+
 ## Next task to pick up
 
-**P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split, the
-harness through it** (`docs/Tessera_Phase5_Plan.md` §3.1.2–3.1.3, §5).
-Read §3.1 in full first. It is a behaviour-neutral refactor of the most
-load-bearing code: the snapshot proves it.
+**P5-3 — LangSmith tracing with taint-based redaction (native stack
+first)** (`docs/Tessera_Phase5_Plan.md` §3.9.1–3.9.4, §3.9.6, §5). Read
+§3.9 in full first, and the P5-1 spike items 8–10 in Done.
 
 **Acceptance (plan §5, verbatim):**
-- the snapshot equals P5-0's (plus the empty context-marker field);
-- the native live sweep passes every gated row;
-- the route-matched diff against P5-0 is in the PR;
-- the context-marker row is reported, with zero hits;
-- `answer_query()`'s signature is unchanged.
+- the redaction test and the env-var guard pass;
+- the subprocess import test passes (native-only loads no framework);
+- with a key, one traced query per archetype is visible in LangSmith with
+  redaction applied. Without a key yet, that step is recorded as pending
+  and doesn't block.
 
-Comparisons against P5-0 use its noise floor: A/C relevance ±0.03,
-B relevance ±0.11, everything else exact (P5-0 in Done). The live sweep
-is free NIM; expect 1–2 h and a few 503 ERROR rows, re-run alone.
+**What the spike already settled (P5-1 in Done):**
+- the redacting client needs `anonymizer` **and**
+  `process_buffered_run_ops` (with `run_ops_buffer_size`) — the hide_*
+  hooks and the anonymizer alone leave `events`/`error` unredacted;
+- the gated test must plant markers in errors and events, not only
+  inputs/outputs, and must mock HTTP by patching `Session.send` (the
+  `Client` replaces a mounted adapter);
+- `LANGSMITH_TRACING=true` really posts to `api.smith.langchain.com`, so
+  the env-var guard is needed;
+- wrap steps at the composition root through `NativePipeline`'s step
+  parameters (P5-2), never inside core modules.
+
+**Needs from the user:** a LangSmith account + API key (free developer
+tier) for the live step only. Ask when the code is done.
 
 ---
 
@@ -2035,9 +2110,9 @@ replanned + re-adopted the same day (#57):
 **Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
 stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-0 — baseline + noise floor~~ — done (#71)
-- ~~P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike~~ — done
-- P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split **← next**
-- P5-3 — LangSmith tracing with taint redaction (native first)
+- ~~P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike~~ — done (#72)
+- ~~P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split~~ — done (#73)
+- P5-3 — LangSmith tracing with taint redaction (native first) **← next**
 - P5-4 — LangChain ingestion and indexing
 - P5-5 — LangChain retrieval
 - P5-6 — generation, routing, retries, expertise
@@ -2053,6 +2128,43 @@ destroy for the LinkedIn video. CLAUDE.md carries this numbering since
 P5-1.
 
 ## Notes / open flags
+
+- **NIM was heavily overloaded all of 2026-10-06** (free tier, judge and
+  answers). Three 92-case sweeps: 1h47 / 2h10 / 2h48, with 130 / 160 /
+  216 transient 429/503s and 2 / 2 / 6 ERROR rows; failures came in
+  bursts (`ql011`, `ql015`, `ql016` within minutes). `ql016` then 503'd on
+  three single-case re-runs in a row. Expect 2–3 h per sweep on a bad day;
+  plan sweeps early, and re-run ERROR cases alone afterwards. **Spend
+  today:** 3 full sweeps (~280 calls each) + 13 single-case re-runs +
+  ~10 spike calls on NIM; ~8 Gemini Flash calls (< $0.01). Well inside
+  10,000/day.
+- **`ql016` is unscored in P5-2** (four 503s). It passed in both P5-0
+  sweeps and its path is unchanged; re-run it once NIM is calm if a clean
+  P5-2 record is wanted. Not blocking.
+- **ERROR rows stay in the committed exports** (user decision,
+  2026-10-06, option 1): never merge re-run results into an export.
+  Re-run failed cases alone with the same `run_harness` path at the same
+  commit, and put their scores in the PR body. The re-run and
+  route-matched-diff scripts were scratchpad one-offs (P5-0's
+  `rerun_cases.py`: `cli._build_llms` + `run_harness` filtered by
+  `EvalCase.id` — note the field is `id`, not `case_id`; `route_diff.py`:
+  route-matched comparison of two `--json` exports on the deterministic
+  fields). If they're needed every task, promote them into `evals/` (a
+  `tessera eval --cases` filter and an `evals/compare.py`) rather than
+  rewriting them.
+- **`uv sync` is exact**: `uv sync --extra dev` *uninstalls* the `lc`
+  extra. Use `uv sync --extra dev --extra lc` for Phase 5 work; drop
+  `--extra lc` only to test a native-only install (`/start-day` says so
+  since P5-1).
+- **The CPU-only lock check is now `grep -cE '^name = "nvidia-' uv.lock`**
+  (a bare `grep 'nvidia-'` counts `langchain-nvidia-ai-endpoints`). It
+  exits 1 when the count is 0 — expected, so don't chain `&&` after it.
+- **Compare snapshots against `evals/snapshots/p5-2.json` from P5-3 on.**
+  `v0.4.0.json` predates `context_marker_hits` and needs
+  `--allow-added context_marker_hits`.
+- **The user reads chat replies in ASD-STE100 + ~20% ELI5** (their
+  `~/.claude/CLAUDE.md`, 2026-10-06; chat only — files, commits, PR bodies
+  and anything the user publishes stay in normal English).
 
 - **Cloud is Google Cloud now (ADR 0007, 2026-10-05).**
   - Project `tessera-510716`.
