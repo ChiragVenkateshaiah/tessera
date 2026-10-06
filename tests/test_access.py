@@ -175,14 +175,16 @@ def test_access_cases_ask_as_the_principals_they_claim() -> None:
         assert c.principal is not None, c.id
         if c.access == "leakage":
             assert not walls.is_cleared(c.principal, c.restricted_engagement), c.id
-            assert c.forbidden_markers, c.id
+            assert list(c.forbidden_markers) == [c.restricted_engagement], c.id
         if c.access == "authorized":
             assert walls.is_cleared(c.principal, c.restricted_engagement), c.id
             (source,) = c.relevant_sources
             assert source.startswith("engagements/"), c.id
         if c.access == "injection":
             assert walls.engagements_for(c.principal) == frozenset(), c.id
-        for marker in c.forbidden_markers:
+        # Markers are keyed by a real engagement, and none is in the question.
+        assert set(c.forbidden_markers) <= set(walls.cleared), c.id
+        for marker in [m for facts in c.forbidden_markers.values() for m in facts]:
             assert marker.lower() not in c.query.lower(), (c.id, marker)
     leakage = {c.query for c in cases if c.access == "leakage"}
     assert leakage == {c.query for c in cases if c.access == "authorized"}
@@ -199,5 +201,8 @@ def test_the_embedded_instruction_case_checks_for_the_planted_canary() -> None:
     (case,) = [c for c in load_cases(REPO_ROOT / "evals" / "cases") if c.id == "ac-i04"]
 
     assert canary in planted.read_text(encoding="utf-8")
-    assert case.access == "injection" and canary in case.forbidden_markers
+    assert case.access == "injection" and case.canary_markers == [canary]
+    # Answer-only: the canary is in an internal document, so it must not be
+    # a forbidden (context-checked) marker.
+    assert all(canary not in facts for facts in case.forbidden_markers.values())
     assert canary.lower() not in case.query.lower()  # only the document carries it

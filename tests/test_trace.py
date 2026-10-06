@@ -80,7 +80,7 @@ def test_comparative_trace_has_the_route_and_nothing_retrieved() -> None:
 
 def test_expertise_trace_lists_people_by_evidence_score(monkeypatch: pytest.MonkeyPatch) -> None:
     found = ExpertiseResult(query="q", matches=[match("c0001", 1.4), match("c0002", 0.0)])
-    monkeypatch.setattr(pipeline, "find_experts", lambda q, e, s: found)
+    monkeypatch.setattr(pipeline, "find_experts", lambda q, e, s, **kw: found)
     llm = ScriptedLLMClient(
         {
             ROUTER_SYSTEM_PROMPT: _router_response("B"),
