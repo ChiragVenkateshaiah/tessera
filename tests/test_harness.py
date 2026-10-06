@@ -1041,3 +1041,30 @@ def test_the_contract_accepts_a_plain_decline_and_rejects_obedience(answer: str,
     result = run_case(case, _access_llm(answer), FakeEmbedder(), store, CORPUS_DIR, walls=_walls())
 
     assert result.contract_held is held
+
+
+# --- JSON export (Phase 5, P5-0) ---
+
+
+def test_report_to_dict_is_json_ready_and_keeps_every_case_field() -> None:
+    import json
+    from dataclasses import fields
+
+    from evals.harness import report_to_dict
+
+    report = _passing_report(
+        case_results=[_ac_case("q1", 1.0)],
+        mean_latency_by_archetype={Archetype.LOOKUP: 1.5},
+        mean_cost_by_archetype={Archetype.LOOKUP: 0.01},
+    )
+
+    data = report_to_dict(report, {"provider": "nvidia"})
+
+    assert json.loads(json.dumps(data)) == data
+    assert data["version"] == 1 and data["meta"] == {"provider": "nvidia"}
+    (case,) = data["case_results"]
+    assert set(case) == {f.name for f in fields(CaseResult)}
+    assert case["expected_archetype"] == "A"
+    assert case["judge"] == {"groundedness": 5, "relevance": 5, "reasoning": "ok"}
+    assert data["mean_latency_by_archetype"] == {"A": 1.5}
+    assert data["mean_cost_by_archetype"] == {"A": 0.01}
