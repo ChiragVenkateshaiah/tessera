@@ -275,3 +275,89 @@ def test_unmetered_client_leaves_usage_without_cost() -> None:
     assert result.usage.calls == ()
     assert result.usage.unmetered_calls == 1
     assert result.usage.cost_usd({}) is None
+
+
+# --- Phase 5 (P5-2): the Pipeline protocol and PipelineRun -----------------
+
+
+def test_native_pipeline_run_carries_what_the_harness_scores() -> None:
+    from tessera.generation.prompts import LOOKUP_ANSWER_SYSTEM_PROMPT
+    from tessera.pipeline import NativePipeline, Pipeline, PipelineRun
+
+    llm = ScriptedLLMClient(
+        {
+            ROUTER_SYSTEM_PROMPT: _router_response("A"),
+            LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1].",
+        }
+    )
+    store = FakeVectorStore(
+        [_result("over.md", RELEVANCE_THRESHOLD + 0.2), _result("under.md", RELEVANCE_THRESHOLD - 0.1)]
+    )
+    pipeline: Pipeline = NativePipeline(llm, FakeEmbedder(), store)
+
+    run = pipeline.run("market entry template?")
+
+    assert isinstance(run, PipelineRun)
+    assert run.decision.archetype is Archetype.LOOKUP
+    (retrieval,) = run.retrievals
+    assert [r.document_path for r in retrieval.results] == ["over.md", "under.md"]
+    assert [r.document_path for r in run.shown] == ["over.md"]  # cleared the floor
+    assert run.generated is not None and run.generated.answer == run.answer.answer == "See [1]."
+    assert run.expertise is None
+
+
+def test_routing_and_generation_usage_are_kept_apart_even_with_one_client() -> None:
+    from tessera.generation.prompts import LOOKUP_ANSWER_SYSTEM_PROMPT
+    from tessera.pipeline import NativePipeline
+
+    llm = ScriptedLLMClient(
+        {ROUTER_SYSTEM_PROMPT: _router_response("A"), LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1]."}
+    )
+    store = FakeVectorStore([_result("a.md", 0.6)])
+
+    run = NativePipeline(llm, FakeEmbedder(), store).run("q")
+
+    # The scripted client reports no usage, so each call is "unmetered".
+    assert run.routing_usage.unmetered_calls == 1
+    assert run.generation_calls == 1
+    assert run.answer.usage.unmetered_calls == 2  # the answer's total covers both
+
+
+def test_a_terminal_answer_makes_no_generation_call() -> None:
+    from tessera.pipeline import NativePipeline
+
+    llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: _router_response("D")})
+
+    run = NativePipeline(llm, FakeEmbedder(), FakeVectorStore([])).run("compare client X and Y")
+
+    assert run.answer.answer == COMPARATIVE_REFUSAL_MESSAGE
+    assert run.generation_calls == 0 and run.retrievals == () and run.generated is None
+
+
+def test_steps_are_injectable_so_routing_can_be_forced_without_a_call() -> None:
+    from tessera.generation.prompts import SYNTHESIS_ANSWER_SYSTEM_PROMPT
+    from tessera.pipeline import NativePipeline
+    from tessera.retrieval.router import RoutingDecision
+
+    llm = ScriptedLLMClient({SYNTHESIS_ANSWER_SYSTEM_PROMPT: "Briefing [1]."})
+    forced = lambda query, _llm: RoutingDecision(query, Archetype.SYNTHESIS, "forced")
+    store = FakeVectorStore([_result("a.md", 0.6)])
+
+    run = NativePipeline(llm, FakeEmbedder(), store, route_fn=forced).run("q")
+
+    assert run.decision.reasoning == "forced"
+    assert run.routing_usage.unmetered_calls == 0 and len(llm.calls) == 1
+    assert run.answer.archetype is Archetype.SYNTHESIS
+
+
+def test_answer_query_is_the_native_pipelines_answer() -> None:
+    from tessera.generation.prompts import LOOKUP_ANSWER_SYSTEM_PROMPT
+    from tessera.pipeline import NativePipeline
+
+    responses = {ROUTER_SYSTEM_PROMPT: _router_response("A"), LOOKUP_ANSWER_SYSTEM_PROMPT: "See [1]."}
+    store = FakeVectorStore([_result("a.md", 0.6)])
+
+    via_wrapper = answer_query("q", ScriptedLLMClient(responses), FakeEmbedder(), store)
+    via_pipeline = NativePipeline(ScriptedLLMClient(responses), FakeEmbedder(), store).run("q")
+
+    assert via_wrapper == via_pipeline.answer

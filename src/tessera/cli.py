@@ -36,7 +36,7 @@ from tessera.ingestion.data_quality import (
 )
 from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
-from tessera.pipeline import AnswerResult, answer_query
+from tessera.pipeline import AnswerResult, NativePipeline, answer_query
 from tessera.principal import Principal
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
@@ -87,6 +87,29 @@ def _announce_retry(attempt: int, delay: float, error: BaseException) -> None:
         f"  LLM returned {code}; retrying in {delay:.0f}s (attempt {attempt})",
         err=True,
     )
+
+
+STACK_HELP = (
+    "Which pipeline answers: native, or lc (the Phase 5 LangChain stack, "
+    "not built yet). Default: TESSERA_STACK, else native."
+)
+LC_NOT_BUILT_MESSAGE = (
+    "The LangChain stack (--stack lc) isn't built yet: Phase 5 builds it in "
+    "P5-4 to P5-7 (docs/Tessera_Phase5_Plan.md). Use --stack native."
+)
+
+
+def _resolve_stack(settings: Settings, stack: str | None) -> str:
+    """The stack to run (the option, else TESSERA_STACK). Only native
+    exists so far; asking for lc stops with a clear message."""
+    chosen = stack or settings.stack
+    if chosen not in ("native", "lc"):
+        typer.echo(f"Unknown stack {chosen!r}: use native or lc.", err=True)
+        raise typer.Exit(code=2)
+    if chosen == "lc":
+        typer.echo(LC_NOT_BUILT_MESSAGE, err=True)
+        raise typer.Exit(code=2)
+    return chosen
 
 
 def _build_nvidia(settings: Settings, *, min_interval: float = 0.0) -> RetryingLLMClient:
@@ -440,9 +463,11 @@ def query(
         "for the engagements that person is cleared for. Default: internal "
         "documents only.",
     ),
+    stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
 ) -> None:
     """Answer a query against the persisted index, with citations."""
     settings = _load_settings()
+    _resolve_stack(settings, stack)
     principal = _require_principal(settings, as_person)
     store, expertise_store = _open_stores(settings)
 
@@ -482,6 +507,7 @@ def chat(
         "for the engagements that person is cleared for. Default: internal "
         "documents only.",
     ),
+    stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
 ) -> None:
     """Ask questions one after another in an interactive session.
 
@@ -491,6 +517,7 @@ def chat(
     Ctrl-D) to leave.
     """
     settings = _load_settings()
+    _resolve_stack(settings, stack)
     principal = _require_principal(settings, as_person)
     store, expertise_store = _open_stores(settings)
 
@@ -567,6 +594,7 @@ def chat(
 def serve(
     host: str = typer.Option("127.0.0.1", help="Interface to listen on."),
     port: int = typer.Option(8000, help="Port to listen on."),
+    stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
 ) -> None:
     """Serve the HTTP API locally.
 
@@ -579,6 +607,7 @@ def serve(
     from tessera.api import create_app
 
     settings = _load_settings()
+    _resolve_stack(settings, stack)
     store, expertise_store = _open_stores(settings)
 
     typer.echo("Loading the embedding model…")
@@ -614,6 +643,7 @@ def eval_command(
         "--json",
         help="Also write every case's result and the aggregates as JSON here.",
     ),
+    stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
 ) -> None:
     """Run the eval harness against the persisted index and print a report."""
     if str(REPO_ROOT) not in sys.path:
@@ -631,6 +661,7 @@ def eval_command(
         raise typer.Exit(code=1) from exc
 
     settings = _load_settings()
+    chosen_stack = _resolve_stack(settings, stack)
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
     _require_index(store)
 
@@ -653,7 +684,13 @@ def eval_command(
         if settings.llm_provider == "nvidia"
         else _build_nvidia(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
     )
-    typer.echo(f"Answers: {llms.name} · judge: nvidia:{settings.nvidia_model}", err=True)
+    typer.echo(
+        f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}",
+        err=True,
+    )
+    pipeline = NativePipeline(
+        llms.answer, embedder, store, expertise_store, router_llm=llms.router
+    )
 
     def show_progress(done: int, total: int, result: object) -> None:
         error = getattr(result, "error", None)
@@ -674,6 +711,7 @@ def eval_command(
         judge_llm=judge,
         prices=MODEL_PRICES,
         walls=walls,
+        pipeline=pipeline,
     )
 
     typer.echo(format_report(report))
@@ -684,6 +722,7 @@ def eval_command(
             "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git_commit(),
             "provider": settings.llm_provider,
+            "stack": chosen_stack,
             "answers": llms.name,
             "judge": f"nvidia:{settings.nvidia_model}",
         }

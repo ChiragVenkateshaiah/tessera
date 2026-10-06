@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     llm_provider: Literal["nvidia", "gemini", "bedrock"] = Field(
         default="nvidia", validation_alias="TESSERA_LLM_PROVIDER"
     )
+    # Which pipeline answers (Phase 5 plan §3.1.2): the native stack, or the
+    # LangChain stack beside it (built in P5-4..P5-7). --stack overrides it.
+    stack: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_STACK")
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.

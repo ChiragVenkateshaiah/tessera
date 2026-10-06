@@ -782,6 +782,9 @@ def test_eval_on_bedrock_keeps_the_judge_on_nvidia(monkeypatch: pytest.MonkeyPat
     assert judge is not captured["llm"] and captured["router_llm"] is not captured["llm"]
     assert captured["prices"] is MODEL_PRICES
     assert "judge: nvidia:" in result.output
+    # Cases run through the Pipeline protocol (Phase 5 plan §3.1.2).
+    assert isinstance(captured["pipeline"], cli.NativePipeline)
+    assert "Stack: native" in result.output
 
 
 def test_query_prints_tokens_and_cost(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -976,3 +979,29 @@ def test_query_without_as_is_internal_only_and_unknown_people_are_refused(
     assert plain.exit_code == 0 and seen["principal"] is None
     assert "internal documents only" in plain.output
     assert unknown.exit_code == 1 and "No person 'c9999'" in unknown.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [["query", "x", "--stack", "lc"], ["chat", "--stack", "lc"], ["serve", "--stack", "lc"],
+     ["eval", "--stack", "lc"]],
+)
+def test_the_lc_stack_is_refused_until_it_is_built(args: list[str]) -> None:
+    result = runner.invoke(cli.app, args)
+
+    assert result.exit_code == 2
+    assert "isn't built yet" in result.output
+
+
+def test_tessera_stack_sets_the_default_stack(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TESSERA_STACK", "lc")
+
+    result = runner.invoke(cli.app, ["query", "x"])
+
+    assert result.exit_code == 2 and "isn't built yet" in result.output
+
+
+def test_an_unknown_stack_is_rejected() -> None:
+    result = runner.invoke(cli.app, ["query", "x", "--stack", "langchain"])
+
+    assert result.exit_code == 2 and "Unknown stack" in result.output

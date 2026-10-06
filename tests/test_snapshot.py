@@ -59,10 +59,10 @@ def _people_store() -> FixedScoreStore:
     return FixedScoreStore([(doer, 0.61234), (claimer, 0.7)])
 
 
-def test_scripted_llm_counts_calls_and_cites() -> None:
-    llm = ScriptedLLM()
-    assert llm.complete("s", "u") == SCRIPTED_ANSWER
-    assert "[1]" in SCRIPTED_ANSWER and llm.calls == 1
+def test_scripted_llm_cites() -> None:
+    # Calls are counted by the pipeline's generation recorder, not here.
+    assert ScriptedLLM().complete("s", "u") == SCRIPTED_ANSWER
+    assert "[1]" in SCRIPTED_ANSWER
 
 
 def test_lookup_case_records_retrieval_with_rounded_scores_and_one_generation_call() -> None:
@@ -129,7 +129,7 @@ def test_comparative_case_is_terminal_with_no_calls() -> None:
         None,
     )
 
-    assert record == {"archetype": "D", "generation_calls": 0}
+    assert record == {"archetype": "D", "generation_calls": 0, "context_marker_hits": []}
 
 
 def test_build_is_keyed_by_case_id_and_deterministic() -> None:
@@ -159,3 +159,33 @@ def test_diff_names_each_changed_field_and_missing_or_new_cases() -> None:
     assert "gone: missing" in lines
     assert "new: new case" in lines
     assert diff_snapshots(before, before) == []
+
+
+def test_a_field_added_since_the_older_snapshot_is_accepted_only_while_empty() -> None:
+    from evals.snapshot import diff_snapshots
+
+    old = {"version": 1, "k": 5, "score_decimals": 4, "cases": {"a": {"generation_calls": 1}}}
+    new_empty = {**old, "cases": {"a": {"generation_calls": 1, "context_marker_hits": []}}}
+    new_hit = {**old, "cases": {"a": {"generation_calls": 1, "context_marker_hits": ["x:y"]}}}
+
+    assert diff_snapshots(old, new_empty) == ["a.context_marker_hits: None -> []"]
+    assert diff_snapshots(old, new_empty, allow_added={"context_marker_hits"}) == []
+    assert diff_snapshots(old, new_hit, allow_added={"context_marker_hits"}) == [
+        "a.context_marker_hits: None -> ['x:y']"
+    ]
+
+
+def test_context_marker_hits_are_recorded_for_an_uncleared_engagement() -> None:
+    from dataclasses import replace
+
+    store = FakeVectorStore([_chunk("pricing", 0, 0.7)])
+    (chunk,) = store.query([1.0], k=1)
+    case = replace(
+        _case("a1", Archetype.LOOKUP),
+        principal="c0014",
+        forbidden_markers={"halcyon": [chunk.text.split()[0]]},
+    )
+
+    record = snapshot_case(case, FakeEmbedder(), store, _people_store(), CORPUS, None)
+
+    assert record["context_marker_hits"] == [f"halcyon:{chunk.text.split()[0]}"]

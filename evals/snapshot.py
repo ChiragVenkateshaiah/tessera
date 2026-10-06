@@ -1,11 +1,12 @@
 """The golden retrieval snapshot (Phase 5 plan §3.1.1, P5-0).
 
-Every eval case is run with its archetype **forced** (no routing call) and
-a scripted fake LLM (no real generation call), and everything that is
-deterministic about the case is recorded: what was retrieved, with what
-score, what cleared the relevance floor, what restricted or superseded
-material was seen, the expertise shortlist, and how many generation calls
-the path made. Zero network calls.
+Every eval case is run through the native ``Pipeline`` with its archetype
+**forced** (a routing step that makes no call) and a scripted fake LLM (no
+real generation call), and everything that is deterministic about the case
+is recorded: what was retrieved, with what score, what cleared the
+relevance floor, what restricted or superseded material was seen, the
+expertise shortlist, how many generation calls the path made, and (from
+P5-2) the context-marker hits. Zero network calls.
 
 The snapshot pins retrieval behaviour while the query path is refactored
 (P5-2) and a second stack is built beside it: a refactor is neutral only
@@ -17,8 +18,11 @@ are injected, and they return data. Only `main()` builds a real index,
 reads the environment and writes or compares a file — the same exemption
 `harness.main()` has.
 
-    python -m evals.snapshot --out evals/snapshots/v0.4.0.json
-    python -m evals.snapshot --check evals/snapshots/v0.4.0.json
+    python -m evals.snapshot --out evals/snapshots/p5-2.json
+    python -m evals.snapshot --check evals/snapshots/p5-2.json
+    # P5-2's proof against P5-0's snapshot, which predates the new field:
+    python -m evals.snapshot --check evals/snapshots/v0.4.0.json \
+        --allow-added context_marker_hits
 """
 
 from __future__ import annotations
@@ -26,16 +30,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from evals.harness import DEFAULT_K, EvalCase, case_principal, unique_documents_by_rank
+from collections.abc import Collection
+
+from evals.harness import (
+    DEFAULT_K,
+    EvalCase,
+    case_principal,
+    context_marker_hits,
+    unique_documents_by_rank,
+)
 from tessera.embedding.base import Embedder
-from tessera.generation.answer import filter_relevant, generate_answer
 from tessera.generation.base import LLMClient
-from tessera.generation.expertise import generate_expertise_answer
 from tessera.ingestion.access_loader import Walls
 from tessera.ingestion.loader import SENSITIVITY_INTERNAL, STATUS_SUPERSEDED
-from tessera.retrieval.expertise import find_experts
-from tessera.retrieval.retriever import retrieve
-from tessera.retrieval.router import Archetype
+from tessera.pipeline import NativePipeline
+from tessera.retrieval.router import Archetype, RoutingDecision
 from tessera.store.base import ExpertiseStore, VectorStore
 
 SNAPSHOT_VERSION = 1
@@ -47,14 +56,19 @@ SCRIPTED_ANSWER = "Scripted snapshot answer [1]."
 
 
 class ScriptedLLM(LLMClient):
-    """Answers every call with SCRIPTED_ANSWER and counts the calls."""
-
-    def __init__(self) -> None:
-        self.calls = 0
+    """Answers every call with SCRIPTED_ANSWER."""
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
-        self.calls += 1
         return SCRIPTED_ANSWER
+
+
+def forced_route(archetype: Archetype):
+    """A routing step that decides ``archetype`` without calling the LLM."""
+
+    def route(query: str, llm: LLMClient) -> RoutingDecision:
+        return RoutingDecision(query=query, archetype=archetype, reasoning="forced (snapshot)")
+
+    return route
 
 
 def _relative(path: str, corpus_dir: Path) -> str:
@@ -77,12 +91,19 @@ def snapshot_case(
     """One case's deterministic record, archetype forced to the labelled
     one. D is terminal, so it records only that no call was made.
     """
-    llm = ScriptedLLM()
+    pipeline = NativePipeline(
+        ScriptedLLM(),
+        embedder,
+        store,
+        expertise_store,
+        expertise_k=k,
+        route_fn=forced_route(case.archetype),
+    )
+    run = pipeline.run(case.query, case_principal(case, walls))
     record: dict[str, Any] = {"archetype": case.archetype.value}
 
     if case.archetype is Archetype.EXPERTISE:
-        result = find_experts(case.query, embedder, expertise_store, k=k)
-        generated = generate_expertise_answer(result, llm)
+        assert run.expertise is not None
         record["shortlist"] = [
             {
                 "person_id": m.person.person_id,
@@ -91,14 +112,13 @@ def snapshot_case(
                 "rank_score": _score(m.rank_score),
                 "evidence": [[e.kind, e.self_reported] for e in m.evidence],
             }
-            for m in result.matches
+            for m in run.expertise.matches
         ]
-        record["presented"] = [m.person.person_id for m in generated.experts]
+        record["presented"] = [m.person.person_id for m in run.answer.experts]
     elif case.archetype in (Archetype.LOOKUP, Archetype.SYNTHESIS):
-        principal = case_principal(case, walls)
-        retrieval = retrieve(case.query, case.archetype, embedder, store, principal=principal)
-        generated = generate_answer(retrieval, llm)
-        shown = filter_relevant(retrieval.results)
+        (retrieval,) = run.retrievals
+        assert run.generated is not None
+        shown = run.shown
         record.update(
             documents=unique_documents_by_rank(retrieval.results, corpus_dir),
             chunks=[
@@ -123,11 +143,14 @@ def snapshot_case(
                 }
                 for m in retrieval.superseded
             ],
-            superseded_noted=sorted(_relative(m.document_path, corpus_dir) for m in generated.superseded),
+            superseded_noted=sorted(
+                _relative(m.document_path, corpus_dir) for m in run.generated.superseded
+            ),
             removed=dict(sorted(retrieval.removed.items())),
         )
 
-    record["generation_calls"] = llm.calls
+    record["generation_calls"] = run.generation_calls
+    record["context_marker_hits"] = context_marker_hits(case, run, walls)
     return record
 
 
@@ -152,9 +175,15 @@ def build_snapshot(
     }
 
 
-def diff_snapshots(expected: dict[str, Any], actual: dict[str, Any]) -> list[str]:
+def diff_snapshots(
+    expected: dict[str, Any],
+    actual: dict[str, Any],
+    allow_added: Collection[str] = (),
+) -> list[str]:
     """Human-readable differences, one line per changed field; empty when
-    the two are equal.
+    the two are equal. A field named in ``allow_added`` may be absent from
+    ``expected`` if it is empty in ``actual`` — how a snapshot that gained
+    a field (P5-2's context-marker hits) is compared with an older one.
     """
     lines: list[str] = []
     for key in ("version", "k", "score_decimals"):
@@ -170,6 +199,12 @@ def diff_snapshots(expected: dict[str, Any], actual: dict[str, Any]) -> list[str
             for field_name in sorted(set(want[case_id]) | set(got[case_id])):
                 before = want[case_id].get(field_name)
                 after = got[case_id].get(field_name)
+                if (
+                    field_name in allow_added
+                    and field_name not in want[case_id]
+                    and not after
+                ):
+                    continue
                 if before != after:
                     lines.append(f"{case_id}.{field_name}: {before!r} -> {after!r}")
     return lines
@@ -200,6 +235,13 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--out", type=Path, help="write the snapshot here")
     mode.add_argument("--check", type=Path, help="compare with this snapshot")
+    parser.add_argument(
+        "--allow-added",
+        action="append",
+        default=[],
+        metavar="FIELD",
+        help="with --check: a field the older snapshot lacks, accepted while empty",
+    )
     args = parser.parse_args()
 
     corpus_dir = Path(os.environ.get("TESSERA_CORPUS_DIR", "data/corpus"))
@@ -233,7 +275,7 @@ def main() -> None:
         print(f"Wrote {len(snapshot['cases'])} cases to {args.out}")
         return
 
-    differences = diff_snapshots(json.loads(args.check.read_text()), snapshot)
+    differences = diff_snapshots(json.loads(args.check.read_text()), snapshot, args.allow_added)
     if differences:
         print(f"{len(differences)} difference(s) from {args.check}:")
         print("\n".join(f"  {line}" for line in differences))
