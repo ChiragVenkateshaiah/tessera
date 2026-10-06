@@ -41,20 +41,27 @@ Full reasoning behind these constraints lives in `docs/`:
 - `docs/Tessera_Phase3_Plan.md` — the authoritative brief for Phase 3
   (complete, tagged `v0.3.0`): archetype B (expertise-finding) built end
   to end over a synthesized firm expertise dataset.
-- `docs/Tessera_Phase4_Plan.md` — the authoritative brief for Phase 4 (the
-  current phase, replanned 2026-10-01): four production-readiness
+- `docs/Tessera_Phase4_Plan.md` — the authoritative brief for Phase 4
+  (complete, tagged `v0.4.0`): four production-readiness
   features aimed at the documented reasons GenAI projects stall after
   proof of concept — a cloud LLM with cost accounting (Gemini on
   Google Cloud's Agent Platform since ADR 0007; the plan says Claude on
   Bedrock), request
   traces + a feedback-to-eval loop, document freshness + a data-quality
-  report, and permission-aware retrieval with a gated leakage eval. §5 is
-  the task sequence. Phase 5 = an **ephemeral** cloud deployment (deploy →
-  record a demo → destroy, verified; plan §9); Phase 6 = CI/CD with the
+  report, and permission-aware retrieval with a gated leakage eval. Its
+  §9 (the ephemeral deployment) is renumbered: now Phase 6, re-scoped by
+  ADR 0007.
+- `docs/Tessera_Phase5_Plan.md` — the authoritative brief for Phase 5 (the
+  current phase, adopted 2026-10-05): LangChain, LangGraph and LangSmith
+  built as a **parallel, measured stack** beside the native core, which
+  stays the default and the baseline (ADR 0006). §5 is the task sequence.
+  Phase 6 = an **ephemeral** Google Cloud deployment with the chat UI
+  (deploy → record a demo → destroy, verified); Phase 7 = CI/CD with the
   eval gate + monitoring.
 - `docs/adr/` — forward-looking architecture decisions for Phase 4+
-  (e.g. the hybrid Go/Python production split). Documentation only; none
-  of it is built in Phases 1–4. Phase 5 deploys the Solution Design's
+  (e.g. the hybrid Go/Python production split). ADR 0006 (accepted) is
+  the parallel framework stack Phase 5 builds; the rest is documentation
+  only, none of it built in Phases 1–5. Phase 6 deploys the Solution Design's
   minimal "pilot footprint" (one container service), not the ADR
   0002/0003 Go edge + DynamoDB design. **ADR 0007 (2026-10-05) moved the
   cloud from AWS to Google Cloud and the LLM from Claude on Bedrock to
@@ -75,30 +82,41 @@ embedding + local vector store, retrieval for archetype A (lookup) and C
 (synthesis), grounded generation with mandatory citations, eval harness
 scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
 
-**Explicitly NOT in Phases 1–4 — do not build these:**
+**Explicitly NOT in Phases 1–5 — do not build these:**
 - Archetype D (comparative) — out of pilot scope by design (confidentiality).
   Implement only as a refusal guardrail — never actually attempt it.
 - Real HR-system integration (Workday, an SSO directory, an SFDC
-  people-index) — Phase 6+. Phase 3's `ExpertiseStore` is a local
+  people-index) — Phase 7+. Phase 3's `ExpertiseStore` is a local
   implementation behind the port, the same as `ChromaVectorStore` is for
   documents.
-- Expertise staleness / live-sync mechanism — Phase 6+. Phase 3 ships a
+- Expertise staleness / live-sync mechanism — Phase 7+. Phase 3 ships a
   dated static snapshot whose age the answer surfaces.
-- Any cloud deployment — Phase 5. Phase 4 calls the cloud LLM from the
-  local machine and provisions nothing. Phase 5's stack (Terraform, one
+- Any cloud deployment — Phase 6. Phases 4–5 call the cloud LLM from the
+  local machine and provision nothing. Phase 6's stack (Terraform, one
   Cloud Run service, Artifact Registry, in the dedicated GCP project
   `tessera-510716`; ADR 0007) is ephemeral by design: deployed for a demo
   recording, then destroyed and the teardown verified — never left
   running between sessions. An always-on deployment was rejected on
-  cost (user, 2026-10-05). CI/CD and monitoring are Phase 6+.
+  cost (user, 2026-10-05). CI/CD and monitoring are Phase 7+.
+- Agents and tool calling (user, 2026-10-03) — no `create_agent`,
+  `langgraph.prebuilt`, `ToolNode` or `add_messages` anywhere in `src/`
+  (Phase 5 adds an import test). LangGraph is used for orchestration,
+  conditional routing, a bounded loop without tools, and interrupts for
+  the review workflow. Structured-output routing prefers JSON-schema /
+  guided-JSON mode; if a model needs forced function calling for it, that
+  is a schema constraint, not agentic tool use.
+- LLM caching in any gating sweep — `set_llm_cache` is never used there,
+  so every bar check measures live calls.
 - The Go edge layer, DynamoDB session state, Kubernetes (ADRs
   0002–0004), OpenSearch Serverless, Bedrock Titan embeddings, an
   S3-hosted corpus — documented AWS direction (superseded as the cloud
   target by ADR 0007), not built.
 - Conversation memory / multi-turn context — each question is answered
-  independently (CLI and UI alike).
+  independently (CLI and UI alike). The LangGraph query graph is
+  compiled **without** a checkpointer; only the review workflow
+  (`tessera corpus review`) checkpoints, to pause and resume a review.
 - PowerPoint/deck ingestion — not in the pilot corpus.
-- Real authentication / SSO / identity — Phase 6+. Phase 4's "ask as
+- Real authentication / SSO / identity — Phase 7+. Phase 4's "ask as
   person X" (`--as`, an API field) is a **demo identity**, and every place
   that accepts it says so.
 - Automated detection of anonymized-but-identifiable content — Discovery
@@ -109,7 +127,7 @@ scaffold (runnable, metrics implemented, cases empty), CLI for smoke-testing.
   toolchain), deployed with the API on Cloud Run in the ephemeral stack,
   and shown running on GCP in the final video. It includes the persona
   switcher that shows access control (demo identities, labelled as
-  such). Built in the deployment phase's plan, not before.
+  such). Built in Phase 6, not before.
 
 **Access-control enforcement** was on this list through Phase 3 (the
 pilot corpus was low-sensitivity by construction — "sidesteps the
@@ -131,11 +149,12 @@ pilot corpus and query log were.
 
 These are reasons, not preferences:
 
-1. **Swappable ports.** Phases 4–5 start moving this to the cloud (Gemini on Agent Platform now, per ADR 0007; the original target was AWS).
+1. **Swappable ports.** Phases 4–6 start moving this to the cloud (Gemini on Agent Platform now, per ADR 0007; the original target was AWS).
    Every external dependency — embedding model, vector store, LLM client,
    document source — sits behind a thin interface so the swap is a config
    change, not a rewrite. The single most important structural decision in
-   Phase 1.
+   Phase 1. A port change is named as one (e.g. Phase 5's
+   `VectorStore.delete_document()`, for delete-then-add indexing).
 2. **Grounded generation only.** Every claim in an answer must trace to a
    retrieved chunk. The system says "we don't have anything on that" rather
    than fabricating.
@@ -147,11 +166,11 @@ These are reasons, not preferences:
    a refusal.
 4. **Evals are infrastructure, not an afterthought.** The harness is built now
    even though real test cases arrive later, because it becomes the CI gate
-   in Phase 6.
+   in Phase 7.
 5. **Local-first.** Local stays the development and evaluation
    environment; the only cloud dependency on the query path is the LLM
    call (NVIDIA NIM by default, Gemini on Agent Platform when selected
-   by config). Cloud hosting is used only for Phase 5's ephemeral demo
+   by config). Cloud hosting is used only for Phase 6's ephemeral demo
    deployment.
 6. **The query path stays transport-agnostic.** `router.py`, `retriever.py`,
    `generation/`, and `pipeline.py` — everything between "a query came in"
@@ -179,6 +198,25 @@ These are reasons, not preferences:
    session or global), and traces and token usage come back as data
    that only the composition roots write out.
 
+   Phase 5 holds it for the frameworks (`docs/Tessera_Phase5_Plan.md`
+   §3.2.2):
+   - **An allow-list import boundary.** Only `tessera/lc/`,
+     `tessera/review/`, `tessera/integrations/`, `tessera/observability/`
+     and `evals/langsmith_sync.py` may import `langchain*`, `langgraph*`
+     or `langsmith`. A test walks the tree, and a subprocess test proves a
+     native-only run of `pipeline`, `cli` and `api` loads none of them.
+   - **LangChain objects are built by lazily imported factories in
+     `integrations/`**, which the composition roots call only when the
+     LangChain stack or LangSmith is selected.
+   - **Graph nodes are pure over plain-data state.** Dependencies and
+     usage recorders arrive per invocation through LangGraph's runtime
+     context, never in state and never bound when the graph is built.
+   - **`@traceable` wraps calls at the composition roots**, not inside the
+     core.
+   - **`review/` is exempt from the no-I/O rule** the way `loader.py` is:
+     the review workflow reads and writes the corpus, the audit log and
+     its checkpoint database, all through parameters.
+
 ## Technology decisions
 
 | Concern | Phase 1 choice | Phase 4 target | Notes |
@@ -189,11 +227,14 @@ These are reasons, not preferences:
 | Vector store | Chroma (local, persistent) | OpenSearch Serverless | Behind `VectorStore` interface |
 | Expertise store (Phase 3) | Chroma collection, separate from documents | Real people-index / HR API | Behind `ExpertiseStore` interface; reuses the `Embedder` port |
 | LLM | NVIDIA NIM API (`nemotron-3-ultra-550b-a55b`) | Gemini on Agent Platform (ADR 0007) | Behind `LLMClient` interface; free NIM API key, 40 rpm / 10,000 req/day (swapped from the Gemini API's 20/day free tier, which was blocking eval-harness sweeps). Phase 4 adds config-selected cloud providers with token/cost accounting: `gemini` (`gemini-3.8-flash` routes, `gemini-3.1-pro-preview` answers, ADC auth) and `bedrock` (built, dormant — the AWS account can't pay). NIM stays the eval judge |
-| HTTP / UI (Phase 4) | FastAPI, `tessera serve` (P4-1); a chat page only if chosen after P4-2 | same, on Cloud Run (Phase 5) | `api.py` is a composition root like `cli.py`; no Node toolchain |
+| HTTP / UI (Phase 4) | FastAPI, `tessera serve` (P4-1); the chat page is built in Phase 6 | same, on Cloud Run (Phase 6) | `api.py` is a composition root like `cli.py`; no Node toolchain |
 | Feedback (Phase 4) | `FeedbackStore` port, local JSONL | a managed store | Feedback becomes *candidate* eval cases for human labelling, never auto-added |
 | Access data (Phase 4) | `data/access/walls.yaml` (seeded generator, synthetic) | a real entitlement / ethical-wall system | Deny-by-default; filtered in the store query, before ranking |
-| Packaging (Phase 5) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Cloud Run |
-| IaC (Phase 5) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 6 | Labelled `project=tessera`, `ephemeral=true`, in the dedicated GCP project; `terraform destroy` after every demo |
+| LangChain stack (Phase 5) | `src/tessera/lc/`, a second `Pipeline` behind per-layer switches (`TESSERA_LC_<SWITCH>`): loader, splitter, embeddings, `langchain_chroma`, retrievers (+ BM25 hybrid, multi-query, rerank), structured-output router, LCEL chains, `ChatNVIDIA` / `ChatGoogleGenerativeAI`, retries, LangGraph orchestration, corrective loop | the stack the user picks at P5-10 | Optional extra: `uv sync --extra lc` (user, 2026-10-06). `native` stays the default until the comparison decides |
+| LangGraph review (Phase 5) | `tessera corpus review`: `interrupt()` + SQLite checkpointer | same | Demo-identity reviewer; checkpoint state holds JSON types only |
+| LangSmith (Phase 5) | Tracing for both stacks with taint-based redaction; datasets, experiments, feedback, annotation queues, prompt hub | same | Free developer tier; tracing only through Tessera's redacting client, never from env vars |
+| Packaging (Phase 6) | Container image (indexes + embedding model baked in) | same | Runs locally via `docker run` and on Cloud Run |
+| IaC (Phase 6) | Terraform (`infra/`), ephemeral stack | same + CI/CD in Phase 7 | Labelled `project=tessera`, `ephemeral=true`, in the dedicated GCP project; `terraform destroy` after every demo |
 | Config | `pydantic-settings` + `.env` | same + Secret Manager | No hardcoded values |
 | Testing | `pytest` | same | |
 | CLI | `typer` | n/a | |
@@ -213,8 +254,8 @@ These are reasons, not preferences:
 - Work task by task per the current phase's plan — `docs/Tessera_Phase1_Build_Plan.md`
   §5 for Phase 1, `docs/Tessera_Phase2_Plan.md` §4 for Phase 2,
   `docs/Tessera_Phase3_Plan.md` §5 for Phase 3, `docs/Tessera_Phase4_Plan.md`
-  §5 for Phase 4. Stop after each task and
-  report against its acceptance check before continuing.
+  §5 for Phase 4, `docs/Tessera_Phase5_Plan.md` §5 for Phase 5. Stop after
+  each task and report against its acceptance check before continuing.
 - **Phase plans get an independent review before adoption.** Run a
   read-only `Plan` subagent against the draft *and the real code*. Fold
   in every finding, and add a review section to the plan mapping each
@@ -230,12 +271,19 @@ These are reasons, not preferences:
   `retrieval/` (`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
   `generation/` (including any prompt string), `pipeline.py`, the corpus
   (`data/corpus/`), the access data (`data/access/`), the expertise
-  dataset or its generator (`data/expertise/`), or the eval set
-  (`evals/cases/`) must run a fresh `tessera eval --check` and paste the
+  dataset or its generator (`data/expertise/`), the eval set
+  (`evals/cases/`), or (Phase 5) `lc/`, `review/`, `integrations/` or
+  `observability/` must run a fresh `tessera eval --check` and paste the
   report — including its final
   `=> PASS/FAIL` line — into the PR body. A gated-threshold failure blocks
   the merge. The bar lives in `evals/QUALITY_BAR.md` /
-  `evals.harness.QualityBar`.
+  `evals.harness.QualityBar`. A PR that changes code both stacks share
+  pastes a sweep for each stack.
+- **LangSmith (Phase 5+).** Tracing is enabled only by Tessera's config,
+  through its redacting client passed explicitly
+  (`tracing_context(client=…)`); `LANGSMITH_TRACING` / `LANGCHAIN_TRACING_V2`
+  in the environment are refused, not honoured. Redaction is never
+  bypassed, not even for debugging.
 
 ## Git workflow
 
@@ -255,8 +303,8 @@ Every change ships through a PR:
 criteria are met (build plan §7 for Phase 1) — e.g. `v0.1.0` when Phase 1
 exits. Not cut per-task; tasks are checkpoints, phases are releases.
 
-**CI/CD:** intentionally not set up in Phases 1–5 (do-not-build list). It
-earns its place at Phase 6, gated by the eval harness built in Task 7 —
+**CI/CD:** intentionally not set up in Phases 1–6 (do-not-build list). It
+earns its place at Phase 7, gated by the eval harness built in Task 7 —
 no change ships if retrieval/answer quality regresses (Solution
 Design §5). Until then, quality gating is manual: run `pytest` and
 `tessera eval --check` locally before opening a PR, and paste the
@@ -267,7 +315,7 @@ bar-check result into the PR body for any retrieval/prompt change (see
 Bedrock) costs real money — state the expected cost before starting one,
 and keep the judge on NIM (free) unless the user decides otherwise.
 
-**Cloud (Phase 5, Google Cloud per ADR 0007):** every cloud change goes through Terraform in `infra/`,
+**Cloud (Phase 6, Google Cloud per ADR 0007):** every cloud change goes through Terraform in `infra/`,
 reviewed as a `terraform plan` before any `apply`. `apply` and `destroy`
 are run only with the user's explicit go-ahead for that specific run —
 they create and delete billed resources. After a demo, `terraform destroy`

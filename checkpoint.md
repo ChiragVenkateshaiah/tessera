@@ -4,19 +4,19 @@ Last updated: 2026-10-06
 
 ## Status
 
-**Phase 5 adopted and started (2026-10-05).**
-- **Cloud and LLM moved to Google Cloud + Gemini** (ADR 0007, PR #69).
-  AWS couldn't take payment from an Indian-issued card, and Claude on GCP
-  had zero partner-model quota.
-- **P4-2's open acceptance is closed on Gemini.** Fresh `tessera eval
-  --check`, `=> PASS`, 92/92 after one NIM-judge 503 re-run. Cost
-  $0.012 per answer, $1.10 for the sweep.
-- **The Phase 5 plan + ADR 0006 are adopted** (PR #67), amended for ADR
-  0007 and reviewed a third time (plan §14).
-- **P5-0 is half done** on branch `feat/p5-0-baseline` (pushed, no PR
-  yet): the golden snapshot and `tessera eval --json` are built; the two
-  NIM baseline sweeps are not run yet.
-- **The chat UI is decided:** yes, on Cloud Run in Phase 6.
+**Phase 5 in progress — P5-0 and P5-1 done (2026-10-06).**
+- **P5-0** (#71): golden snapshot, `tessera eval --json`, two NIM
+  baseline sweeps (both `=> PASS`). Judge noise floor: A/C relevance
+  ±0.03, B relevance ±0.11; routing, retrieval and groundedness exact.
+- **P5-1**: plan + ADR 0006 adopted into CLAUDE.md, README, ADRs and the
+  evals docs (§9; Phase 6 = deploy, Phase 7 = CI/CD). The frameworks are
+  an **optional extra** (`uv sync --extra lc`, user decision); lock
+  checks pass (0 existing entries changed, 0 `nvidia-*`). The spike
+  found 10 places the plan's assumptions differ — see P5-1 in Done.
+- **Next: P5-2** (the `Pipeline` protocol refactor).
+- **Earlier (2026-10-05):** cloud and LLM moved to Google Cloud + Gemini
+  (ADR 0007, #69); P4-2's live acceptance closed on Gemini ($1.10 sweep);
+  the chat UI decided (yes, on Cloud Run in Phase 6).
 
 **Phase 4 complete (`v0.4.0`, 2026-10-03).** All seven plan tasks merged
 (P4-1 #56, P4-2 code #59, P4-3 #60, P4-4 #63, P4-5 #64, P4-6 #65, P4-7
@@ -1687,37 +1687,183 @@ same change and stays ungated (`QUALITY_BAR.md`).
       A third Plan-agent review (§14) found 1 blocking and 8 should-fix
       issues, all folded in. `main` was merged into the plan branch (not
       rebased: the old draft commits touched `checkpoint.md`).
+- [x] **P5-0 — baseline + judge noise floor** (2026-10-06, PR #71).
+      Golden snapshot `evals/snapshots/v0.4.0.json`, `tessera eval
+      --json`, and two NIM sweeps from a clean tree at `c76a095`, both
+      `=> PASS`. Noise floor on the 88 cases scored in both: routing and
+      retrieval identical on every case; groundedness unchanged; A/C
+      relevance ±0.03 (one case, `q005` 4→5), B relevance ±0.11 (one
+      case, `ql019` 4→3 — one judge point on 9 cases). Each sweep had 2
+      ERROR rows on NIM 503s (`ql036`/`ql039`, `q002`/`q006`); the
+      exports keep them (user decision), and the four were re-run alone,
+      all 5/5, scores in the PR body. Sweeps took 1h47 and 2h10 (130 and
+      160 transient 429/503s).
+- [x] **P5-1 — adopt; dependencies; spike** (2026-10-06). Results below.
+      **Install mode: optional extra `lc`** (user, 2026-10-06; plan §10.2).
+
+      **Dependencies.** `[project.optional-dependencies].lc` in
+      `pyproject.toml`. Resolved on Python 3.14.4 — every package
+      installs and imports; no 3.14 blocker.
+      | Package | Locked | Floor and why |
+      |---|---|---|
+      | langchain-core | 1.6.6 | ≥ 1.2.5, CVE-2025-68664 (dumps/loads serialization injection) |
+      | langchain-classic | 1.0.8 | |
+      | langchain-community | 0.4.2 | |
+      | langchain-text-splitters | 1.1.3 | |
+      | langchain-chroma | 1.1.0 | |
+      | langchain-huggingface | 1.2.2 | |
+      | langchain-nvidia-ai-endpoints | 1.4.3 | |
+      | langchain-google-genai | 4.4.0 | |
+      | rank-bm25 | 0.2.2 | |
+      | langgraph | 1.2.13 | ≥ 1.0.10, CVE-2026-28277 (msgpack checkpoint deserialization) |
+      | langgraph-checkpoint | 4.2.0 | ≥ 3.0.0, CVE-2025-64439 (JsonPlusSerializer RCE) |
+      | langgraph-checkpoint-sqlite | 3.1.1 | ≥ 3.0.1, CVE-2025-67644 (filter-key SQL injection) |
+      | langsmith | 0.14.4 | |
+      | greenlet | 3.5.6 | **not in the plan** — see below |
+      Lock checks: 124 → 156 packages, **0 pre-existing entries changed**
+      (version, source, wheels and deps compared field by field;
+      `google-genai` stays 2.28.0, `torch` stays on the CPU index);
+      `grep -cE '^name = "nvidia-' uv.lock` = **0**. `langgraph` pulls
+      `langgraph-prebuilt` transitively; it is installed but stays
+      forbidden to import (P5-3's import test).
+
+      **Where the plan's assumptions differed (each one is for the named
+      task to act on):**
+      1. **`SQLRecordManager` needs `greenlet`**, which `langchain-classic`
+         doesn't declare (SQLAlchemy's asyncio import fails). Added to the
+         extra. (P5-4)
+      2. **`index()` replaces chunk ids with content hashes**, breaking
+         `<stem>::<n>` (§3.2.2). `key_encoder=lambda d: d.id` keeps the ids
+         and still cleans up shrunk documents (5 → 3: 2 deleted), **but an
+         edited chunk is then "skipped" and its old text stays** — it needs
+         `force_update=True` (re-embeds every chunk each run). P5-4 picks:
+         id-keyed + `force_update`, or hashed ids with the chunk id in
+         metadata (and `_chunk_index` reading metadata). (P5-4)
+      3. **`langchain_chroma`'s `similarity_search_by_vector_with_relevance_scores`
+         returns cosine *distance*, despite the name.** Ids and order match
+         native exactly on every principal; native score = `1 − value`
+         (max diff 0.0). `similarity_search_with_relevance_scores` (text
+         query) returns similarity, also exact. The §3.4 re-scoring step
+         must convert. (P5-5)
+      4. **Precomputed embeddings work** (mechanism (a)): upsert through
+         the chroma client into `tessera_lc_chunks`, read through
+         `langchain_chroma.Chroma`. Prefix-on-write/strip-on-read (b) not
+         needed. `HuggingFaceEmbeddings` = native vectors (max diff 8.6e-8
+         documents, 0 queries). All native filters work unchanged
+         (`$and`/`$or`/`$in`/`$nin`/`$ne`); a cleared principal sees 5
+         restricted chunks on an engagement query, walled and none see 0.
+      5. **Splitters vs native chunker** (70 docs / 427 chunks today):
+         `MarkdownHeaderTextSplitter` is fence-aware (a `#` inside ```
+         isn't a heading); `strip_headers=False` keeps `## Overview  ` in
+         the text. `RecursiveCharacterTextSplitter(800)` **splits tables
+         and fences** (2 table pieces without a header row; 2 pieces with
+         unbalanced ```), which native never does. Expected; the
+         comparison records it. (P5-4)
+      6. **`ChatNVIDIA` differs from `NvidiaClient` (§3.5 parity, S11):**
+         - **thinking is ON by default** (reasoning in `reasoning_content`;
+           "Say OK" = 18 output tokens vs 2 with it off). Off via
+           `.bind(chat_template_kwargs={"enable_thinking": False})` or
+           `model_kwargs={...}` — both put it in the body;
+         - **sends `max_tokens=1024` by default** (native sends none) and
+           `stream: false`;
+         - **errors are a bare `Exception("[503] {...}")`** — no status
+           attribute, so `is_retryable` can't read it; the `retry` switch
+           must parse the message prefix;
+         - **`with_structured_output(include_raw=True)` raises
+           `NotImplementedError`** (all methods). Without it:
+           default/`json_schema` → `response_format: json_schema`;
+           `function_calling`/`strict` → `guided_json` (no tools sent);
+         - `usage_metadata` is populated (input/output/total).
+         (P5-6)
+      7. **`ChatGoogleGenerativeAI` (Agent Platform, ADC):**
+         `vertexai=True, project, location` works with no API key;
+         `thinking_level="low"` is sent as `ThinkingLevel.LOW`; **no
+         temperature is sent** (parity with native); `usage_metadata`
+         `output_tokens` **includes thinking** (87 = 1 + 86 reasoning,
+         also in `output_token_details.reasoning`) — matches native's
+         candidates + thoughts. Differences:
+         - **`.content` is a list of blocks** (with a thought signature),
+           not a string — use `.text` / a string parser;
+         - **automatic function calling is not disabled** (the SDK warns;
+           native disables it);
+         - **`max_output_tokens=None`** by default (native sets
+           `DEFAULT_MAX_OUTPUT_TOKENS`);
+         - **`max_retries=6` by default** — would stack on Tessera's
+           retries; set 0 under the native `retry` value;
+         - errors: 503 → `GoogleAPIError` with `.code == 503`; 429 →
+           `GoogleRateLimitError` with no `.code` (the `ClientError` cause
+           has it);
+         - `with_structured_output(include_raw=True)` works in all three
+           modes (`json_schema`/`json_mode` → `response_mime_type`;
+           `function_calling` → tools).
+         Spend: ~8 Flash calls, < $0.01. (P5-6)
+      8. **LangSmith hooks don't cover every field** (real `Client`,
+         mocked HTTP, marker in inputs/outputs/metadata/error/event/child
+         run): no hooks → leaks in `inputs`, `outputs`, `extra`
+         (metadata), `error`, `events`; `hide_inputs`+`hide_outputs` →
+         `error`, `events`, `extra`; `+ hide_metadata` → `error`,
+         `events`; `anonymizer` → **`events`**. Only **`anonymizer` +
+         `process_buffered_run_ops`** (which requires
+         `run_ops_buffer_size`) reached **0**. P5-3's redacting client
+         needs that combination, and the gated test must plant markers in
+         errors and events, not just inputs/outputs. (P5-3)
+      9. **Env-driven tracing is real:** with `LANGSMITH_TRACING=true` and
+         no `tracing_context`, a bare `@traceable` posts to
+         `api.smith.langchain.com/runs/multipart`. `tracing_context(enabled=False)`
+         stops it. The env-var guard is needed. (P5-3)
+      10. **The `Client` mounts its own adapter on a passed `session`**, so
+          an HTTP mock must patch `Session.send` (not mount an adapter)
+          — the first spike run reported a false "0 leaks" because of
+          this. (P5-3 test design)
+
+      **Confirmed as the plan assumed:** runtime context
+      (`context_schema` / `Runtime`) keeps two invocations' recorders
+      apart; append reducers; `Send` map-reduce; subgraph as a node, with
+      `subgraphs=True` streaming; stream modes `values`/`updates`/
+      `custom`/`debug` (and multi-mode tuples; `messages` is empty with
+      no LLM); `RetryPolicy(retry_on=…)`; `get_state_history`;
+      `update_state` before a node runs (time travel — adds a checkpoint);
+      the Functional API (`@entrypoint`/`@task`); `interrupt()` +
+      `Command(resume=…)` **across two processes** via `SqliteSaver`, and
+      **the interrupted node re-runs from its start on resume** (a side
+      effect before `interrupt()` ran twice). Fixed `run_id` and metadata
+      via `langsmith_extra` reach the payload. `Client` has
+      `create_dataset`/`create_examples`/`create_feedback`/
+      `create_annotation_queue`/`add_runs_to_annotation_queue`/
+      `push_prompt`/`pull_prompt`; `evaluate` and `evaluate_comparative`
+      import. **Not exercised offline** (P5-9 does them, mocked then
+      live): `evaluate()` runs, `evaluate_comparative`, annotation
+      queues, the prompt hub.
+
+      **Checkpoint serializer** (`langgraph-checkpoint` 4.2.0): `str`,
+      `int`, `float`, `list`, `dict`, `set`, `bytes`, `datetime`,
+      `date`, `Path` round-trip; **`tuple` comes back as `list`**;
+      dataclass, enum and pydantic round-trip **with a warning that
+      unregistered types "will be blocked in a future version"**
+      (`LANGGRAPH_STRICT_MSGPACK=true` blocks now); a plain class fails
+      (`TypeError`). Confirms §3.8.2's "state holds JSON types only";
+      P5-8 should set strict mode.
+
+      Spike scripts were scratchpad one-offs (no LLM except items 6–7:
+      ~8 NIM calls, ~8 Flash calls).
 
 ## Next task to pick up
 
-**P5-0 — Baseline at `main` after ADR 0007 (NIM path unchanged since
-`v0.4.0`)** (`docs/Tessera_Phase5_Plan.md` §3.1.1, §5). Branch
-`feat/p5-0-baseline`, pushed, no PR yet.
-
-**Done on the branch:**
-- `evals/snapshot.py` + `evals/snapshots/v0.4.0.json` (92 cases, zero
-  calls, fresh temporary index). A re-run is identical, and the same
-  script run against the `v0.4.0` tag is identical.
-- `tessera eval --json PATH` (`harness.report_to_dict`, provenance from
-  the CLI).
-- Tests: `tests/test_snapshot.py` plus an export test. Suite **438
-  passed, 8 skipped**.
-
-**Left:**
-1. Baseline sweep 1:
-   `TESSERA_LLM_PROVIDER=nvidia tessera eval --check --json evals/baselines/p5-0-native-1.json`
-   from a clean tree (the export records the commit, `+dirty` otherwise).
-2. Sweep 2, the same command to `…-2.json`, for the judge's noise floor.
-3. Compute the per-metric run-to-run spread between the two.
-4. Commit both exports and open the PR, with the noise floor and both
-   bar reports in its body. Then P5-1.
-
-Both sweeps are on free NIM; each takes 20–50 min.
+**P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split, the
+harness through it** (`docs/Tessera_Phase5_Plan.md` §3.1.2–3.1.3, §5).
+Read §3.1 in full first. It is a behaviour-neutral refactor of the most
+load-bearing code: the snapshot proves it.
 
 **Acceptance (plan §5, verbatim):**
-- the snapshot and both exports are committed;
-- the noise floor is recorded in the PR;
-- the suite is green.
+- the snapshot equals P5-0's (plus the empty context-marker field);
+- the native live sweep passes every gated row;
+- the route-matched diff against P5-0 is in the PR;
+- the context-marker row is reported, with zero hits;
+- `answer_query()`'s signature is unchanged.
+
+Comparisons against P5-0 use its noise floor: A/C relevance ±0.03,
+B relevance ±0.11, everything else exact (P5-0 in Done). The live sweep
+is free NIM; expect 1–2 h and a few 503 ERROR rows, re-run alone.
 
 ---
 
@@ -1888,9 +2034,9 @@ replanned + re-adopted the same day (#57):
 
 **Phase 5** — LangChain / LangGraph / LangSmith as a parallel, measured
 stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
-- P5-0 — baseline (snapshot + `--json` done; two NIM sweeps left) **← next**
-- P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike
-- P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split
+- ~~P5-0 — baseline + noise floor~~ — done (#71)
+- ~~P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike~~ — done
+- P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split **← next**
 - P5-3 — LangSmith tracing with taint redaction (native first)
 - P5-4 — LangChain ingestion and indexing
 - P5-5 — LangChain retrieval
@@ -1903,8 +2049,8 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 **Phase 6** — ephemeral Google Cloud deployment: Cloud Run + chat UI,
 Terraform, project `tessera-510716`. **Phase 7** — CI/CD (GitHub Actions
 → GCP via WIF) + monitoring. **Then** one final deploy → record →
-destroy for the LinkedIn video. CLAUDE.md still says Phase 5/6 for these
-until P5-1 applies plan §9.
+destroy for the LinkedIn video. CLAUDE.md carries this numbering since
+P5-1.
 
 ## Notes / open flags
 

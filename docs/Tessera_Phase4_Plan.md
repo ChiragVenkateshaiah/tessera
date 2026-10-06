@@ -357,6 +357,8 @@ streaming) and slotted before Phase 5.
 
 ## 9. Phase 5 (next): ephemeral AWS deployment
 
+> **Renumbered (2026-10-06):** now Phase 6 — see `Tessera_Phase5_Plan.md` §8.
+
 Carried over unchanged from the PR #55 design, to be written up as
 `docs/Tessera_Phase5_Plan.md` at the Phase 4 exit:
 one container image (app + both indexes + MiniLM baked in) on a single

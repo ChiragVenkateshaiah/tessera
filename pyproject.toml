@@ -28,6 +28,32 @@ dev = [
     "httpx>=0.27",
     "pytest>=8.0",
 ]
+# Phase 5: the LangChain stack, measured beside the native one
+# (docs/Tessera_Phase5_Plan.md §3.2, §10.2). Optional so a native-only
+# install never pulls the frameworks; `uv sync --extra lc` adds them.
+# Floors sit past the known advisories (plan §3.9.6):
+#   langchain-core 1.2.5        CVE-2025-68664 (dumps/loads serialization injection)
+#   langgraph-checkpoint 3.0.0  CVE-2025-64439 (JsonPlusSerializer RCE)
+#   langgraph-checkpoint-sqlite 3.0.1  CVE-2025-67644 (filter-key SQL injection)
+#   langgraph 1.0.10            CVE-2026-28277 (msgpack checkpoint deserialization)
+lc = [
+    "langchain-core>=1.2.5",
+    "langchain-classic>=1.0",
+    "langchain-community>=0.4",
+    "langchain-text-splitters>=1.0",
+    "langchain-chroma>=1.0",
+    "langchain-huggingface>=1.0",
+    "langchain-nvidia-ai-endpoints>=1.0",
+    "langchain-google-genai>=3.0",
+    "rank-bm25>=0.2.2",
+    "langgraph>=1.0.10",
+    "langgraph-checkpoint>=3.0.0",
+    "langgraph-checkpoint-sqlite>=3.0.1",
+    "langsmith>=0.4",
+    # SQLRecordManager imports SQLAlchemy's asyncio module, which needs greenlet;
+    # langchain-classic doesn't declare it (found in the P5-1 spike).
+    "greenlet>=3.2",
+]
 
 [project.scripts]
 tessera = "tessera.cli:app"

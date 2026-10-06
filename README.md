@@ -11,10 +11,11 @@ cloud LLM with cost accounting (Gemini on Google Cloud's Agent Platform),
 request traces and a feedback-to-eval
 loop, document freshness with a data-quality report, and
 permission-aware retrieval over a restricted tier, proven by a gated
-leakage eval. Everything still runs locally apart from the LLM call;
-the ephemeral Google Cloud deployment (Phase 5) and CI/CD (Phase 6) are
-ahead — see the phase table and "Honest limits"
-below.
+leakage eval. Everything still runs locally apart from the LLM call.
+**Phase 5 is in progress:** LangChain, LangGraph and LangSmith built as a
+parallel, measured stack beside the native core (ADR 0006). The ephemeral
+Google Cloud deployment (Phase 6) and CI/CD (Phase 7) are ahead — see the
+phase table and "Honest limits" below.
 
 ## Phase boundary — what's built vs. designed
 
@@ -24,9 +25,9 @@ below.
 | **Phase 2** | ✅ Complete (`v0.2.0`) | Eval set populated to 50 cases against the synthetic corpus and retrieval/generation tuned against it; a documented internal quality bar (`evals/QUALITY_BAR.md`) enforced via `tessera eval --check` on every retrieval/prompt PR. The consultant query log Discovery described is fictional and will never arrive — `evals/cases/query_log.yaml` is a deliberately, transparently synthesized stand-in. |
 | **Phase 3** | ✅ Complete (`v0.3.0`) | Archetype B (expertise-finding) built end to end: a seeded, synthesized 600-consultant expertise dataset (`data/expertise/` — the HR data is fictional, like the corpus) indexed behind an `ExpertiseStore` port, evidence-ranked people retrieval, grounded "who should I talk to" answers, and B metrics (person recall/MRR, a no-match refusal set) gated in the quality bar. |
 | **Phase 4** | ✅ Complete (`v0.4.0`, this repo) | Production readiness, built and evaluated locally: Gemini on Agent Platform (ADR 0007; Claude on Bedrock built but dormant) + model routing + per-answer cost, an HTTP API, request traces + a feedback-to-eval loop, superseded-document handling + `tessera data-report`, and permission-aware retrieval over a synthetic restricted tier with gated leakage / authorized-recall / prompt-injection evals. See "Phase 4 — production readiness" below. |
-| Phase 4.5 | Planned | LangGraph as an alternative orchestrator over the same pure core (held to the same bar), LangChain adapters behind the existing ports, and a human-review interrupt for quarantined documents. |
-| Phase 5 | Documented, not built | An **ephemeral** Google Cloud deployment for a demo (ADR 0007): container image, Terraform, one Cloud Run service with a chat UI — deployed, recorded, destroyed, teardown verified. |
-| Phase 6 | Documented, not built | CI/CD with the eval gate, monitoring, real identity. |
+| **Phase 5** | 🚧 In progress (`docs/Tessera_Phase5_Plan.md`) | LangChain / LangGraph / LangSmith as a **parallel, measured stack** beside the native core, which stays the default (ADR 0006): each layer swapped in and scored against native, LangGraph orchestration with a bounded corrective loop, a LangGraph human-review workflow (`interrupt` + checkpointer), and LangSmith tracing under taint-based redaction. Installed as an optional extra: `uv sync --extra lc`. |
+| Phase 6 | Documented, not built | An **ephemeral** Google Cloud deployment for a demo (ADR 0007): container image, Terraform, one Cloud Run service with a chat UI — deployed, recorded, destroyed, teardown verified. |
+| Phase 7 | Documented, not built | CI/CD with the eval gate, monitoring, real identity. |
 
 **Deliberately not built (yet):** archetype D (comparative — refusal
 guardrail only, confidentiality-sensitive), real HR-system integration
@@ -34,8 +35,8 @@ guardrail only, confidentiality-sensitive), real HR-system integration
 surfaces), real authentication (`--as` is a demo identity), automated
 detection of anonymized-but-identifiable content (a human review gate
 instead — Discovery §4), conversation memory, PowerPoint ingestion, a
-chat UI (decision deferred until Bedrock latency is measured), and any
-AWS deployment. Full reasoning: [`CLAUDE.md`](CLAUDE.md) and the phase
+chat UI (decided 2026-10-05: built in Phase 6, on Cloud Run), agents
+and tool calling, and any cloud deployment. Full reasoning: [`CLAUDE.md`](CLAUDE.md) and the phase
 plans in [`docs/`](docs/).
 
 Background reading:
@@ -75,7 +76,7 @@ evidence in the eval harness
   on Gemini: A 11.8 s, B 11.3 s, C 15.5 s, D 3.8 s (2026-10-05 sweep;
   the means are higher because a few cases waited out retry backoff).
 - **Identity is a demo device.** `--as c0014` is taken at its word; there
-  is no authentication. Phase 6+ replaces it with SSO.
+  is no authentication. Phase 7+ replaces it with SSO.
 - **Walls are synthetic and static** — a seeded generator, not an
   entitlement system, and there is no live sync.
 - **The review gate is not a detector.** Pending anonymized documents are
@@ -257,6 +258,13 @@ This installs the `tessera` package (editable) plus its dependencies,
 including a CPU-only build of `torch` — Phase 1 is local-first and has no
 GPU dependency (see `pyproject.toml`'s `tool.uv.sources` for why that pin
 exists).
+
+Phase 5's LangChain / LangGraph / LangSmith stack is an optional extra.
+The native stack never needs it:
+
+```sh
+uv sync --extra dev --extra lc
+```
 
 ### Configure
 
@@ -470,7 +478,7 @@ progress to stderr; a full 92-case sweep has taken 15–45 minutes. A case that
 still fails after its retries is reported as an `ERROR` row and excluded
 from the aggregates rather than aborting the run.
 
-`--check` is the manual regression gate (the precursor to the Phase 6 CI
+`--check` is the manual regression gate (the precursor to the Phase 7 CI
 gate): any change touching `retrieval/` (`retriever.py`, `router.py`,
 `expertise.py`), `chunker.py`, `generation/`, `pipeline.py`, the corpus,
 the access data, the expertise dataset or its generator, or the eval set
