@@ -1,0 +1,353 @@
+{
+ "rows": [
+  {
+   "variant": {
+    "name": "native",
+    "splitter": "native",
+    "chunk_size": null,
+    "strip_headers": null,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 427,
+    "words_median": 61,
+    "words_p90": 158,
+    "words_max": 270,
+    "unbalanced_fences": 0,
+    "headerless_table_pieces": 0
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.9,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 400",
+    "splitter": "lc",
+    "chunk_size": 400,
+    "strip_headers": true,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 806,
+    "words_median": 42.0,
+    "words_p90": 59,
+    "words_max": 124,
+    "unbalanced_fences": 6,
+    "headerless_table_pieces": 13
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9425,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 800",
+    "splitter": "lc",
+    "chunk_size": 800,
+    "strip_headers": true,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 504,
+    "words_median": 63.0,
+    "words_p90": 107,
+    "words_max": 188,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 4
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 1200",
+    "splitter": "lc",
+    "chunk_size": 1200,
+    "strip_headers": true,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 437,
+    "words_median": 61,
+    "words_p90": 148,
+    "words_max": 312,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 1
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 1600",
+    "splitter": "lc",
+    "chunk_size": 1600,
+    "strip_headers": true,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 407,
+    "words_median": 60,
+    "words_p90": 176,
+    "words_max": 312,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 2
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.9,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 800 keep headers",
+    "splitter": "lc",
+    "chunk_size": 800,
+    "strip_headers": false,
+    "embed_prefix": true
+   },
+   "stats": {
+    "chunks": 514,
+    "words_median": 65.0,
+    "words_p90": 109,
+    "words_max": 190,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 4
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_mrr": 0.9677,
+    "total_misses": 0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_mrr": 1.0,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "native (no prefix)",
+    "splitter": "native",
+    "chunk_size": null,
+    "strip_headers": null,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 427,
+    "words_median": 61,
+    "words_p90": 158,
+    "words_max": 270,
+    "unbalanced_fences": 0,
+    "headerless_table_pieces": 0
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8414,
+    "mean_mrr": 0.8522,
+    "total_misses": 2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.8,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 400 (no prefix)",
+    "splitter": "lc",
+    "chunk_size": 400,
+    "strip_headers": true,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 806,
+    "words_median": 42.0,
+    "words_p90": 59,
+    "words_max": 124,
+    "unbalanced_fences": 6,
+    "headerless_table_pieces": 13
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8414,
+    "mean_mrr": 0.8559,
+    "total_misses": 2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.75,
+    "mean_mrr": 1.0,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 800 (no prefix)",
+    "splitter": "lc",
+    "chunk_size": 800,
+    "strip_headers": true,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 504,
+    "words_median": 63.0,
+    "words_p90": 107,
+    "words_max": 188,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 4
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8333,
+    "mean_mrr": 0.8522,
+    "total_misses": 2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.75,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 1200 (no prefix)",
+    "splitter": "lc",
+    "chunk_size": 1200,
+    "strip_headers": true,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 437,
+    "words_median": 61,
+    "words_p90": 148,
+    "words_max": 312,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 1
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8575,
+    "mean_mrr": 0.8522,
+    "total_misses": 2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.75,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 1600 (no prefix)",
+    "splitter": "lc",
+    "chunk_size": 1600,
+    "strip_headers": true,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 407,
+    "words_median": 60,
+    "words_p90": 176,
+    "words_max": 312,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 2
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8414,
+    "mean_mrr": 0.8522,
+    "total_misses": 2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.8,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  },
+  {
+   "variant": {
+    "name": "lc 800 keep headers (no prefix)",
+    "splitter": "lc",
+    "chunk_size": 800,
+    "strip_headers": false,
+    "embed_prefix": false
+   },
+   "stats": {
+    "chunks": 514,
+    "words_median": 65.0,
+    "words_p90": 109,
+    "words_max": 190,
+    "unbalanced_fences": 2,
+    "headerless_table_pieces": 4
+   },
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.8366,
+    "mean_mrr": 0.8253,
+    "total_misses": 3
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.75,
+    "mean_mrr": 0.875,
+    "total_misses": 0
+   }
+  }
+ ],
+ "chosen_lc": "lc 1600"
+}

@@ -29,7 +29,8 @@ from tessera.generation.gemini import GeminiClient
 from tessera.generation.nvidia import NvidiaClient
 from tessera.generation.resilient import RetryingLLMClient
 from tessera.ingestion.access_loader import Walls, load_walls
-from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
+from tessera.ingestion.chunker import chunk_corpus
+from tessera.ingestion.indexing import IndexingResult, index_corpus
 from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
 from tessera.ingestion.data_quality import (
     NEAR_DUPLICATE_THRESHOLD,
@@ -387,25 +388,110 @@ def _require_index(store: ChromaVectorStore) -> None:
         raise typer.Exit(code=1)
 
 
+INGEST_STACK_HELP = (
+    "Which index to build: native (collection tessera_chunks), or lc — the "
+    "LangChain stack's index (collection tessera_lc_chunks), built with the "
+    "TESSERA_LC_* switches. Default: TESSERA_STACK, else native."
+)
+
+
 @app.command()
-def ingest() -> None:
-    """Load the corpus, chunk it, embed it, and persist the index."""
+def ingest(stack: str | None = typer.Option(None, "--stack", help=INGEST_STACK_HELP)) -> None:
+    """Load the corpus, chunk it, embed it, and index it (delete-then-add)."""
     settings = _load_settings()
+    chosen = stack or settings.stack
+    if chosen not in ("native", "lc"):
+        typer.echo(f"Unknown stack {chosen!r}: use native or lc.", err=True)
+        raise typer.Exit(code=2)
+    if chosen == "lc":
+        _ingest_lc(settings)
+        return
 
     loaded = load_corpus(settings.corpus_dir)
-    # Quarantined documents (pending human review) are never embedded.
-    docs = indexable(loaded)
-    chunks = chunk_corpus(docs)
-    held = len(loaded) - len(docs)
-    quarantine = f" ({held} quarantined, not indexed)" if held else ""
-    typer.echo(f"Loaded {len(loaded)} documents{quarantine}, {len(chunks)} chunks.")
-
     embedder = LocalEmbedder()
-    embeddings = embedder.embed_documents([chunk_embedding_text(c) for c in chunks])
-
     store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
-    store.add(chunks, embeddings)
-    typer.echo(f"Indexed {store.count()} chunks at {settings.vectorstore_dir}.")
+    # Each document's old chunks go first, so nothing stale survives a
+    # shrink, a relabel or a quarantine (P5-4).
+    result = index_corpus(loaded, embedder, store)
+    _report_indexing(result, settings.vectorstore_dir, store.count())
+
+
+def _report_indexing(result: IndexingResult, where: Path, total: int) -> None:
+    quarantine = f" ({result.quarantined} quarantined, not indexed)" if result.quarantined else ""
+    typer.echo(f"Loaded {result.documents} documents{quarantine}.")
+    typer.echo(
+        f"Indexed {result.chunks_added} chunks at {where} "
+        f"(replaced {result.chunks_deleted}"
+        f"{f', {result.chunks_unchanged} unchanged' if result.chunks_unchanged else ''}"
+        f"; {total} in the index)."
+    )
+
+
+def _ingest_lc(settings: Settings) -> None:
+    """Build the LangChain stack's index, one layer per TESSERA_LC_* switch
+    (plan §3.2.1, §3.3). LangChain is imported only here."""
+    if settings.lc_indexing == "lc" and settings.lc_store != "lc":
+        typer.echo(
+            "TESSERA_LC_INDEXING=lc needs TESSERA_LC_STORE=lc: LangChain's index() "
+            "writes through a LangChain vector store.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    try:
+        from tessera.integrations.langchain import hf_embeddings, lc_chroma, sql_record_manager
+    except ImportError as exc:
+        typer.echo("The LangChain stack needs the lc extra: `uv sync --extra dev --extra lc`.", err=True)
+        raise typer.Exit(code=1) from exc
+    from functools import partial
+
+    from tessera.ingestion.chunker import chunk_document, chunk_embedding_text
+    from tessera.lc.embeddings import LangChainEmbedder, as_langchain
+    from tessera.lc.indexing import index_with_record_manager
+    from tessera.lc.loader import TesseraCorpusLoader, native_document
+    from tessera.lc.splitter import split_document
+    from tessera.lc.store import LC_COLLECTION_NAME, LangChainChromaStore
+
+    typer.echo(
+        f"Stack: lc · loader {settings.lc_loader} · splitter {settings.lc_splitter}"
+        f"{f' ({settings.lc_chunk_size} chars)' if settings.lc_splitter == 'lc' else ''}"
+        f" · embed prefix {'on' if settings.lc_embed_prefix else 'off'}"
+        f" · embeddings {settings.lc_embeddings} · store {settings.lc_store}"
+        f" · indexing {settings.lc_indexing}",
+        err=True,
+    )
+    # Quarantined documents are loaded too, so indexing can remove them.
+    if settings.lc_loader == "lc":
+        loader = TesseraCorpusLoader(settings.corpus_dir, include_quarantined=True)
+        documents = [native_document(d) for d in loader.lazy_load()]
+    else:
+        documents = load_corpus(settings.corpus_dir)
+    split = (
+        partial(split_document, chunk_size=settings.lc_chunk_size)
+        if settings.lc_splitter == "lc"
+        else chunk_document
+    )
+    lc_embeddings = (
+        hf_embeddings() if settings.lc_embeddings == "lc" else as_langchain(LocalEmbedder())
+    )
+    persist = settings.vectorstore_dir
+    if settings.lc_store == "lc":
+        chroma = lc_chroma(persist, lc_embeddings, embed_prefix=settings.lc_embed_prefix)
+        store: VectorStore = LangChainChromaStore(chroma)
+    else:
+        store = ChromaVectorStore(persist_dir=persist, collection_name=LC_COLLECTION_NAME)
+
+    if settings.lc_indexing == "lc":
+        records = sql_record_manager(persist / "lc_record_manager.sqlite")
+        result = index_with_record_manager(documents, chroma, records, split=split)
+    else:
+        result = index_corpus(
+            documents,
+            LangChainEmbedder(lc_embeddings),
+            store,
+            split=split,
+            embedding_text=chunk_embedding_text if settings.lc_embed_prefix else (lambda c: c.text),
+        )
+    _report_indexing(result, persist, store.count())
 
 
 @app.command(name="index-people")

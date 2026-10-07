@@ -13,10 +13,10 @@ from tessera.store.base import SearchResult, VectorStore
 DEFAULT_COLLECTION_NAME = "tessera_chunks"
 
 
-def _serialize_metadata(chunk: Chunk) -> dict[str, str]:
+def chunk_metadata(chunk: Chunk) -> dict[str, str]:
     """Chroma metadata values must be flat scalars (str/int/float/bool) —
     Chunk's list/tuple/date fields get serialized to strings here and
-    reconstructed in _result_from_row.
+    reconstructed in search_result_from_row.
     """
     return {
         "document_path": str(chunk.document_path),
@@ -33,7 +33,7 @@ def _serialize_metadata(chunk: Chunk) -> dict[str, str]:
     }
 
 
-def _result_from_row(
+def search_result_from_row(
     chunk_id: str, text: str, meta: dict[str, str], distance: float
 ) -> SearchResult:
     return SearchResult(
@@ -87,7 +87,7 @@ class ChromaVectorStore(VectorStore):
             ids=[c.chunk_id for c in chunks],
             embeddings=embeddings,
             documents=[c.text for c in chunks],
-            metadatas=[_serialize_metadata(c) for c in chunks],
+            metadatas=[chunk_metadata(c) for c in chunks],
         )
 
     def query(
@@ -108,11 +108,17 @@ class ChromaVectorStore(VectorStore):
         metadatas = result["metadatas"][0]
         distances = result["distances"][0]
         return [
-            _result_from_row(chunk_id, text, meta, distance)
+            search_result_from_row(chunk_id, text, meta, distance)
             for chunk_id, text, meta, distance in zip(
                 ids, documents, metadatas, distances
             )
         ]
+
+    def delete_document(self, document_path: str) -> int:
+        ids = self._collection.get(where={"document_path": document_path}, include=[])["ids"]
+        if ids:
+            self._collection.delete(ids=ids)
+        return len(ids)
 
     def count(self) -> int:
         return self._collection.count()

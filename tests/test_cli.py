@@ -44,64 +44,39 @@ def test_missing_config_reports_actionable_error_and_exits_nonzero(
     assert "Missing or invalid configuration" in result.output
 
 
-def test_ingest_wires_loader_chunker_embedder_and_store(
+def test_ingest_indexes_the_whole_loaded_corpus_delete_then_add(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[str] = []
+    """ingest hands every loaded document — quarantined ones too, so their
+    old chunks get deleted — to index_corpus (P5-4)."""
+    from tessera.ingestion.indexing import IndexingResult
 
-    fake_docs = [type("D", (), {"is_quarantined": False})() for _ in range(2)]
-    fake_chunk_attrs = {"text": "a", "document_title": "Doc", "heading_path": ("H",)}
-    fake_chunks = [
-        type("C", (), fake_chunk_attrs)(),
-        type("C", (), {**fake_chunk_attrs, "text": "b"})(),
-    ]
-
-    monkeypatch.setattr(
-        cli,
-        "load_corpus",
-        lambda corpus_dir: (calls.append("load_corpus"), fake_docs)[1],
-    )
-    monkeypatch.setattr(
-        cli,
-        "chunk_corpus",
-        lambda docs: (calls.append("chunk_corpus"), fake_chunks)[1],
-    )
-
-    class FakeEmbedder:
-        def __init__(self) -> None:
-            calls.append("LocalEmbedder")
-
-        def embed_documents(self, texts: list[str]) -> list[list[float]]:
-            calls.append("embed_documents")
-            return [[0.0] for _ in texts]
+    loaded = [object(), object(), object()]
+    seen: dict[str, object] = {}
 
     class FakeStore:
         def __init__(self, persist_dir: Path) -> None:
-            calls.append("ChromaVectorStore")
-            self._count = 0
-
-        def add(self, chunks: object, embeddings: object) -> None:
-            calls.append("add")
-            self._count = len(fake_chunks)
+            pass
 
         def count(self) -> int:
-            return self._count
+            return 7
 
-    monkeypatch.setattr(cli, "LocalEmbedder", FakeEmbedder)
+    def fake_index(documents: object, embedder: object, store: object) -> IndexingResult:
+        seen.update(documents=documents, embedder=embedder, store=store)
+        return IndexingResult(documents=3, quarantined=1, chunks_added=7, chunks_deleted=9)
+
+    monkeypatch.setattr(cli, "load_corpus", lambda corpus_dir: loaded)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: "embedder")
     monkeypatch.setattr(cli, "ChromaVectorStore", FakeStore)
+    monkeypatch.setattr(cli, "index_corpus", fake_index)
 
     result = runner.invoke(cli.app, ["ingest"])
 
-    assert result.exit_code == 0
-    assert calls == [
-        "load_corpus",
-        "chunk_corpus",
-        "LocalEmbedder",
-        "embed_documents",
-        "ChromaVectorStore",
-        "add",
-    ]
-    assert "Indexed 2 chunks" in result.output
+    assert result.exit_code == 0, result.output
+    assert seen["documents"] is loaded and seen["embedder"] == "embedder"
+    assert isinstance(seen["store"], FakeStore)
+    assert "Loaded 3 documents (1 quarantined, not indexed)." in result.output
+    assert "Indexed 7 chunks" in result.output and "replaced 9" in result.output
 
 
 def test_query_requires_an_existing_index(monkeypatch: pytest.MonkeyPatch) -> None:

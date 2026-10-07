@@ -225,9 +225,9 @@ def main() -> None:
     from evals.harness import load_cases
     from tessera.embedding.local import LocalEmbedder
     from tessera.ingestion.access_loader import load_walls
-    from tessera.ingestion.chunker import chunk_corpus, chunk_embedding_text
     from tessera.ingestion.expertise_loader import load_expertise, profile_summary_text
-    from tessera.ingestion.loader import indexable, load_corpus
+    from tessera.ingestion.indexing import index_corpus
+    from tessera.ingestion.loader import load_corpus
     from tessera.store.chroma import ChromaVectorStore
     from tessera.store.chroma_expertise import ChromaExpertiseStore
 
@@ -249,8 +249,6 @@ def main() -> None:
     access_file = Path(os.environ.get("TESSERA_ACCESS_FILE", "data/access/walls.yaml"))
 
     loaded = load_corpus(corpus_dir)
-    docs = indexable(loaded)
-    chunks = chunk_corpus(docs)
     embedder = LocalEmbedder()
     people = load_expertise(expertise_dir, corpus_dir=corpus_dir)
     walls = load_walls(
@@ -261,7 +259,8 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as persist_dir:
         store = ChromaVectorStore(persist_dir=Path(persist_dir))
-        store.add(chunks, embedder.embed_documents([chunk_embedding_text(c) for c in chunks]))
+        # The same delete-then-add path `tessera ingest` uses (P5-4).
+        index_corpus(loaded, embedder, store)
         expertise_store = ChromaExpertiseStore(persist_dir=Path(persist_dir))
         expertise_store.add(
             people, embedder.embed_documents([profile_summary_text(p) for p in people])
