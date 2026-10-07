@@ -261,6 +261,13 @@ These are reasons, not preferences:
   in every finding, and add a review section to the plan mapping each
   finding to its fix. The Phase 5 reviews found real defects a docs-only
   read would have missed.
+- **PR review guide** (user, 2026-10-07). Whenever the user runs
+  `gh pr view <n> --web` in the chat, or `/pr-review <n>`, reply with the
+  reviewer's guide for PR `<n>` in the format of
+  [`.claude/commands/pr-review.md`](.claude/commands/pr-review.md):
+  decision summary, reading order, what to check (`file:line`),
+  before/after, risks and accept criteria, then the link to the PR's
+  "Files changed" page. Also post it right after every `gh pr create`.
 - **Portfolio depth over speed** (user, 2026-10-03). The thorough,
   evidenced version is the default. Don't propose shrinkable scope or
   time-boxed shortcuts to save time; still flag cost (cloud LLM spend) and
