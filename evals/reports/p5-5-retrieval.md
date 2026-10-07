@@ -90,7 +90,44 @@ store.
 
 ## 4. Multi-query, live
 
-_The sweep is running; results are added when it completes._
+`TESSERA_LC_RETRIEVER=multiquery tessera eval --check --stack lc` ran on
+NIM. Routing and generation were native; the rephrasings came from the
+routing model (Nemotron). The run took 95 minutes, with 120 transient
+429/503 errors retried. **`=> PASS`.** One ERROR row (`ql039`, retries
+exhausted) stays in the export, per the project rule. Re-run alone at the
+same commit, `ql039` scored recall 0.67, RR 1.00, groundedness 5 and
+relevance 5. Native's score on it is also recall 0.67.
+
+Compared with the P5-4 native sweep (`evals/baselines/p5-4-native.json`)
+on the **90 cases scored in both and routed alike** (`ac-a06` re-routed
+A→D, the known Cobalt instability):
+
+| | native (P5-4) | multi-query |
+|---|---|---|
+| A/C recall (53 labelled cases) | 0.9745 | 0.9745 |
+| A/C MRR | 0.9717 | 0.9717 |
+| A/C precision | 0.362 | 0.355 |
+| groundedness (42 judged) | 4.929 | 4.976 |
+| relevance (42 judged) | 4.929 | 4.952 |
+| cases whose recall or RR changed | — | **0** |
+| mean latency per A/C case | 29.3 s | 57.7 s |
+
+- **Multi-query changes no case's retrieval outcome.** The union widens
+  the pool, but the cosine re-order and per-document diversification
+  bring back the same documents in the same order. The judge means move
+  by +0.05 and +0.02. The shown chunks differ slightly, so this is not
+  pure judge noise (P5-0 measured A/C relevance noise at ±0.03), but it is
+  small.
+- **It doubles latency**: three rephrasings, then four retrievals.
+- **Its LLM calls aren't metered.** The rephrasings run inside the
+  retriever, outside the pipeline's usage recorders, so the sweep's token
+  totals even fell (180k → 176k input). On a paid model this cost would be
+  invisible. The plan's fix arrives with P5-7: usage recorders passed per
+  invocation through LangGraph's runtime context, not bound at build time.
+  Until then, this is a known gap of the multi-query retriever.
+
+**Decision:** not a default. It brings no recall gain, doubles latency,
+and has unmetered cost.
 
 ## 5. Findings worth knowing
 
