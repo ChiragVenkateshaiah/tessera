@@ -326,7 +326,16 @@ at `data/vectorstore`. Costs zero LLM calls. The first run downloads the
 ~90MB embedding model from Hugging Face (a one-time, few-minute pause with
 no progress output) — this is the only network access in Phase 1 outside
 the LLM call itself. Safe to re-run any time the
-corpus changes.
+corpus changes. Each document's old chunks are deleted before its new ones
+are added, so a document that shrinks, is relabelled or is quarantined
+for review leaves nothing stale behind.
+
+With the `lc` extra, `uv run tessera ingest --stack lc` builds the
+LangChain stack's index beside it (collection `tessera_lc_chunks`). Each
+layer is a `TESSERA_LC_*` switch: the loader, the splitter, the embedding
+prefix, the embeddings, the store, and the indexing. LangChain's
+`index()` with a `SQLRecordManager` skips unchanged chunks on a re-run.
+The evidence behind each default is in `evals/reports/p5-4-ingestion.md`.
 
 ```sh
 uv run tessera index-people

@@ -75,6 +75,20 @@ class VectorStore(ABC):
     def count(self) -> int:
         """Number of chunks currently indexed."""
 
+    def delete_document(self, document_path: str) -> int:
+        """Remove every chunk of one document; return how many were removed.
+
+        A port change (Phase 5, P5-4; CLAUDE.md constraint #1). Ingestion
+        deletes a document's chunks before adding its new ones, so a
+        document whose chunk count shrinks, or that is relabelled or
+        quarantined, leaves nothing behind under its old labels.
+        document_path is in the form chunks carry (``str(Chunk.document_path)``).
+
+        Not abstract, so read-only stores and test fakes needn't implement
+        it; a store that ingestion writes to must.
+        """
+        raise NotImplementedError(f"{type(self).__name__} can't delete documents")
+
 
 @dataclass(frozen=True)
 class Evidence:

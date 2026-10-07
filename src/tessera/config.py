@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     # Which pipeline answers (Phase 5 plan §3.1.2): the native stack, or the
     # LangChain stack beside it (built in P5-4..P5-7). --stack overrides it.
     stack: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_STACK")
+    # The LangChain stack's per-layer switches (Phase 5 plan §3.2.1),
+    # TESSERA_LC_<SWITCH>. Each is "native" or "lc", so any one framework
+    # component can be measured with the rest held native. The defaults are
+    # the "lc-defaults" profile: each layer at the value its evidence chose
+    # (P5-4: docs/Tessera_Phase5_Plan.md §3.3, evals/reports/p5-4-ingestion.md).
+    lc_loader: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_LOADER")
+    lc_splitter: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_SPLITTER")
+    lc_chunk_size: int = Field(default=1600, validation_alias="TESSERA_LC_CHUNK_SIZE")
+    lc_embed_prefix: bool = Field(default=True, validation_alias="TESSERA_LC_EMBED_PREFIX")
+    lc_embeddings: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_EMBEDDINGS")
+    lc_store: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_STORE")
+    lc_indexing: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_INDEXING")
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.

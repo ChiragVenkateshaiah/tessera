@@ -173,6 +173,33 @@ def _split_oversized(text: str, max_words: int) -> list[str]:
     return pieces
 
 
+def make_chunk(
+    doc: Document, index: int, heading_path: tuple[str, ...], text: str
+) -> Chunk:
+    """The ``index``-th chunk of ``doc``: its id is ``<stem>::<index>`` (the
+    retriever's ``_chunk_index`` reads it back), and it carries the
+    document's citation, freshness and access labels. Every splitter —
+    this module's and the LangChain stack's — builds chunks through here,
+    so the labels can't differ between them.
+    """
+    return Chunk(
+        chunk_id=f"{doc.path.stem}::{index}",
+        document_path=doc.path,
+        document_title=doc.title,
+        doc_type=doc.doc_type,
+        industry=doc.industry,
+        topics=doc.topics,
+        date=doc.date,
+        heading_path=heading_path,
+        text=text,
+        chunk_index=index,
+        status=doc.status,
+        superseded_by=str(doc.superseded_by_path) if doc.superseded_by_path else None,
+        sensitivity=SENSITIVITY_RESTRICTED if doc.is_restricted else doc.sensitivity,
+        engagement=doc.engagement,
+    )
+
+
 def chunk_document(
     doc: Document, max_words: int = DEFAULT_MAX_CHUNK_WORDS
 ) -> list[Chunk]:
@@ -182,32 +209,9 @@ def chunk_document(
     _flatten(tree, (), sections)
 
     chunks: list[Chunk] = []
-    index = 0
     for heading_path, text in sections:
         for piece in _split_oversized(text, max_words):
-            chunks.append(
-                Chunk(
-                    chunk_id=f"{doc.path.stem}::{index}",
-                    document_path=doc.path,
-                    document_title=doc.title,
-                    doc_type=doc.doc_type,
-                    industry=doc.industry,
-                    topics=doc.topics,
-                    date=doc.date,
-                    heading_path=heading_path,
-                    text=piece,
-                    chunk_index=index,
-                    status=doc.status,
-                    superseded_by=str(doc.superseded_by_path)
-                    if doc.superseded_by_path
-                    else None,
-                    sensitivity=SENSITIVITY_RESTRICTED
-                    if doc.is_restricted
-                    else doc.sensitivity,
-                    engagement=doc.engagement,
-                )
-            )
-            index += 1
+            chunks.append(make_chunk(doc, len(chunks), heading_path, piece))
     return chunks
 
 
