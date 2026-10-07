@@ -79,11 +79,17 @@ def embedder() -> LocalEmbedder:
 def stores(
     documents: list[Document], embedder: LocalEmbedder, tmp_path_factory: pytest.TempPathFactory
 ) -> dict[str, Any]:
+    # One collection, read by both stores. Chroma's HNSW search is
+    # approximate and its graph is built with parallel inserts, so two
+    # separately built indexes can return different chunks for the same
+    # filtered query (seen: q001's expansion, ::5 vs ::1). Parity is about
+    # the retrieval logic, so both read the same graph; the native reader
+    # ignores the extra chunk_id metadata.
     root = tmp_path_factory.mktemp("retrieval")
-    native = ChromaVectorStore(persist_dir=root / "native")
-    index_corpus(documents, embedder, native)
-    lc = LangChainChromaStore(lc_chroma(root / "lc", as_langchain(embedder)))
+    lc = LangChainChromaStore(lc_chroma(root, as_langchain(embedder)))
     index_corpus(documents, embedder, lc)
+    native = ChromaVectorStore(persist_dir=root, collection_name="tessera_lc_chunks")
+    assert native.count() == lc.count()
     return {"native": native, "lc": lc}
 
 
