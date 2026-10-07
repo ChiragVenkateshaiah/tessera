@@ -76,6 +76,16 @@ class Settings(BaseSettings):
     bedrock_router_model: str = "anthropic.claude-haiku-4-5"
     bedrock_answer_model: str = "anthropic.claude-opus-5-5"
     bedrock_answer_effort: str = "medium"
+    # LangSmith tracing (Phase 5 plan §3.9): enabled ONLY here, never by
+    # LANGSMITH_TRACING / LANGCHAIN_TRACING_V2 (the composition roots refuse
+    # those). Runs go through Tessera's redacting client; the key and
+    # endpoint are passed to it explicitly. Needs the lc extra.
+    langsmith_tracing: bool = Field(default=False, validation_alias="TESSERA_LANGSMITH_TRACING")
+    langsmith_api_key: str | None = Field(default=None, validation_alias="TESSERA_LANGSMITH_API_KEY")
+    langsmith_endpoint: str = Field(
+        default="https://api.smith.langchain.com", validation_alias="TESSERA_LANGSMITH_ENDPOINT"
+    )
+    langsmith_project: str = Field(default="tessera", validation_alias="TESSERA_LANGSMITH_PROJECT")
     corpus_dir: Path = Field(
         default=Path("data/corpus"), validation_alias="TESSERA_CORPUS_DIR"
     )
