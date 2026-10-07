@@ -418,3 +418,74 @@ def _has_removed_restricted(value: Any) -> bool:
         return any(_has_removed_restricted(v) for v in value)
     return False
 
+
+
+# --- P5-5: the LangChain retrievers' own runs ---
+
+# The run each retriever kind must produce through LangChain's callbacks —
+# proof the runs exist and went through the redacting client.
+LC_RETRIEVER_RUNS = {
+    "vector": {"ArchetypeRetriever", "ScopedVectorRetriever"},
+    "bm25": {"ArchetypeRetriever", "BM25Retriever"},
+    "hybrid": {"ArchetypeRetriever", "EnsembleRetriever", "BM25Retriever", "ScopedVectorRetriever"},
+    "multiquery": {"ArchetypeRetriever", "MultiQueryRetriever", "ScopedVectorRetriever"},
+    "rerank": {"ArchetypeRetriever", "ContextualCompressionRetriever", "ScopedVectorRetriever"},
+    "parent_doc": {"ArchetypeRetriever", "ParentDocumentRetriever"},
+}
+
+
+@pytest.fixture(scope="module")
+def lc_store(documents: list[Document], embedder: LocalEmbedder, tmp_path_factory: pytest.TempPathFactory) -> Any:
+    from tessera.ingestion.indexing import index_corpus
+    from tessera.integrations.langchain import lc_chroma
+    from tessera.lc.embeddings import as_langchain
+    from tessera.lc.store import LangChainChromaStore
+
+    built = LangChainChromaStore(lc_chroma(tmp_path_factory.mktemp("lc-index"), as_langchain(embedder)))
+    index_corpus(documents, embedder, built)
+    return built
+
+
+@pytest.fixture(scope="module")
+def retriever_parts(documents: list[Document]) -> dict[str, Any]:
+    from tessera.integrations.langchain import hf_cross_encoder
+    from tessera.lc.retrievers import BM25Cache, parent_docstore
+
+    return {"bm25": BM25Cache(), "cross_encoder": hf_cross_encoder(), "parents": parent_docstore(documents)}
+
+
+@pytest.mark.parametrize("kind", list(LC_RETRIEVER_RUNS))
+def test_langchain_retriever_runs_are_redacted_too(
+    kind: str,
+    sent: list[Any],
+    documents: list[Document],
+    lc_store: Any,
+    embedder: LocalEmbedder,
+    access_cases: list[EvalCase],
+    walls: Walls,
+    forbidden: dict[str, Any],
+    retriever_parts: dict[str, Any],
+) -> None:
+    """Every access case through the native pipeline with a LangChain
+    retriever swapped in (the ``retriever`` switch): LangChain's callback
+    runs for the retriever and its sub-retrievers nest under Tessera's
+    traced retrieve step, go through the same redacting client, and send
+    nothing restricted. Multi-query's rephrasing model is the leaky echo."""
+    from tessera.lc.retrievers import lc_retrieve_fn
+
+    tracer = make_tracer(documents)
+    llm = LeakyLLM()
+    retrieve = lc_retrieve_fn(lc_store, kind, llm=tracer.llm(llm, "rephrase"), **retriever_parts)
+    pipeline = NativePipeline(
+        tracer.llm(llm, "answer"),
+        embedder,
+        lc_store,
+        router_llm=tracer.llm(llm, "router"),
+        **tracer.native_steps(retrieve=retrieve),
+    )
+    for case in access_cases:
+        tracer.run(pipeline, case.query, case_principal(case, walls), tracer.new_trace_id())
+
+    assert leaks(captured_text(sent), forbidden) == []
+    names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
+    assert LC_RETRIEVER_RUNS[kind] <= names, f"missing LangChain runs: {LC_RETRIEVER_RUNS[kind] - names}"
