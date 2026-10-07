@@ -35,8 +35,9 @@ in-memory corpus. One index over everything would rank restricted text
 for a walled user before any post-filter ran (Phase 4 plan §3.5.4). So
 each principal's BM25 ranks only over the union of their scopes —
 internal, plus each engagement they are cleared for — read through their
-``ScopedStore``. Indexes are cached per scope set and per corpus version;
-``invalidate()`` drops them (the review workflow calls it, P5-8).
+``ScopedStore``. Indexes are cached per scope set and per content
+fingerprint of those rows, so a relabel or edit rebuilds them;
+``invalidate()`` drops them all (the review workflow calls it, P5-8).
 
 **Package reality.** ``EnsembleRetriever``, ``MultiQueryRetriever``,
 ``ParentDocumentRetriever``, ``ContextualCompressionRetriever`` and
@@ -47,6 +48,7 @@ maintenance mode); ``BM25Retriever`` and ``HuggingFaceCrossEncoder`` from
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import threading
@@ -252,23 +254,48 @@ def bm25_tokens(text: str) -> list[str]:
 
 class BM25Cache:
     """BM25 indexes, one per scope set (internal + the principal's
-    engagements), built from that principal's in-scope rows and keyed by
-    the corpus version, so a principal never ranks over text outside
-    their scopes."""
+    engagements), built from that principal's in-scope rows, so a
+    principal never ranks over text outside their scopes.
+
+    **Keyed by a content fingerprint** of those rows — every chunk's id,
+    text and labels — not by a count. A relabel or an edit that keeps the
+    chunk count (a document moved from internal to restricted, say) gives
+    a new fingerprint, so the next request builds a fresh index; with a
+    count key it got the stale one (the P5-5 review's Risk 1). The rows are
+    read in scope on every request (cheap: metadata and text); the BM25
+    build, the expensive part, is what's cached. ``invalidate()`` still
+    drops everything.
+    """
 
     def __init__(self) -> None:
-        self._indexes: dict[tuple[frozenset[str], int], list[LCDocument]] = {}
+        self._indexes: dict[tuple[frozenset[str], str], BM25Retriever] = {}
         self._lock = threading.Lock()
 
+    @staticmethod
+    def fingerprint(documents: list[LCDocument]) -> str:
+        digest = hashlib.sha256()
+        for doc in sorted(documents, key=lambda d: d.metadata["chunk_id"]):
+            labels = sorted((k, str(v)) for k, v in doc.metadata.items() if k != "score")
+            digest.update(repr((labels, doc.page_content)).encode())
+        return digest.hexdigest()
+
     def documents(self, scoped: ScopedStore) -> list[LCDocument]:
-        key = (scoped.scope_names, scoped.count())
-        with self._lock:
-            if key not in self._indexes:
-                self._indexes[key] = [to_document(r) for r in scoped.rows(CURRENT_ONLY)]
-            return self._indexes[key]
+        """The principal's in-scope rows, as BM25 indexes them."""
+        return [to_document(r) for r in scoped.rows(CURRENT_ONLY)]
 
     def retriever(self, scoped: ScopedStore, k: int) -> BM25Retriever:
-        return BM25Retriever.from_documents(self.documents(scoped), k=k, preprocess_func=bm25_tokens)
+        documents = self.documents(scoped)
+        key = (scoped.scope_names, self.fingerprint(documents))
+        with self._lock:
+            if key not in self._indexes:
+                self._indexes[key] = BM25Retriever.from_documents(
+                    documents, k=k, preprocess_func=bm25_tokens
+                )
+            built = self._indexes[key]
+        return built.model_copy(update={"k": k})
+
+    def __len__(self) -> int:
+        return len(self._indexes)
 
     def invalidate(self) -> None:
         """Drop every index (the corpus changed under review)."""

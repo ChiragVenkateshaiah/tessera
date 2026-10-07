@@ -255,12 +255,50 @@ def test_every_sub_call_carries_the_permission_filter(
 
 def test_bm25_indexes_are_per_scope_set_and_invalidated(stores: dict[str, Any]) -> None:
     cache = BM25Cache()
-    walled = cache.documents(ScopedStore(stores["lc"], Principal("a")))
-    other_walled = cache.documents(ScopedStore(stores["lc"], Principal("b")))
-    cleared = cache.documents(ScopedStore(stores["lc"], Principal("c", frozenset({"halcyon"}))))
-    assert walled is other_walled  # same scope set, one index
-    assert {d.metadata["sensitivity"] for d in walled} == {"internal"}
-    assert {d.metadata["engagement"] for d in cleared} == {"", "halcyon"}
-    assert len(cleared) > len(walled)
+    walled = cache.retriever(ScopedStore(stores["lc"], Principal("a")), k=5)
+    cache.retriever(ScopedStore(stores["lc"], Principal("b")), k=20)
+    assert len(cache) == 1  # same scope set, same rows: one build
+    cleared = cache.retriever(ScopedStore(stores["lc"], Principal("c", frozenset({"halcyon"}))), k=5)
+    assert len(cache) == 2
+    assert {d.metadata["sensitivity"] for d in walled.docs} == {"internal"}
+    assert {d.metadata["engagement"] for d in cleared.docs} == {"", "halcyon"}
     cache.invalidate()
-    assert cache.documents(ScopedStore(stores["lc"], Principal("a"))) is not walled
+    assert len(cache) == 0
+
+
+def test_a_relabel_in_the_same_process_rebuilds_the_bm25_index(tmp_path: Path) -> None:
+    """The P5-5 review's Risk 1. A document relabelled internal ->
+    restricted and re-indexed in the same process keeps the chunk count;
+    a count-keyed cache then served the walled user the stale index, with
+    the restricted text in BM25's own output. The content fingerprint
+    changes, so the index is rebuilt."""
+    from tests.test_stale_chunks import HashEmbedder
+
+    def write(label: str) -> None:
+        for name, front, body in [
+            ("a", f'title: "A"\n{label}', "## Notes\n\nThe zebrafinch pricing tactic."),
+            ("b", 'title: "B"\n', "## Notes\n\nA general pricing framework."),
+        ]:
+            path = tmp_path / "corpus" / "methodology" / f"{name}.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                f"---\n{front}doc_type: methodology\nindustry: retail\ntopics: [pricing]\n"
+                f"date: 2025-01-01\n---\n\n{body}\n"
+            )
+
+    embedder = HashEmbedder()
+    store = LangChainChromaStore(lc_chroma(tmp_path / "index", as_langchain(embedder)))
+    walled = Principal("walled")
+    cache = BM25Cache()
+
+    write("")
+    index_corpus(load_corpus(tmp_path / "corpus"), embedder, store)
+    before = cache.retriever(ScopedStore(store, walled), k=5).invoke("zebrafinch pricing")
+    assert any("zebrafinch" in d.page_content for d in before)  # internal: allowed
+
+    write("sensitivity: restricted\nengagement: kestrel\n")
+    index_corpus(load_corpus(tmp_path / "corpus"), embedder, store)
+    assert store.count() == 2  # same count: the case a count key missed
+    after = cache.retriever(ScopedStore(store, walled), k=5).invoke("zebrafinch pricing")
+    assert not any("zebrafinch" in d.page_content for d in after)
+    assert len(cache) == 2  # rebuilt, without invalidate()

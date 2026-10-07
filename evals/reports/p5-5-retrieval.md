@@ -150,8 +150,20 @@ and has unmetered cost.
   corpus would rank restricted text for a walled user before any
   post-filter ran. Instead, each principal's BM25 ranks only over the
   union of their scopes (internal plus their engagements). The rows are
-  read through their `ScopedStore`, cached per scope set and corpus size,
-  and dropped by `invalidate()` (the review workflow's hook, P5-8).
+  read through their `ScopedStore` on every request, and the BM25 build is
+  cached per scope set and per **content fingerprint** of those rows (ids,
+  text, labels). `invalidate()` drops every index (the review workflow's
+  hook, P5-8).
+- **Review finding (Risk 1), fixed in this PR.** The first version keyed
+  the cache on the chunk count. A document relabelled from internal to
+  restricted and re-indexed in the same process keeps its count, so the
+  walled user got the stale index, with the restricted text in
+  `BM25Retriever`'s own output and trace run. It did not reach the answer:
+  `rescore()` re-reads each candidate's vector in scope and dropped it. The
+  fingerprint key now rebuilds the index;
+  `test_a_relabel_in_the_same_process_rebuilds_the_bm25_index` pins it.
+  The fix also caches the built BM25 index, where the count-keyed version
+  cached only the rows and rebuilt BM25 on every request.
 - **`ParentDocumentRetriever`'s docstore is unfiltered.** `mget(ids)`
   returns whatever it holds. It is safe here only because the ids come
   from child hits that passed the scope. Every parent is re-checked
