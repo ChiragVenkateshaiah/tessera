@@ -69,14 +69,21 @@ class ChromaVectorStore(VectorStore):
         self,
         persist_dir: Path,
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        *,
+        search_ef: int | None = None,
     ) -> None:
         self._client = chromadb.PersistentClient(path=str(persist_dir))
         # sentence-transformers embeddings are trained for cosine
         # similarity; Chroma's default space is L2, so this is set
-        # explicitly rather than relying on the default.
-        self._collection = self._client.get_or_create_collection(
-            collection_name, metadata={"hnsw:space": "cosine"}
-        )
+        # explicitly rather than relying on the default. search_ef (only
+        # applied when the collection is created) widens HNSW's search:
+        # at or above the collection size the search is exact, so two
+        # independently built indexes agree — the parity tests use it.
+        # Left unset, Chroma's default applies.
+        metadata: dict[str, object] = {"hnsw:space": "cosine"}
+        if search_ef is not None:
+            metadata["hnsw:search_ef"] = search_ef
+        self._collection = self._client.get_or_create_collection(collection_name, metadata=metadata)
 
     def add(self, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
         if len(chunks) != len(embeddings):

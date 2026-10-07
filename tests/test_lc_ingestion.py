@@ -41,6 +41,7 @@ from tessera.store.chroma import ChromaVectorStore  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 CORPUS = REPO / "data" / "corpus"
+EXACT_EF = 2_000  # above the corpus's chunk count: HNSW search is exhaustive
 
 
 @pytest.fixture(scope="module")
@@ -135,12 +136,18 @@ def test_the_store_embeds_exactly_the_native_embedding_text(documents: list[Docu
 def stores(
     documents: list[Document], embedder: LocalEmbedder, tmp_path_factory: pytest.TempPathFactory
 ) -> dict[str, Any]:
+    # Three independently built indexes. Chroma's HNSW search is
+    # approximate and its graph depends on insertion order and parallel
+    # inserts, so at the default search width the builds can return
+    # different chunks for a filtered query (this test flaked on it).
+    # EXACT_EF makes every search visit the whole collection, so the
+    # comparison is between the write paths, not the graphs.
     root = tmp_path_factory.mktemp("stores")
-    native = ChromaVectorStore(persist_dir=root / "native")
+    native = ChromaVectorStore(persist_dir=root / "native", search_ef=EXACT_EF)
     index_corpus(documents, embedder, native)
-    direct = LangChainChromaStore(lc_chroma(root / "direct", as_langchain(embedder)))
+    direct = LangChainChromaStore(lc_chroma(root / "direct", as_langchain(embedder), search_ef=EXACT_EF))
     index_corpus(documents, embedder, direct)
-    chroma = lc_chroma(root / "indexed", as_langchain(embedder))
+    chroma = lc_chroma(root / "indexed", as_langchain(embedder), search_ef=EXACT_EF)
     index_with_record_manager(documents, chroma, sql_record_manager(root / "records.sqlite"))
     return {"native": native, "lc direct": direct, "lc index()": LangChainChromaStore(chroma)}
 
@@ -166,12 +173,12 @@ def test_the_native_retriever_sees_the_same_index_in_the_lc_collection(
         assert [r.text for r in b.results] == [r.text for r in a.results], case.id
         assert b.removed == a.removed, case.id
         # Superseded matches come from a second, filtered nearest-neighbour
-        # query. Chroma's HNSW search is approximate and index() inserts
-        # rows in a different order, so it can surface a document's
-        # second-best chunk (ac-l03: ::2 at 0.3903 for ::0 at 0.3924).
-        # Same documents; scores within that margin.
+        # query. At Chroma's default search width, index()'s different
+        # insertion order once surfaced a document's second-best chunk
+        # (ac-l03: ::2 at 0.3903 for ::0 at 0.3924); with EXACT_EF the
+        # builds agree exactly.
         assert [m.document_path for m in b.superseded] == [m.document_path for m in a.superseded], case.id
-        assert all(abs(x.score - y.score) < 0.01 for x, y in zip(a.superseded, b.superseded)), case.id
+        assert all(abs(x.score - y.score) < 1e-6 for x, y in zip(a.superseded, b.superseded)), case.id
 
 
 # --- splitter ---

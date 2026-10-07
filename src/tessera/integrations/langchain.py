@@ -28,14 +28,19 @@ def lc_chroma(
     *,
     embed_prefix: bool = True,
     collection_name: str = LC_COLLECTION_NAME,
+    search_ef: int | None = None,
 ) -> TesseraChroma:
     """The LangChain collection in the same Chroma directory as native's
-    (a different collection), in cosine space."""
+    (a different collection), in cosine space. ``search_ef`` as
+    ``ChromaVectorStore``'s (exact search for the parity tests)."""
+    metadata: dict[str, object] = {"hnsw:space": "cosine"}
+    if search_ef is not None:
+        metadata["hnsw:search_ef"] = search_ef
     return TesseraChroma(
         collection_name=collection_name,
         embedding_function=embeddings,
         client=chromadb.PersistentClient(path=str(persist_dir)),
-        collection_metadata={"hnsw:space": "cosine"},
+        collection_metadata=metadata,
         embed_prefix=embed_prefix,
     )
 
