@@ -320,12 +320,14 @@ def _native_pipeline(
     store: VectorStore,
     expertise_store: ExpertiseStore | None,
     tracer: LangSmithTracer | None,
-    retrieve: Callable[..., object] | None = None,
+    steps: dict[str, Callable[..., object]] | None = None,
 ) -> NativePipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
-    core (plan §3.9.2). ``retrieve`` swaps in a LangChain retriever (the
-    ``retriever`` switch); everything else stays native."""
+    core (plan §3.9.2). ``steps`` swaps in the LangChain stack's layers
+    (``retrieve``, ``route``, ``generate``, ``find_experts``,
+    ``generate_expertise``); any step not given stays native."""
+    steps = steps or {}
     if tracer is None:
         return NativePipeline(
             llms.answer,
@@ -333,7 +335,7 @@ def _native_pipeline(
             store,
             expertise_store,
             router_llm=llms.router,
-            retrieve_fn=retrieve,  # type: ignore[arg-type]
+            **{f"{name}_fn": fn for name, fn in steps.items()},  # type: ignore[arg-type]
         )
     return NativePipeline(
         tracer.llm(llms.answer, "answer"),
@@ -341,7 +343,7 @@ def _native_pipeline(
         store,
         expertise_store,
         router_llm=tracer.llm(llms.router, "router"),
-        **tracer.native_steps(retrieve=retrieve),  # type: ignore[arg-type]
+        **tracer.native_steps(**steps),  # type: ignore[arg-type]
     )
 
 
@@ -355,11 +357,19 @@ class LcRetrieval:
     embedder: Embedder
     retrieve: Callable[..., object] | None
     switches: dict[str, object]
+    # Generation layers (P5-6): swapped-in pipeline steps, and the model
+    # clients when model_client=lc (None: the native clients).
+    steps: dict[str, Callable[..., object]] = field(default_factory=dict)
+    llms: LLMs | None = None
+
+    def pipeline_steps(self) -> dict[str, Callable[..., object]]:
+        return {**({"retrieve": self.retrieve} if self.retrieve else {}), **self.steps}
 
 
-def _lc_retrieval(settings: Settings, llms: LLMs) -> LcRetrieval:
-    """The LangChain stack's retrieval layers, per the TESSERA_LC_* switches.
-    Layers not built yet (generation, orchestration) stay native."""
+def _lc_retrieval(settings: Settings, llms: LLMs, *, min_interval: float = 0.0) -> LcRetrieval:
+    """The LangChain stack's layers, per the TESSERA_LC_* switches:
+    retrieval (P5-4/5) and generation (P5-6). Orchestration stays native
+    until P5-7."""
     try:
         from tessera.integrations.langchain import hf_cross_encoder, hf_embeddings, lc_chroma
     except ImportError as exc:
@@ -392,16 +402,98 @@ def _lc_retrieval(settings: Settings, llms: LLMs) -> LcRetrieval:
             cross_encoder=hf_cross_encoder() if kind == "rerank" else None,
             parents=parent_docstore(load(settings.corpus_dir)) if kind == "parent_doc" else None,
         )
+    lc_llms, steps = _lc_generation(settings, llms, min_interval=min_interval)
     switches: dict[str, object] = {
         "embeddings": settings.lc_embeddings,
         "store": "lc",
         "retriever": kind,
         **({"hybrid_bm25_weight": settings.lc_hybrid_bm25_weight} if kind == "hybrid" else {}),
-        "router": "native",
-        "generation": "native",
+        "router": settings.lc_router,
+        "prompt_chain": settings.lc_prompt_chain,
+        "model_client": settings.lc_model_client,
+        "retry": settings.lc_retry,
+        "expertise": settings.lc_expertise,
         "orchestration": "native",
     }
-    return LcRetrieval(store=store, embedder=embedder, retrieve=retrieve, switches=switches)
+    return LcRetrieval(
+        store=store, embedder=embedder, retrieve=retrieve, switches=switches, steps=steps, llms=lc_llms
+    )
+
+
+def _lc_generation(
+    settings: Settings, llms: LLMs, *, min_interval: float
+) -> tuple[LLMs | None, dict[str, Callable[..., object]]]:
+    """The generation layers (plan §3.5–3.6): the model clients when
+    model_client=lc, and the router / LCEL chain / expertise steps."""
+    from tessera.lc.expertise import find_experts_step
+    from tessera.lc.generation import LcModel, generate_expertise_step, generate_step, route_step
+
+    if settings.lc_retry == "lc" and settings.lc_model_client != "lc":
+        typer.echo("TESSERA_LC_RETRY=lc needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
+        raise typer.Exit(code=2)
+    lc_llms: LLMs | None = None
+    answer_model = router_model = LcModel()
+    if settings.lc_model_client == "lc":
+        lc_llms, answer_model, router_model = _lc_chat_models(settings, min_interval=min_interval)
+    steps: dict[str, Callable[..., object]] = {}
+    if settings.lc_router == "lc":
+        steps["route"] = route_step(router_model)
+    if settings.lc_prompt_chain == "lc":
+        steps["generate"] = generate_step(answer_model)
+        steps["generate_expertise"] = generate_expertise_step(answer_model)
+    if settings.lc_expertise == "lc":
+        steps["find_experts"] = find_experts_step()
+    return lc_llms, steps
+
+
+def _lc_chat_models(settings: Settings, *, min_interval: float) -> tuple[LLMs, object, object]:
+    """ChatNVIDIA / ChatGoogleGenerativeAI as the model clients. retry
+    native: behind the native port in RetryingLLMClient (chains reach them
+    through it). retry lc: .with_retry() + InMemoryRateLimiter pacing, and
+    chains call the chat models directly, metered by callback."""
+    from tessera.integrations.langchain import chat_gemini, chat_nvidia
+    from tessera.lc.chat_models import LangChainLLMClient
+    from tessera.lc.generation import LcModel, eval_rate_limiter, with_lc_retries
+
+    lc_retry = settings.lc_retry == "lc"
+    limiter = eval_rate_limiter() if lc_retry and min_interval else None
+    if settings.llm_provider == "nvidia":
+        chat = chat_nvidia(settings.nvidia_api_key, settings.nvidia_model, rate_limiter=limiter)
+        models = {"answer": (chat, settings.nvidia_model), "router": (chat, settings.nvidia_model)}
+        name = f"lc-nvidia:{settings.nvidia_model}"
+    elif settings.llm_provider == "gemini":
+        project = _require_gcp(settings)
+        models = {
+            "answer": (
+                chat_gemini(project, settings.gemini_answer_model, location=settings.gcp_location,
+                            thinking_level=settings.gemini_answer_thinking, rate_limiter=limiter),
+                settings.gemini_answer_model,
+            ),
+            "router": (
+                chat_gemini(project, settings.gemini_router_model, location=settings.gcp_location,
+                            thinking_level=settings.gemini_router_thinking, rate_limiter=limiter),
+                settings.gemini_router_model,
+            ),
+        }
+        name = f"lc-gemini:{settings.gemini_answer_model} (router {settings.gemini_router_model})"
+    else:
+        typer.echo("TESSERA_LC_MODEL_CLIENT=lc has no Bedrock adapter (the provider is dormant, ADR 0007).", err=True)
+        raise typer.Exit(code=2)
+
+    clients: dict[str, LLMClient] = {}
+    lc_models: dict[str, object] = {}
+    for role, (chat, model_id) in models.items():
+        if lc_retry:
+            clients[role] = LangChainLLMClient(with_lc_retries(chat), model_id)
+            lc_models[role] = LcModel(chat_model=chat, model_id=model_id)
+        else:
+            clients[role] = RetryingLLMClient(
+                LangChainLLMClient(chat, model_id), min_interval=min_interval, on_retry=_announce_retry
+            )
+            lc_models[role] = LcModel()  # chains reach the model through the port
+    if settings.llm_provider == "nvidia":
+        clients["router"] = clients["answer"]  # one client for both, as native
+    return LLMs(answer=clients["answer"], router=clients["router"], name=name), lc_models["answer"], lc_models["router"]
 
 
 @dataclass
@@ -935,7 +1027,11 @@ def eval_command(
         raise typer.Exit(code=1)
 
     llms = _build_llms(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
-    lc = _lc_retrieval(settings, llms) if chosen_stack == "lc" else None
+    lc = (
+        _lc_retrieval(settings, llms, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+        if chosen_stack == "lc"
+        else None
+    )
     embedder: Embedder = lc.embedder if lc is not None else LocalEmbedder()
     if lc is not None:
         store = lc.store
@@ -947,6 +1043,10 @@ def eval_command(
         if settings.llm_provider == "nvidia"
         else _build_nvidia(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
     )
+    # The judge stays the native NIM client whatever the LangChain stack's
+    # model_client switch says, so judge scores stay comparable.
+    if lc is not None and lc.llms is not None:
+        llms = lc.llms
     typer.echo(
         f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}"
         + (" · " + " · ".join(f"{k} {v}" for k, v in lc.switches.items()) if lc is not None else ""),
@@ -965,7 +1065,7 @@ def eval_command(
     if tracer is not None:
         typer.echo(f"Tracing to LangSmith project {settings.langsmith_project!r} (redacted)", err=True)
     native = _native_pipeline(
-        llms, embedder, store, expertise_store, tracer, retrieve=lc.retrieve if lc is not None else None
+        llms, embedder, store, expertise_store, tracer, steps=lc.pipeline_steps() if lc is not None else None
     )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 

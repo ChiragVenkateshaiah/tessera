@@ -51,6 +51,54 @@ def hf_cross_encoder(model_name: str = DEFAULT_CROSS_ENCODER) -> Any:
     return HuggingFaceCrossEncoder(model_name=model_name)
 
 
+def chat_nvidia(api_key: str, model: str, *, rate_limiter: Any = None) -> Any:
+    """``ChatNVIDIA`` sending what ``NvidiaClient`` sends (plan §3.5): the
+    model, ``temperature`` 0.0, thinking off, and **no** ``max_tokens``
+    (``None`` omits it; the default sends 1024). The P5-6 parity test pins
+    the request body."""
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+    return ChatNVIDIA(
+        model=model,
+        api_key=api_key,
+        temperature=0.0,
+        max_tokens=None,
+        model_kwargs={"chat_template_kwargs": {"enable_thinking": False}},
+        rate_limiter=rate_limiter,
+    )
+
+
+def chat_gemini(
+    project: str,
+    model: str,
+    *,
+    location: str = "global",
+    thinking_level: str | None = "low",
+    max_output_tokens: int = 16_000,
+    rate_limiter: Any = None,
+) -> Any:
+    """``ChatGoogleGenerativeAI`` on Agent Platform (ADC, no key) sending
+    what ``GeminiClient`` sends: the same model ids, ``thinking_level``,
+    ``max_output_tokens`` 16,000, location ``global``, and **SDK retries
+    off** — ``GeminiClient`` makes one attempt and leaves retries to the
+    ``retry`` switch."""
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    kwargs: dict[str, Any] = {}
+    if thinking_level is not None:
+        kwargs["thinking_level"] = thinking_level
+    return ChatGoogleGenerativeAI(
+        model=model,
+        vertexai=True,
+        project=project,
+        location=location,
+        max_output_tokens=max_output_tokens,
+        max_retries=0,
+        rate_limiter=rate_limiter,
+        **kwargs,
+    )
+
+
 def sql_record_manager(path: Path, namespace: str = f"chroma/{LC_COLLECTION_NAME}") -> SQLRecordManager:
     """``index()``'s record manager, in a SQLite file."""
     manager = SQLRecordManager(namespace, db_url=f"sqlite:///{path}")

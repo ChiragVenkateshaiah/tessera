@@ -1008,7 +1008,7 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
     monkeypatch.setattr(
         cli,
         "_lc_retrieval",
-        lambda settings, llms: cli.LcRetrieval(
+        lambda settings, llms, **kw: cli.LcRetrieval(
             store=lc_store, embedder="lc-embedder", retrieve=lc_retrieve,  # type: ignore[arg-type]
             switches={"retriever": "lc"},
         ),

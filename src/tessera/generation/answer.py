@@ -161,9 +161,13 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
         system=system,
         user=build_grounded_answer_user_prompt(retrieval.query, relevant),
     )
-    # One citation per document, numbered as the prompt numbered them.
-    # heading_path is the section only when a single section was shown.
-    citations = [
+    return finish_answer(retrieval, relevant, answer)
+
+
+def citations_for(relevant: list[SearchResult]) -> list[Citation]:
+    """One citation per document, numbered as the prompt numbered them.
+    heading_path is the section only when a single section was shown."""
+    return [
         Citation(
             marker=i,
             document_path=group[0].document_path,
@@ -172,6 +176,16 @@ def generate_answer(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnsw
         )
         for i, group in enumerate(group_by_document(relevant), start=1)
     ]
+
+
+def finish_answer(
+    retrieval: RetrievalResult, relevant: list[SearchResult], answer: str
+) -> GeneratedAnswer:
+    """The model's text as a ``GeneratedAnswer``: citations numbered as
+    the prompt numbered the sources, and the fixed superseded note. Shared
+    by the native generator and the LangChain chain (P5-6), so neither
+    stack's numbering or note can drift."""
+    citations = citations_for(relevant)
     superseded = noted_superseded(retrieval)
     notice = supersession_notice(superseded, citations) if superseded else ""
     if notice:

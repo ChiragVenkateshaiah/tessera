@@ -61,9 +61,11 @@ from tessera.observability.taint import (
 )
 from tessera.pipeline import Pipeline, PipelineRun
 from tessera.principal import Principal
-from tessera.retrieval.expertise import ExpertiseResult, find_experts
+from tessera.retrieval.expertise import ExpertiseResult
+from tessera.retrieval.expertise import find_experts as _core_find_experts
 from tessera.retrieval.retriever import RetrievalResult, retrieve
-from tessera.retrieval.router import RoutingDecision, route
+from tessera.retrieval.router import RoutingDecision
+from tessera.retrieval.router import route as _core_route
 
 logger = logging.getLogger(__name__)
 
@@ -366,14 +368,26 @@ class LangSmithTracer:
         return _TracedLLM(inner, role)
 
     def native_steps(
-        self, retrieve: Callable[..., RetrievalResult] | None = None
+        self,
+        retrieve: Callable[..., RetrievalResult] | None = None,
+        *,
+        route: Callable[..., RoutingDecision] | None = None,
+        generate: Callable[..., GeneratedAnswer] | None = None,
+        find_experts: Callable[..., ExpertiseResult] | None = None,
+        generate_expertise: Callable[..., GeneratedAnswer] | None = None,
     ) -> dict[str, Callable[..., Any]]:
-        """``NativePipeline`` step keyword arguments, each the core
-        function wrapped as a run. ``retrieve`` replaces the native
-        ``retrieve()`` (the LangChain stack's ``retriever`` switch); its
-        own LangChain retriever runs nest under this one."""
+        """``NativePipeline`` step keyword arguments, each wrapped as a
+        run. By default each step is the core function; a LangChain
+        stack's switch passes its replacement (``retrieve``, ``route``,
+        ``generate``, ...), whose own LangChain runs nest under the step's."""
         ref = self.principal_ref
         retrieve_step = retrieve or _native_retrieve
+        route_step = route or (lambda query, llm: _core_route(query, llm))
+        generate_step = generate or (lambda retrieval, llm: generate_answer(retrieval, llm))
+        experts_step = find_experts or (
+            lambda query, embedder, store, *, k: _core_find_experts(query, embedder, store, k=k)
+        )
+        expertise_step = generate_expertise or (lambda found, llm: generate_expertise_answer(found, llm))
 
         @traceable(
             run_type="chain",
@@ -382,7 +396,7 @@ class LangSmithTracer:
             process_outputs=_or_empty(_route_outputs),
         )
         def route_fn(query: str, llm: LLMClient) -> RoutingDecision:
-            return route(query, llm)
+            return route_step(query, llm)
 
         @traceable(
             run_type="retriever",
@@ -412,7 +426,7 @@ class LangSmithTracer:
             process_outputs=_or_empty(_generated_outputs),
         )
         def generate_fn(retrieval: RetrievalResult, llm: LLMClient) -> GeneratedAnswer:
-            return generate_answer(retrieval, llm)
+            return generate_step(retrieval, llm)
 
         @traceable(
             run_type="retriever",
@@ -421,7 +435,7 @@ class LangSmithTracer:
             process_outputs=_or_empty(_expertise_outputs),
         )
         def find_experts_fn(query: str, embedder: Any, store: Any, *, k: int) -> ExpertiseResult:
-            return find_experts(query, embedder, store, k=k)
+            return experts_step(query, embedder, store, k=k)
 
         @traceable(
             run_type="chain",
@@ -432,7 +446,7 @@ class LangSmithTracer:
             process_outputs=_or_empty(_generated_outputs),
         )
         def generate_expertise_fn(found: ExpertiseResult, llm: LLMClient) -> GeneratedAnswer:
-            return generate_expertise_answer(found, llm)
+            return expertise_step(found, llm)
 
         return {
             "route_fn": route_fn,

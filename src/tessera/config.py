@@ -75,6 +75,18 @@ class Settings(BaseSettings):
         default="lc", validation_alias="TESSERA_LC_RETRIEVER"
     )
     lc_hybrid_bm25_weight: float = Field(default=0.25, validation_alias="TESSERA_LC_HYBRID_BM25_WEIGHT")
+    # Generation layers (P5-6). router: native JSON parsing or LangChain
+    # structured output; prompt_chain: native prompts or the LCEL chain;
+    # model_client: NvidiaClient/GeminiClient or ChatNVIDIA/
+    # ChatGoogleGenerativeAI (per TESSERA_LLM_PROVIDER); retry:
+    # RetryingLLMClient or .with_retry() + InMemoryRateLimiter (needs
+    # model_client=lc); expertise: native find_experts or PeopleRetriever.
+    # Evidence: evals/reports/p5-6-generation.md.
+    lc_router: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_ROUTER")
+    lc_prompt_chain: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_PROMPT_CHAIN")
+    lc_model_client: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_MODEL_CLIENT")
+    lc_retry: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_RETRY")
+    lc_expertise: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_EXPERTISE")
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.
