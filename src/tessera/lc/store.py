@@ -121,6 +121,28 @@ class LangChainChromaStore(VectorStore):
     def count(self) -> int:
         return self.chroma.collection.count()
 
+    def rows(self, where: dict[str, object] | None = None) -> list[SearchResult]:
+        """Every chunk matching ``where`` (score 0.0) — what BM25 indexes."""
+        got = self.chroma.get(where=where, include=["documents", "metadatas"])
+        return [
+            search_result_from_row(m["chunk_id"], text, m, 1.0)
+            for text, m in zip(got["documents"], got["metadatas"])
+        ]
+
+    def vectors(
+        self, chunk_ids: list[str], where: dict[str, object] | None = None
+    ) -> dict[str, list[float]]:
+        """The stored embeddings of ``chunk_ids`` that also match ``where``,
+        by chunk id — for re-scoring a fused or reranked list by cosine."""
+        if not chunk_ids:
+            return {}
+        only: dict[str, object] = {"chunk_id": {"$in": list(chunk_ids)}}
+        got = self.chroma.get(
+            where=only if not where else {"$and": [where, only]},
+            include=["embeddings", "metadatas"],
+        )
+        return {m["chunk_id"]: list(v) for m, v in zip(got["metadatas"], got["embeddings"])}
+
     def delete_document(self, document_path: str) -> int:
         ids = self.chroma.get(where={"document_path": document_path}, include=[])["ids"]
         if ids:

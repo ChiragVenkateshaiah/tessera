@@ -110,19 +110,21 @@ STACK_HELP = (
     "not built yet). Default: TESSERA_STACK, else native."
 )
 LC_NOT_BUILT_MESSAGE = (
-    "The LangChain stack (--stack lc) isn't built yet: Phase 5 builds it in "
-    "P5-4 to P5-7 (docs/Tessera_Phase5_Plan.md). Use --stack native."
+    "The LangChain stack (--stack lc) isn't built yet for this command: so far "
+    "it answers only in `tessera eval` (retrieval since P5-5; generation and "
+    "orchestration come in P5-6 and P5-7, docs/Tessera_Phase5_Plan.md). "
+    "Use --stack native."
 )
 
 
-def _resolve_stack(settings: Settings, stack: str | None) -> str:
-    """The stack to run (the option, else TESSERA_STACK). Only native
-    exists so far; asking for lc stops with a clear message."""
+def _resolve_stack(settings: Settings, stack: str | None, *, allow_lc: bool = False) -> str:
+    """The stack to run (the option, else TESSERA_STACK). A command the
+    LangChain stack doesn't serve yet stops with a clear message."""
     chosen = stack or settings.stack
     if chosen not in ("native", "lc"):
         typer.echo(f"Unknown stack {chosen!r}: use native or lc.", err=True)
         raise typer.Exit(code=2)
-    if chosen == "lc":
+    if chosen == "lc" and not allow_lc:
         typer.echo(LC_NOT_BUILT_MESSAGE, err=True)
         raise typer.Exit(code=2)
     return chosen
@@ -318,20 +320,88 @@ def _native_pipeline(
     store: VectorStore,
     expertise_store: ExpertiseStore | None,
     tracer: LangSmithTracer | None,
+    retrieve: Callable[..., object] | None = None,
 ) -> NativePipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
-    core (plan §3.9.2)."""
+    core (plan §3.9.2). ``retrieve`` swaps in a LangChain retriever (the
+    ``retriever`` switch); everything else stays native."""
     if tracer is None:
-        return NativePipeline(llms.answer, embedder, store, expertise_store, router_llm=llms.router)
+        return NativePipeline(
+            llms.answer,
+            embedder,
+            store,
+            expertise_store,
+            router_llm=llms.router,
+            retrieve_fn=retrieve,  # type: ignore[arg-type]
+        )
     return NativePipeline(
         tracer.llm(llms.answer, "answer"),
         embedder,
         store,
         expertise_store,
         router_llm=tracer.llm(llms.router, "router"),
-        **tracer.native_steps(),
+        **tracer.native_steps(retrieve=retrieve),  # type: ignore[arg-type]
     )
+
+
+@dataclass(frozen=True)
+class LcRetrieval:
+    """What the LangChain stack retrieves with (plan §3.2.1): its index,
+    the query embedder, and the retriever (None: native ``retrieve()``
+    over the LangChain index)."""
+
+    store: VectorStore
+    embedder: Embedder
+    retrieve: Callable[..., object] | None
+    switches: dict[str, object]
+
+
+def _lc_retrieval(settings: Settings, llms: LLMs) -> LcRetrieval:
+    """The LangChain stack's retrieval layers, per the TESSERA_LC_* switches.
+    Layers not built yet (generation, orchestration) stay native."""
+    try:
+        from tessera.integrations.langchain import hf_cross_encoder, hf_embeddings, lc_chroma
+    except ImportError as exc:
+        typer.echo("The LangChain stack needs the lc extra: `uv sync --extra dev --extra lc`.", err=True)
+        raise typer.Exit(code=1) from exc
+    from tessera.ingestion.loader import load_corpus as load
+    from tessera.lc.embeddings import LangChainEmbedder, as_langchain
+    from tessera.lc.retrievers import BM25Cache, lc_retrieve_fn, parent_docstore
+    from tessera.lc.store import LangChainChromaStore
+
+    native_embedder = LocalEmbedder()
+    lc_embeddings = hf_embeddings() if settings.lc_embeddings == "lc" else as_langchain(native_embedder)
+    embedder: Embedder = (
+        LangChainEmbedder(lc_embeddings) if settings.lc_embeddings == "lc" else native_embedder
+    )
+    store = LangChainChromaStore(lc_chroma(settings.vectorstore_dir, lc_embeddings))
+    if store.count() == 0:
+        typer.echo("No LangChain index found — run `tessera ingest --stack lc` first.", err=True)
+        raise typer.Exit(code=1)
+    kind = settings.lc_retriever
+    retrieve = None
+    if kind != "native":
+        retrieve = lc_retrieve_fn(
+            store,
+            "vector" if kind == "lc" else kind,
+            bm25=BM25Cache(),
+            bm25_weight=settings.lc_hybrid_bm25_weight,
+            # Multi-query's rephrasings come from the routing model.
+            llm=llms.router if kind == "multiquery" else None,
+            cross_encoder=hf_cross_encoder() if kind == "rerank" else None,
+            parents=parent_docstore(load(settings.corpus_dir)) if kind == "parent_doc" else None,
+        )
+    switches: dict[str, object] = {
+        "embeddings": settings.lc_embeddings,
+        "store": "lc",
+        "retriever": kind,
+        **({"hybrid_bm25_weight": settings.lc_hybrid_bm25_weight} if kind == "hybrid" else {}),
+        "router": "native",
+        "generation": "native",
+        "orchestration": "native",
+    }
+    return LcRetrieval(store=store, embedder=embedder, retrieve=retrieve, switches=switches)
 
 
 @dataclass
@@ -851,9 +921,9 @@ def eval_command(
         raise typer.Exit(code=1) from exc
 
     settings = _load_settings()
-    chosen_stack = _resolve_stack(settings, stack)
-    store = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
-    _require_index(store)
+    chosen_stack = _resolve_stack(settings, stack, allow_lc=True)
+    store: VectorStore = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
+    _require_index(store)  # type: ignore[arg-type]
 
     expertise_store = ChromaExpertiseStore(persist_dir=settings.vectorstore_dir)
     if expertise_store.count() == 0:
@@ -864,8 +934,11 @@ def eval_command(
         )
         raise typer.Exit(code=1)
 
-    embedder = LocalEmbedder()
     llms = _build_llms(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+    lc = _lc_retrieval(settings, llms) if chosen_stack == "lc" else None
+    embedder: Embedder = lc.embedder if lc is not None else LocalEmbedder()
+    if lc is not None:
+        store = lc.store
     # The judge stays on Nemotron so bar numbers stay comparable across
     # providers (plan §3.1.4). On NIM it is the same paced client as the
     # answers, so pacing covers every call.
@@ -875,7 +948,8 @@ def eval_command(
         else _build_nvidia(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
     )
     typer.echo(
-        f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}",
+        f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}"
+        + (" · " + " · ".join(f"{k} {v}" for k, v in lc.switches.items()) if lc is not None else ""),
         err=True,
     )
     cases = load_cases(EVAL_CASES_DIR)
@@ -890,7 +964,9 @@ def eval_command(
     )
     if tracer is not None:
         typer.echo(f"Tracing to LangSmith project {settings.langsmith_project!r} (redacted)", err=True)
-    native = _native_pipeline(llms, embedder, store, expertise_store, tracer)
+    native = _native_pipeline(
+        llms, embedder, store, expertise_store, tracer, retrieve=lc.retrieve if lc is not None else None
+    )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 
     def show_progress(done: int, total: int, result: object) -> None:
@@ -923,6 +999,7 @@ def eval_command(
             "commit": _git_commit(),
             "provider": settings.llm_provider,
             "stack": chosen_stack,
+            **({"lc_switches": lc.switches} if lc is not None else {}),
             "answers": llms.name,
             "judge": f"nvidia:{settings.nvidia_model}",
         }

@@ -1,0 +1,166 @@
+{
+ "rows": [
+  {
+   "name": "vector (= native)",
+   "kind": "vector",
+   "bm25_weight": null,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_precision": 0.4,
+    "mean_mrr": 0.9677,
+    "total_misses": 0,
+    "mean_context_chars": 7317,
+    "mean_latency_ms": 63.5
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.9,
+    "mean_precision": 0.6,
+    "mean_mrr": 0.875,
+    "total_misses": 0,
+    "mean_context_chars": 7742,
+    "mean_latency_ms": 58.8
+   }
+  },
+  {
+   "name": "parent_doc",
+   "kind": "parent_doc",
+   "bm25_weight": null,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9586,
+    "mean_precision": 0.3871,
+    "mean_mrr": 0.9677,
+    "total_misses": 0,
+    "mean_context_chars": 21923,
+    "mean_latency_ms": 83.5
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.9,
+    "mean_precision": 0.6,
+    "mean_mrr": 0.875,
+    "total_misses": 0,
+    "mean_context_chars": 26435,
+    "mean_latency_ms": 82.7
+   }
+  },
+  {
+   "name": "bm25",
+   "kind": "bm25",
+   "bm25_weight": null,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.7935,
+    "mean_precision": 0.2903,
+    "mean_mrr": 0.7285,
+    "total_misses": 2,
+    "mean_context_chars": 7943,
+    "mean_latency_ms": 63.4
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.3667,
+    "mean_precision": 0.3,
+    "mean_mrr": 0.2917,
+    "total_misses": 1,
+    "mean_context_chars": 6336,
+    "mean_latency_ms": 69.4
+   }
+  },
+  {
+   "name": "hybrid bm25=0.25",
+   "kind": "hybrid",
+   "bm25_weight": 0.25,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9683,
+    "mean_precision": 0.3871,
+    "mean_mrr": 0.9677,
+    "total_misses": 0,
+    "mean_context_chars": 7606,
+    "mean_latency_ms": 94.0
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_precision": 0.55,
+    "mean_mrr": 1.0,
+    "total_misses": 0,
+    "mean_context_chars": 7953,
+    "mean_latency_ms": 88.9
+   }
+  },
+  {
+   "name": "hybrid bm25=0.5",
+   "kind": "hybrid",
+   "bm25_weight": 0.5,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9602,
+    "mean_precision": 0.3806,
+    "mean_mrr": 0.9516,
+    "total_misses": 0,
+    "mean_context_chars": 7537,
+    "mean_latency_ms": 93.2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.8,
+    "mean_precision": 0.5,
+    "mean_mrr": 0.875,
+    "total_misses": 0,
+    "mean_context_chars": 8068,
+    "mean_latency_ms": 88.8
+   }
+  },
+  {
+   "name": "hybrid bm25=0.75",
+   "kind": "hybrid",
+   "bm25_weight": 0.75,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9602,
+    "mean_precision": 0.3806,
+    "mean_mrr": 0.8844,
+    "total_misses": 0,
+    "mean_context_chars": 7777,
+    "mean_latency_ms": 93.2
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.85,
+    "mean_precision": 0.55,
+    "mean_mrr": 0.875,
+    "total_misses": 0,
+    "mean_context_chars": 7469,
+    "mean_latency_ms": 85.2
+   }
+  },
+  {
+   "name": "rerank (cross-encoder)",
+   "kind": "rerank",
+   "bm25_weight": null,
+   "tuned": {
+    "cases": 31,
+    "mean_recall": 0.9,
+    "mean_precision": 0.3548,
+    "mean_mrr": 0.9032,
+    "total_misses": 1,
+    "mean_context_chars": 6874,
+    "mean_latency_ms": 2577.7
+   },
+   "held_out": {
+    "cases": 4,
+    "mean_recall": 0.9,
+    "mean_precision": 0.6,
+    "mean_mrr": 0.875,
+    "total_misses": 0,
+    "mean_context_chars": 6463,
+    "mean_latency_ms": 2105.6
+   }
+  }
+ ],
+ "chosen_hybrid_bm25_weight": 0.25
+}
