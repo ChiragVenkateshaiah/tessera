@@ -958,8 +958,7 @@ def test_query_without_as_is_internal_only_and_unknown_people_are_refused(
 
 @pytest.mark.parametrize(
     "args",
-    [["query", "x", "--stack", "lc"], ["chat", "--stack", "lc"], ["serve", "--stack", "lc"],
-     ["eval", "--stack", "lc"]],
+    [["query", "x", "--stack", "lc"], ["chat", "--stack", "lc"], ["serve", "--stack", "lc"]],
 )
 def test_the_lc_stack_is_refused_until_it_is_built(args: list[str]) -> None:
     result = runner.invoke(cli.app, args)
@@ -980,3 +979,58 @@ def test_an_unknown_stack_is_rejected() -> None:
     result = runner.invoke(cli.app, ["query", "x", "--stack", "langchain"])
 
     assert result.exit_code == 2 and "Unknown stack" in result.output
+
+
+def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P5-5: `eval --stack lc` scores the native pipeline with the
+    LangChain retrieval layers swapped in — the LangChain index as the
+    store, its retriever as the pipeline's retrieve step."""
+    seen: dict[str, object] = {}
+
+    class NonEmptyStore:
+        def __init__(self, persist_dir: Path) -> None:
+            pass
+
+        def count(self) -> int:
+            return 1
+
+    lc_store = NonEmptyStore(Path("."))
+
+    def lc_retrieve(*args: object, **kwargs: object) -> object:
+        raise AssertionError("not called by the stub harness")
+
+    monkeypatch.setattr(cli, "ChromaVectorStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "ChromaExpertiseStore", NonEmptyStore)
+    monkeypatch.setattr(cli, "LocalEmbedder", lambda: object())
+    monkeypatch.setattr(cli, "NvidiaClient", lambda api_key, model, **kw: object())
+    monkeypatch.setattr(
+        cli,
+        "_lc_retrieval",
+        lambda settings, llms: cli.LcRetrieval(
+            store=lc_store, embedder="lc-embedder", retrieve=lc_retrieve,  # type: ignore[arg-type]
+            switches={"retriever": "lc"},
+        ),
+    )
+
+    fake_harness = type(sys)("evals.harness")
+    fake_harness.load_cases = lambda cases_dir: []
+
+    def fake_run_harness(cases, llm, embedder, store, corpus_dir, pipeline=None, **kw):
+        seen.update(embedder=embedder, store=store, pipeline=pipeline)
+        return "report"
+
+    fake_harness.run_harness = fake_run_harness
+    fake_harness.format_report = lambda report: "REPORT"
+    fake_evals_pkg = type(sys)("evals")
+    fake_evals_pkg.harness = fake_harness
+    monkeypatch.setitem(sys.modules, "evals", fake_evals_pkg)
+    monkeypatch.setitem(sys.modules, "evals.harness", fake_harness)
+
+    result = runner.invoke(cli.app, ["eval", "--stack", "lc"])
+
+    assert result.exit_code == 0, result.output
+    assert "Stack: lc" in result.output and "retriever lc" in result.output
+    assert seen["store"] is lc_store and seen["embedder"] == "lc-embedder"
+    assert seen["pipeline"]._retrieve is lc_retrieve  # type: ignore[attr-defined]

@@ -156,6 +156,41 @@ def retrieve(
     query_embedding = embedder.embed_query(query)
     lookup = archetype is Archetype.LOOKUP
     candidate_k = LOOKUP_CANDIDATE_K if lookup else SYNTHESIS_CANDIDATE_K
+    # From here on every query carries the permission filter.
+    scoped = _and(where, permission_filter(principal))
+    candidates = store.query(query_embedding, k=candidate_k, where=_and(scoped, CURRENT_ONLY))
+    return retrieve_from_candidates(
+        query, archetype, query_embedding, candidates, store, where=where, principal=principal
+    )
+
+
+def retrieve_from_candidates(
+    query: str,
+    archetype: Archetype,
+    query_embedding: list[float],
+    candidates: list[SearchResult],
+    store: VectorStore,
+    where: dict[str, object] | None = None,
+    principal: Principal | None = None,
+    *,
+    expand: bool = True,
+) -> RetrievalResult:
+    """Everything ``retrieve()`` does after fetching its candidate pool:
+    the freshness and permission re-check, per-document diversification,
+    the superseded probe and replacements, lookup's parent-document
+    expansion, and the removal counts.
+
+    ``candidates`` is best first. The native path fetches them from the
+    store; the LangChain retrievers (Phase 5, P5-5) produce them other ways
+    — BM25, a fused ranking, a multi-query union, a reranker — and all end
+    here, so every retriever answers under the same contract. Every result
+    must carry a cosine-similarity ``score``: the superseded cutoff and the
+    generation floor read it. ``expand=False`` skips lookup's
+    parent-document expansion, for candidates that are whole documents
+    already (LangChain's ``ParentDocumentRetriever``).
+    """
+    lookup = archetype is Archetype.LOOKUP
+    candidate_k = LOOKUP_CANDIDATE_K if lookup else SYNTHESIS_CANDIDATE_K
     max_results = LOOKUP_TOP_K if lookup else SYNTHESIS_MAX_RESULTS
     max_per_document = LOOKUP_MAX_PER_DOCUMENT if lookup else SYNTHESIS_MAX_PER_DOCUMENT
 
@@ -166,7 +201,7 @@ def retrieve(
     # Re-checked here, not trusted to the store's filter.
     candidates = [
         c
-        for c in store.query(query_embedding, k=candidate_k, where=_and(where, CURRENT_ONLY))
+        for c in candidates
         if c.status != STATUS_SUPERSEDED and is_permitted(c, principal)
     ]
     selected = _diversify_by_source(
@@ -183,7 +218,7 @@ def retrieve(
 
     results = (
         _expand_top_documents(selected, query_embedding, store, LOOKUP_EXPAND_DOCUMENTS, where)
-        if lookup
+        if lookup and expand
         else selected
     )
     # Last line of defence: nothing the principal may not see leaves here.

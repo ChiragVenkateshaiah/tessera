@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     lc_embeddings: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_EMBEDDINGS")
     lc_store: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_STORE")
     lc_indexing: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_INDEXING")
+    # Retrieval (P5-5): native retrieve(), or a LangChain retriever through
+    # the shared contract — lc (vector), parent_doc, bm25, hybrid,
+    # multiquery (calls the router model), rerank (local cross-encoder).
+    # Evidence: evals/reports/p5-5-retrieval.md.
+    lc_retriever: Literal["native", "lc", "parent_doc", "bm25", "hybrid", "multiquery", "rerank"] = Field(
+        default="lc", validation_alias="TESSERA_LC_RETRIEVER"
+    )
+    lc_hybrid_bm25_weight: float = Field(default=0.25, validation_alias="TESSERA_LC_HYBRID_BM25_WEIGHT")
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.

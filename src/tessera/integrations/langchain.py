@@ -5,6 +5,7 @@ this module lazily, only when the LangChain stack is selected.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import chromadb
 from langchain_classic.indexes import SQLRecordManager
@@ -37,6 +38,17 @@ def lc_chroma(
         collection_metadata={"hnsw:space": "cosine"},
         embed_prefix=embed_prefix,
     )
+
+
+DEFAULT_CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+def hf_cross_encoder(model_name: str = DEFAULT_CROSS_ENCODER) -> Any:
+    """A local cross-encoder for the ``rerank`` retriever (zero LLM calls;
+    the model downloads once, ~90 MB)."""
+    from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+
+    return HuggingFaceCrossEncoder(model_name=model_name)
 
 
 def sql_record_manager(path: Path, namespace: str = f"chroma/{LC_COLLECTION_NAME}") -> SQLRecordManager:

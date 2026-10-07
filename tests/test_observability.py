@@ -265,7 +265,7 @@ class FakeTracer:
     def llm(self, inner: object, role: str) -> object:
         return inner
 
-    def native_steps(self) -> dict[str, object]:
+    def native_steps(self, retrieve: object = None) -> dict[str, object]:
         return {}
 
     def run(self, pipeline: object, query: str, principal: object, trace_id: str) -> PipelineRun:

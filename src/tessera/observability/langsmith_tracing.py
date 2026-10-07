@@ -365,10 +365,15 @@ class LangSmithTracer:
     def llm(self, inner: LLMClient, role: str) -> LLMClient:
         return _TracedLLM(inner, role)
 
-    def native_steps(self) -> dict[str, Callable[..., Any]]:
+    def native_steps(
+        self, retrieve: Callable[..., RetrievalResult] | None = None
+    ) -> dict[str, Callable[..., Any]]:
         """``NativePipeline`` step keyword arguments, each the core
-        function wrapped as a run."""
+        function wrapped as a run. ``retrieve`` replaces the native
+        ``retrieve()`` (the LangChain stack's ``retriever`` switch); its
+        own LangChain retriever runs nest under this one."""
         ref = self.principal_ref
+        retrieve_step = retrieve or _native_retrieve
 
         @traceable(
             run_type="chain",
@@ -392,7 +397,7 @@ class LangSmithTracer:
         def retrieve_fn(
             query: str, archetype: Any, embedder: Any, store: Any, *, principal: Principal | None = None
         ) -> RetrievalResult:
-            result = retrieve(query, archetype, embedder, store, principal=principal)
+            result = retrieve_step(query, archetype, embedder, store, principal=principal)
             request = CURRENT_REQUEST.get()
             if request is not None:
                 request.record_results(result.results)
@@ -483,6 +488,12 @@ class LangSmithTracer:
         """``inner`` as a ``Pipeline`` whose every run is a trace (for the
         eval harness, which calls ``run(query, principal)``)."""
         return _TracedPipeline(self, inner)
+
+
+def _native_retrieve(
+    query: str, archetype: Any, embedder: Any, store: Any, *, principal: Principal | None = None
+) -> RetrievalResult:
+    return retrieve(query, archetype, embedder, store, principal=principal)
 
 
 def _answer(

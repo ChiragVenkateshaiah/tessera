@@ -336,6 +336,11 @@ layer is a `TESSERA_LC_*` switch: the loader, the splitter, the embedding
 prefix, the embeddings, the store, and the indexing. LangChain's
 `index()` with a `SQLRecordManager` skips unchanged chunks on a re-run.
 The evidence behind each default is in `evals/reports/p5-4-ingestion.md`.
+`tessera eval --stack lc` scores the native pipeline with the LangChain
+retrieval layers swapped in (`TESSERA_LC_RETRIEVER`: `lc`, `parent_doc`,
+`bm25`, `hybrid`, `multiquery` or `rerank`). Every LangChain retriever
+reads the index only through a store bound to the asking principal. The
+evidence is in `evals/reports/p5-5-retrieval.md`.
 
 ```sh
 uv run tessera index-people
