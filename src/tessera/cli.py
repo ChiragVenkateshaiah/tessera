@@ -4,18 +4,21 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from pydantic import ValidationError
 
 from tessera.config import MODEL_PRICES, Settings
+from tessera.embedding.base import Embedder
 from tessera.embedding.local import LocalEmbedder
 from tessera.feedback.base import Feedback
 from tessera.feedback.candidates import candidate_cases, render_candidates
@@ -36,11 +39,16 @@ from tessera.ingestion.data_quality import (
 )
 from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
+from tessera.observability.guard import TracingEnvError, check_tracing_env
 from tessera.pipeline import AnswerResult, NativePipeline, answer_query
 from tessera.principal import Principal
+from tessera.store.base import ExpertiseStore, VectorStore
 from tessera.store.chroma import ChromaVectorStore
 from tessera.store.chroma_expertise import ChromaExpertiseStore
 from tessera.trace import trace_record
+
+if TYPE_CHECKING:  # LangSmith loads only when tracing is on (Phase 5 §3.2.2)
+    from tessera.observability.langsmith_tracing import LangSmithTracer
 
 # evals/ sits alongside src/, not inside it, so it isn't shipped as part
 # of the installed tessera package or resolvable from the console-script
@@ -66,6 +74,13 @@ app = typer.Typer(help="Tessera — internal knowledge assistant (local CLI).")
 
 
 def _load_settings() -> Settings:
+    # Before anything else: no LangSmith/LangChain tracing from the
+    # environment, ever (Phase 5 plan §3.9.1).
+    try:
+        check_tracing_env(os.environ)
+    except TracingEnvError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     try:
         return Settings()
     except ValidationError as exc:
@@ -254,6 +269,106 @@ def _build_llms(settings: Settings, *, min_interval: float = 0.0) -> LLMs:
     return LLMs(answer=nvidia, router=nvidia, name=f"nvidia:{settings.nvidia_model}")
 
 
+LC_EXTRA_MISSING_MESSAGE = (
+    "TESSERA_LANGSMITH_TRACING is on, but LangSmith isn't installed — it "
+    "comes with the lc extra: `uv sync --extra dev --extra lc`."
+)
+
+
+def _build_tracer(
+    settings: Settings, *, extra_texts: Iterable[str] = ()
+) -> LangSmithTracer | None:
+    """The LangSmith tracer when TESSERA_LANGSMITH_TRACING is on, else
+    None. Its redaction taint set comes from the corpus (plus extra_texts,
+    e.g. the eval set's engagement markers). LangSmith is imported only
+    here, so a run with tracing off never loads it.
+    """
+    if not settings.langsmith_tracing:
+        return None
+    if not settings.langsmith_api_key:
+        typer.echo(
+            "TESSERA_LANGSMITH_TRACING is on, but TESSERA_LANGSMITH_API_KEY is empty. "
+            "Add the key to .env (a free LangSmith developer account), or turn tracing off.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    try:
+        from tessera.observability.langsmith_tracing import build_tracer
+    except ImportError as exc:
+        typer.echo(LC_EXTRA_MISSING_MESSAGE, err=True)
+        raise typer.Exit(code=1) from exc
+    from tessera.observability.taint import corpus_taint
+
+    terms = corpus_taint(
+        load_corpus(settings.corpus_dir), settings.corpus_dir, extra_texts=extra_texts
+    )
+    return build_tracer(
+        api_key=settings.langsmith_api_key,
+        api_url=settings.langsmith_endpoint,
+        project=settings.langsmith_project,
+        terms=terms,
+        stack="native",
+    )
+
+
+def _native_pipeline(
+    llms: LLMs,
+    embedder: Embedder,
+    store: VectorStore,
+    expertise_store: ExpertiseStore | None,
+    tracer: LangSmithTracer | None,
+) -> NativePipeline:
+    """The native pipeline. With a tracer, its steps and LLM ports are
+    wrapped as LangSmith runs here, at the composition root — never in the
+    core (plan §3.9.2)."""
+    if tracer is None:
+        return NativePipeline(llms.answer, embedder, store, expertise_store, router_llm=llms.router)
+    return NativePipeline(
+        tracer.llm(llms.answer, "answer"),
+        embedder,
+        store,
+        expertise_store,
+        router_llm=tracer.llm(llms.router, "router"),
+        **tracer.native_steps(),
+    )
+
+
+@dataclass
+class Answerer:
+    """How `query`, `chat` and `serve` answer one question under one trace
+    id: ``answer_query`` as before, or — with LangSmith tracing on — the
+    traced native pipeline as one redacted trace whose root run id is that
+    trace id, so the JSONL trace and the LangSmith trace line up.
+    """
+
+    llms: LLMs
+    embedder: Embedder
+    store: VectorStore
+    expertise_store: ExpertiseStore | None
+    tracer: LangSmithTracer | None = None
+    _pipeline: NativePipeline | None = field(default=None, init=False, repr=False)
+
+    def new_trace_id(self) -> str:
+        return self.tracer.new_trace_id() if self.tracer is not None else uuid.uuid4().hex
+
+    def __call__(self, text: str, principal: Principal | None, trace_id: str) -> AnswerResult:
+        if self.tracer is None:
+            return answer_query(
+                text,
+                self.llms.answer,
+                self.embedder,
+                self.store,
+                self.expertise_store,
+                router_llm=self.llms.router,
+                principal=principal,
+            )
+        if self._pipeline is None:
+            self._pipeline = _native_pipeline(
+                self.llms, self.embedder, self.store, self.expertise_store, self.tracer
+            )
+        return self.tracer.run(self._pipeline, text, principal, trace_id).answer
+
+
 def usage_line(result: AnswerResult) -> str:
     """Tokens and, when every model is priced, cost — e.g.
     "1,234 in / 210 out tokens · $0.0091".
@@ -431,12 +546,11 @@ def render_answer(result: AnswerResult) -> str:
 
 
 def _record_trace(
-    settings: Settings, result: AnswerResult, latency_s: float, llm_name: str
-) -> str:
-    """Write the answer's trace to the trace log; return its trace_id. A
-    write failure is reported, not raised — the answer still stands.
+    settings: Settings, result: AnswerResult, latency_s: float, llm_name: str, trace_id: str
+) -> None:
+    """Write the answer's trace to the trace log under trace_id. A write
+    failure is reported, not raised — the answer still stands.
     """
-    trace_id = uuid.uuid4().hex
     record = trace_record(
         trace_id,
         result,
@@ -449,7 +563,6 @@ def _record_trace(
         JsonlTraceLog(settings.trace_log).append(record)
     except OSError as exc:
         typer.echo(f"  (couldn't write the trace to {settings.trace_log}: {exc})", err=True)
-    return trace_id
 
 
 @app.command()
@@ -473,18 +586,12 @@ def query(
 
     embedder = LocalEmbedder()
     llms = _build_llms(settings)
+    answer = Answerer(llms, embedder, store, expertise_store, _build_tracer(settings))
 
+    trace_id = answer.new_trace_id()
     start = time.perf_counter()
-    result = answer_query(
-        text,
-        llms.answer,
-        embedder,
-        store,
-        expertise_store,
-        router_llm=llms.router,
-        principal=principal,
-    )
-    trace_id = _record_trace(settings, result, time.perf_counter() - start, llms.name)
+    result = answer(text, principal, trace_id)
+    _record_trace(settings, result, time.perf_counter() - start, llms.name, trace_id)
 
     typer.echo(
         f"\n{render_answer(result)}\n\n({usage_line(result)} · trace {trace_id})"
@@ -524,6 +631,7 @@ def chat(
     typer.echo("Loading the embedding model…")
     embedder = LocalEmbedder()
     llms = _build_llms(settings)
+    answer = Answerer(llms, embedder, store, expertise_store, _build_tracer(settings))
 
     if transcript is not None:
         with transcript.open("a", encoding="utf-8") as f:
@@ -548,17 +656,10 @@ def chat(
         if text.lower() in CHAT_EXIT_WORDS:
             break
 
+        trace_id = answer.new_trace_id()
         start = time.perf_counter()
         try:
-            result = answer_query(
-                text,
-                llms.answer,
-                embedder,
-                store,
-                expertise_store,
-                router_llm=llms.router,
-                principal=principal,
-            )
+            result = answer(text, principal, trace_id)
         except KeyboardInterrupt:
             typer.echo("  (cancelled)")
             continue
@@ -567,7 +668,7 @@ def chat(
             continue
         elapsed = time.perf_counter() - start
         asked += 1
-        trace_id = _record_trace(settings, result, elapsed, llms.name)
+        _record_trace(settings, result, elapsed, llms.name, trace_id)
 
         label = ARCHETYPE_LABELS[result.archetype]
         rendered = render_answer(result)
@@ -613,6 +714,7 @@ def serve(
     typer.echo("Loading the embedding model…")
     embedder = LocalEmbedder()
     llms = _build_llms(settings)
+    answer = Answerer(llms, embedder, store, expertise_store, _build_tracer(settings))
 
     api = create_app(
         llms.answer,
@@ -625,6 +727,8 @@ def serve(
         trace_log=JsonlTraceLog(settings.trace_log),
         feedback_store=JsonlFeedbackStore(settings.feedback_file),
         resolve_principal=_principal_resolver(settings),
+        answer=answer,
+        new_trace_id=answer.new_trace_id,
     )
     typer.echo(f"Tessera on http://{host}:{port}  (Ctrl-C to stop)")
     uvicorn.run(api, host=host, port=port)
@@ -688,16 +792,26 @@ def eval_command(
         f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}",
         err=True,
     )
-    pipeline = NativePipeline(
-        llms.answer, embedder, store, expertise_store, router_llm=llms.router
+    cases = load_cases(EVAL_CASES_DIR)
+    # Traced, the eval set's engagement markers join the redaction taint set.
+    tracer = _build_tracer(
+        settings,
+        extra_texts=(
+            [m for c in cases for ms in c.forbidden_markers.values() for m in ms]
+            if settings.langsmith_tracing
+            else []
+        ),
     )
+    if tracer is not None:
+        typer.echo(f"Tracing to LangSmith project {settings.langsmith_project!r} (redacted)", err=True)
+    native = _native_pipeline(llms, embedder, store, expertise_store, tracer)
+    pipeline = tracer.pipeline(native) if tracer is not None else native
 
     def show_progress(done: int, total: int, result: object) -> None:
         error = getattr(result, "error", None)
         status = "ERROR" if error else "ok"
         typer.echo(f"  [{done}/{total}] {getattr(result, 'case_id', '?')} {status}", err=True)
 
-    cases = load_cases(EVAL_CASES_DIR)
     walls = _load_walls(settings)
     report = run_harness(
         cases,

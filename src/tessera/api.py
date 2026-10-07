@@ -169,6 +169,7 @@ def create_app(
     trace_log: TraceLog | None = None,
     feedback_store: FeedbackStore | None = None,
     resolve_principal: Callable[[str], Principal | None] | None = None,
+    answer: Callable[[str, Principal | None, str], AnswerResult] | None = None,
     new_trace_id: Callable[[], str] = lambda: uuid.uuid4().hex,
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> FastAPI:
@@ -184,6 +185,11 @@ def create_app(
     resolve_principal turns an ``as_person`` into a Principal (None for an
     unknown person); without it, ``as_person`` is rejected. The identity
     is a demo device, not authentication.
+
+    answer, when given, answers ``(question, principal, trace_id)`` in
+    place of ``answer_query`` over the dependencies above — `tessera serve`
+    passes one that traces to LangSmith when that is configured, with the
+    request's trace_id as the LangSmith run id (Phase 5 plan §3.9.2).
     """
     app = FastAPI(
         title="Tessera",
@@ -207,23 +213,26 @@ def create_app(
                 return JSONResponse(
                     status_code=400, content={"error": f"No person {request.as_person!r}."}
                 )
+        trace_id = new_trace_id()
         start = time.perf_counter()
         try:
             with pipeline_lock:
-                result = answer_query(
-                    request.question,
-                    llm,
-                    embedder,
-                    store,
-                    expertise_store,
-                    router_llm=router_llm,
-                    principal=principal,
-                )
+                if answer is not None:
+                    result = answer(request.question, principal, trace_id)
+                else:
+                    result = answer_query(
+                        request.question,
+                        llm,
+                        embedder,
+                        store,
+                        expertise_store,
+                        router_llm=router_llm,
+                        principal=principal,
+                    )
         except Exception:  # the client gets a message, the log gets the trace
-            logger.exception("answer_query failed for an /api/ask request")
+            logger.exception("answering failed for /api/ask request %s", trace_id)
             return JSONResponse(status_code=502, content={"error": ANSWER_FAILED_MESSAGE})
         latency = time.perf_counter() - start
-        trace_id = new_trace_id()
         record = trace_record(
             trace_id,
             result,

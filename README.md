@@ -290,6 +290,30 @@ set -a; source .env; set +a
 only when run from the repo root — exporting first is the reliable path
 regardless of cwd.)
 
+#### Optional: LangSmith tracing (Phase 5)
+
+With the `lc` extra installed, `query`, `chat`, `serve` and `eval` can send
+each answer to LangSmith as one trace, through a redacting client. Set
+`TESSERA_LANGSMITH_TRACING=true` and `TESSERA_LANGSMITH_API_KEY` (a free
+developer key) in `.env`. The LangSmith trace's root run id is the same as
+the `trace_id` in `data/traces/traces.jsonl`.
+
+- **Tessera's config is the only switch.** `LANGSMITH_TRACING`,
+  `LANGCHAIN_TRACING_V2` and the other variables listed in
+  `src/tessera/observability/guard.py` make every command refuse to
+  start: the SDK's own client would trace without redaction.
+- **Redaction works from a taint set:** the text, titles and paths of
+  every restricted and quarantined document, plus the engagement
+  codenames. Matches are replaced with `[withheld-N]`, and so is any run
+  of six words copied from that text.
+- **Whole traces are hidden.** When a question's retrieval touched
+  restricted or quarantined content, every run in that trace has its
+  inputs, outputs and events hidden. The asker appears only as an opaque
+  reference, and the count of withheld restricted chunks is never sent.
+- `tests/test_langsmith_redaction.py` is the gate. It runs every access
+  case through a real `langsmith.Client` with HTTP mocked, and asserts
+  zero restricted content in what would have been sent.
+
 ### Run
 
 ```sh
