@@ -1,28 +1,28 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-06 (end of day)
+Last updated: 2026-10-07 (end of day)
 
 ## Status
 
-**Phase 5 in progress — P5-0, P5-1 and P5-2 done (2026-10-06).**
-- **P5-0** (#71): golden snapshot, `tessera eval --json`, two NIM
-  baseline sweeps (both `=> PASS`). Judge noise floor: A/C relevance
-  ±0.03, B relevance ±0.11; routing, retrieval and groundedness exact.
-- **P5-1** (#72): plan + ADR 0006 adopted into CLAUDE.md, README, ADRs and the
-  evals docs (§9; Phase 6 = deploy, Phase 7 = CI/CD). The frameworks are
-  an **optional extra** (`uv sync --extra lc`, user decision); lock
-  checks pass (0 existing entries changed, 0 `nvidia-*`). The spike
-  found 10 places the plan's assumptions differ — see P5-1 in Done.
-- **P5-2** (#73): the `Pipeline` protocol, `PipelineRun`, the marker
-  split + context-marker check (reported), `--stack native|lc`. Proven
-  neutral: snapshot identical to P5-0's on all 92 cases; live sweep
-  `=> PASS`; 0 deterministic differences on route-matched cases.
-- **Next: P5-3** (LangSmith tracing with taint-based redaction, native
-  stack first). Its live step needs a LangSmith key (pending; doesn't
-  block).
-- **Earlier (2026-10-05):** cloud and LLM moved to Google Cloud + Gemini
-  (ADR 0007, #69); P4-2's live acceptance closed on Gemini ($1.10 sweep);
-  the chat UI decided (yes, on Cloud Run in Phase 6).
+**Phase 5 in progress — P5-0 to P5-5 done (P5-3 to P5-5 on 2026-10-07).**
+- **P5-0 to P5-2** (#71–#73, 2026-10-05/06): baseline sweeps + the judge's
+  noise floor (A/C relevance ±0.03, B ±0.11); plan adoption + the `lc`
+  extra + the spike; the `Pipeline` protocol and the marker split.
+- **P5-3** (#75): LangSmith tracing through a redacting client (taint
+  set + 6-word fragments, whole-trace hiding, env-var guard). The gated
+  redaction test passes. **The live LangSmith step is still pending a key.**
+- **P5-4** (#77): native delete-then-add (`VectorStore.delete_document()`),
+  plus a LangChain ingestion stack (loader, splitter, embeddings, store,
+  `index()` + `SQLRecordManager`, `cleanup="full"`), with parity and
+  stale-chunk tests. `tessera ingest --stack lc`.
+- **P5-5** (#78): LangChain retrievers (vector, BM25, hybrid, multi-query,
+  rerank, parent-doc, `TesseraRetriever`), all principal-bound through
+  `ScopedStore` and one shared contract. Leak and scope-binding tests
+  pass. `tessera eval --stack lc` = native generation + LangChain
+  retrieval. `lc-defaults` keeps every layer at native-equal quality.
+- **Next: P5-6** (generation, routing, retries, expertise on LangChain).
+- **Also on 2026-10-07:** the reviewer's-guide format for PRs (#76,
+  `.claude/commands/pr-review.md`).
 
 **Phase 4 complete (`v0.4.0`, 2026-10-03).** All seven plan tasks merged
 (P4-1 #56, P4-2 code #59, P4-3 #60, P4-4 #63, P4-5 #64, P4-6 #65, P4-7
@@ -1911,34 +1911,137 @@ same change and stays ungated (`QUALITY_BAR.md`).
         deterministically — incl. **`ac-i04` live: contract held, no
         leak, no canary**. **`ql016` failed four times** (sweep + 3
         re-runs) and is unscored in P5-2. Suite 456 passed (18 new).
+- [x] **P5-3 — LangSmith tracing with taint-based redaction (native)**
+      (2026-10-07, PR #75; sweep `evals/baselines/p5-3-native.json`).
+      - `observability/guard.py` (framework-free): every command refuses
+        to start while `LANGSMITH_/LANGCHAIN_` `TRACING`, `TRACING_V2`,
+        `OTEL_ENABLED`, `RUNS_ENDPOINTS` or `ALLOW_UNPROCESSED_PAYLOADS` is
+        set — **even with Tessera's tracing on** (stricter than the plan
+        text; matches CLAUDE.md "refused, not honoured").
+      - `observability/taint.py`: the corpus taint set (restricted and
+        quarantined chunk texts, sentences, titles, paths; codenames as
+        whole words), a per-request `RequestTaint` contextvar, and a
+        `Redactor` that replaces exact terms **and any 6-word fragment**
+        with `[withheld-N]`. The fragment pass was added because the gate
+        found 6 markers leaking in a run name cut mid-sentence.
+      - `observability/langsmith_tracing.py`: the redacting `Client`
+        (`anonymizer` + `process_buffered_run_ops`; buffer size and
+        timeout out of reach, so the tracer flushes only after a trace
+        ends). Whole-trace hiding when retrieval touched restricted or
+        quarantined content; unknown traces hidden (fail closed); no
+        removal count; opaque per-process HMAC principal refs. The Tessera
+        `trace_id` (UUID v7) is the root run id. Steps and LLM ports are
+        wrapped at the composition root.
+      - CLI/API: `TESSERA_LANGSMITH_*` config; an `Answerer` keeps
+        `answer_query` when tracing is off; `create_app(answer=…)`; the
+        trace id is created before the run.
+      - Tests: the gated redaction test (real `Client`, `Session.send`
+        mocked, 29 access cases + 4 scenarios, a leaky fake model, a
+        plain-client control), the env guard (zero outbound), the
+        allow-list import walk, the no-agents check, and the subprocess
+        native-only test. Sweep `=> PASS`, 0 ERROR rows, 65 min.
+      - **Pending:** the live step (one traced query per archetype in
+        LangSmith) needs `TESSERA_LANGSMITH_API_KEY`.
+- [x] **Reviewer's-guide format** (2026-10-07, PR #76). The user found an
+      ELI5 review didn't help them read a diff and chose a 5-part guide:
+      decision summary, reading order, `file:line` checks, before/after,
+      risks + accept criteria, then the "Files changed" link. It lives
+      in `.claude/commands/pr-review.md` (also `/pr-review <n>`), and
+      CLAUDE.md links it. Triggers: `gh pr view <n> --web` in chat,
+      `/pr-review <n>`, and after every `gh pr create`.
+- [x] **P5-4 — LangChain ingestion and indexing** (2026-10-07, PR #77;
+      evidence `evals/reports/p5-4-ingestion.md`, sweep
+      `evals/baselines/p5-4-native.json`).
+      - Native: `VectorStore.delete_document()` (port change, default
+        `NotImplementedError`); `ingestion/indexing.py` `index_corpus()`
+        = delete every loaded document's chunks (quarantined included),
+        then add the indexable ones. `ingest` and `evals/snapshot.py` use
+        it; the snapshot is identical. `chunker.make_chunk()` builds ids
+        and labels for both splitters.
+      - LangChain (`lc/`, `integrations/`): `TesseraCorpusLoader`;
+        `split_document` (all six heading levels — the corpus has
+        `####`); `TesseraChroma` (embeds the title/heading prefix, stores
+        the body) + `LangChainChromaStore` (chunk id from metadata);
+        `index_with_record_manager` with **`cleanup="full"`** — the plan
+        said `incremental`, which leaves a newly quarantined document
+        indexed (pinned as a strict xfail).
+      - `tessera ingest --stack lc` with `TESSERA_LC_*` switches. Evidence:
+        prefix on = recall 0.959 vs ~0.84 off; the LangChain splitter ties
+        native at 800–1600 chars but splits fences and tables, so
+        `lc-defaults` keeps the native splitter; `index()` skips unchanged
+        chunks (14.5 s vs 26 s re-run). One HNSW approximate-search
+        difference on `ac-l03`'s superseded score (same document).
+      - Sweep `=> PASS`, 0 ERROR rows, 62 min. Suite 522 passed.
+- [x] **P5-5 — LangChain retrieval** (2026-10-07, PR #78; evidence
+      `evals/reports/p5-5-retrieval.md`; sweeps
+      `evals/baselines/p5-5-lc-multiquery.json` and `p5-5-native.json`).
+      - `retrieval/retriever.py`: `retrieve_from_candidates()` split out
+        (shared by both stacks; snapshot identical), `expand=` for whole
+        documents.
+      - `lc/retrievers.py`: `ScopedStore` (per request, principal-bound;
+        every read ANDs the permission filter); one contract (cosine
+        re-score from stored vectors, then `retrieve_from_candidates`);
+        generators: vector, BM25 (per scope set, content-fingerprint
+        cache), hybrid `EnsembleRetriever`, `MultiQueryRetriever` (union
+        **ordered by cosine** — its native order put the original
+        question last, and authorized recall fell to 5/12), cross-encoder
+        rerank, `ParentDocumentRetriever`; `TesseraRetriever` bridge.
+      - `tessera eval --stack lc`: native routing/generation + LangChain
+        index and `TESSERA_LC_RETRIEVER`. `query`/`chat`/`serve` still
+        refuse `lc`.
+      - Evidence: parity with native exact; leak test 7 retrievers × 29
+        access cases (0 leaks, authorized 12/12); scope binding 6 kinds ×
+        3 principals; redaction over LangChain's own retriever runs.
+        Retrieval-only: vector = native; BM25 alone held-out 0.367; hybrid
+        0.25 within noise; rerank worse and 40× slower; parent-doc 3×
+        context. `lc-defaults` retriever = vector (`lc`).
+      - Multi-query sweep `=> PASS` (1 ERROR `ql039`, re-run: recall
+        0.67, G5/R5): **0 cases' recall/RR changed** vs native, latency
+        2×, **rephrasing calls unmetered** (fix: P5-7 runtime-context
+        recorders). Native sweep `=> PASS`, 3 ERROR rows (`ac-l08`,
+        `ac-a03`, `ql014`) on an overloaded NIM evening; each re-run alone
+        scored (no leak; authorized 1.00; recall 1.00 G5/R5).
+      - **Review finding (Risk 1), fixed in the PR:** the BM25 cache was
+        keyed on the chunk count, so a same-count relabel in one process
+        served a stale index (restricted text in BM25's own run output;
+        `rescore()` kept it from the answer). Now keyed on a content
+        fingerprint; regression test added. No re-sweep for that commit
+        (neither sweep uses BM25), stated on the PR.
+      - Suite 555 passed. **Deferred to P5-7:** the `Send` fan-out
+        multi-query.
 
 ## Next task to pick up
 
-**P5-3 — LangSmith tracing with taint-based redaction (native stack
-first)** (`docs/Tessera_Phase5_Plan.md` §3.9.1–3.9.4, §3.9.6, §5). Read
-§3.9 in full first, and the P5-1 spike items 8–10 in Done.
+**P5-6 — Generation, routing, retries, expertise** (`docs/Tessera_Phase5_Plan.md`
+§3.5–3.6, §5). Read §3.5 and §3.6 in full first, plus the P5-1 spike
+items 6–7 in Done (`ChatNVIDIA` and `ChatGoogleGenerativeAI` differences).
 
 **Acceptance (plan §5, verbatim):**
-- the redaction test and the env-var guard pass;
-- the subprocess import test passes (native-only loads no framework);
-- with a key, one traced query per archetype is visible in LangSmith with
-  redaction applied. Without a key yet, that step is recorded as pending
-  and doesn't block.
+- the prompt-identity, fake-chat-model and fault-injection tests pass;
+- per-switch sweeps are reported against the noise floor;
+- the redaction test is extended to LLM, prompt and parser runs.
 
-**What the spike already settled (P5-1 in Done):**
-- the redacting client needs `anonymizer` **and**
-  `process_buffered_run_ops` (with `run_ops_buffer_size`) — the hide_*
-  hooks and the anonymizer alone leave `events`/`error` unredacted;
-- the gated test must plant markers in errors and events, not only
-  inputs/outputs, and must mock HTTP by patching `Session.send` (the
-  `Client` replaces a mounted adapter);
-- `LANGSMITH_TRACING=true` really posts to `api.smith.langchain.com`, so
-  the env-var guard is needed;
-- wrap steps at the composition root through `NativePipeline`'s step
-  parameters (P5-2), never inside core modules.
+**What earlier tasks already settled:**
+- **`ChatNVIDIA`** (spike item 6): thinking is **on** by default (turn it
+  off via `chat_template_kwargs={"enable_thinking": False}`); it sends
+  `max_tokens=1024`; errors are a bare `Exception("[503] …")`, so the
+  `retry` switch must parse the message prefix;
+  `with_structured_output(include_raw=True)` raises.
+- **`ChatGoogleGenerativeAI`** (item 7): `.content` is a list of blocks;
+  `max_retries=6` by default (set 0 under the native `retry` value);
+  automatic function calling is not disabled.
+- **Per-switch sweeps** = one NIM sweep each for `router`,
+  `prompt_chain`, `model_client` and `retry` (plan §4.3), every other
+  switch held native. Free on NIM, 1–3 h each on a bad day: plan them
+  early in the day.
+- **Wiring:** `tessera eval --stack lc` already builds the native
+  pipeline with LangChain retrieval (`cli._lc_retrieval`). P5-6 adds the
+  generation-layer switches there.
+- **Redaction:** `test_langsmith_redaction.py` grows by LLM, prompt and
+  parser run types; the tracer wraps steps through `native_steps()`.
 
-**Needs from the user:** a LangSmith account + API key (free developer
-tier) for the live step only. Ask when the code is done.
+**Still open from P5-3:** the live LangSmith step (needs the user's
+LangSmith key). Doesn't block.
 
 ---
 
@@ -2112,10 +2215,10 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-0 — baseline + noise floor~~ — done (#71)
 - ~~P5-1 — adopt (CLAUDE.md §9 edits); dependencies; spike~~ — done (#72)
 - ~~P5-2 — `Pipeline` protocol, `PipelineRun`, the marker split~~ — done (#73)
-- P5-3 — LangSmith tracing with taint redaction (native first) **← next**
-- P5-4 — LangChain ingestion and indexing
-- P5-5 — LangChain retrieval
-- P5-6 — generation, routing, retries, expertise
+- ~~P5-3 — LangSmith tracing with taint redaction (native first)~~ — done (#75; live LangSmith step pending a key)
+- ~~P5-4 — LangChain ingestion and indexing~~ — done (#77)
+- ~~P5-5 — LangChain retrieval~~ — done (#78)
+- P5-6 — generation, routing, retries, expertise **← next**
 - P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API
 - P5-8 — human-review workflow
 - P5-9 — LangSmith datasets, experiments, feedback, prompt hub
@@ -2128,6 +2231,74 @@ destroy for the LinkedIn video. CLAUDE.md carries this numbering since
 P5-1.
 
 ## Notes / open flags
+
+- **NIM spend 2026-10-07 (free tier):** four full sweeps (P5-3 native
+  65 min; P5-4 native 62 min; P5-5 multi-query 95 min with ~45 extra
+  rephrasing calls; P5-5 native **2 h 48 min with 214 retried 429/503s
+  and 3 ERROR rows** in the evening), plus 5 single-case re-runs. About
+  1,300 calls, well inside 10,000/day. Afternoon sweeps were about 1 h;
+  the evening was the worst NIM load yet. Start sweeps early.
+- **Single-case re-run scripts** were scratchpad one-offs again
+  (`rerun_lc.py` and `rerun_native.py`: `cli._build_llms` +
+  `cli._lc_retrieval`/`_native_pipeline` + `run_harness` filtered by
+  `EvalCase.id`; the `CaseResult` field is `reciprocal_rank_score`). This
+  is the third task to need them: promote them into a `tessera eval
+  --cases ID…` filter next time a sweep errors.
+- **The test suite now takes ~10 min** (555 tests): real Chroma indexes
+  of the corpus in several modules, and the cross-encoder
+  (`cross-encoder/ms-marco-MiniLM-L-6-v2`, ~90 MB, downloaded once to the
+  Hugging Face cache). Phase 7's CI must cache that model. Run targeted
+  files while iterating.
+- **Chroma's HNSW search is approximate, and separately built indexes
+  differ** (parallel inserts). `test_the_vector_retriever_reproduces_native_retrieve`
+  flaked once in the full run (`q001`: an expanded document returned
+  `::5` instead of `::1`). It now reads **one** collection through both
+  stores. `tests/test_lc_ingestion.py`'s store-parity test still compares
+  two separate builds; it carries the 0.01 superseded tolerance but could
+  flake the same way. If it does, give it the same one-collection fix, or
+  raise `hnsw:search_ef` for the test collections. The 2026-10-07 full run
+  before the fix: 1 failed (that test), 555 passed.
+- **`--stack lc` today** = `tessera eval` only: native routing and
+  generation, plus LangChain ingestion and retrieval layers per
+  `TESSERA_LC_*`. It needs `tessera ingest --stack lc` first (collection
+  `tessera_lc_chunks` and `lc_record_manager.sqlite` in
+  `data/vectorstore/`). `query`/`chat`/`serve` refuse `lc` until P5-7.
+- **Multi-query's rephrasing calls are unmetered** (made inside the
+  retriever, outside the pipeline's usage recorders). P5-7's
+  runtime-context recorders are the fix; until then, never quote its
+  cost from the sweep's token totals.
+- **Plan departures recorded in the reports, not yet in the plan text:**
+  `index()` uses `cleanup="full"` (not `incremental`; P5-4), and
+  LangChain retrievers report `removed["restricted"]=0` because a scoped
+  store never counts outside its scope (P5-5). Fold both into
+  `docs/Tessera_Phase5_Plan.md` at P5-10 (or earlier if a reviewer asks).
+- **`BM25Cache.invalidate()`** exists for P5-8's review workflow. With the
+  content-fingerprint key it isn't needed for correctness any more, but
+  it frees memory after a review.
+- **Merging:** this session `gh pr merge` worked when the user asked for
+  the merge (#75, #76, #78). The 2026-10-05 note that auto mode blocks it
+  may depend on how the request is phrased. Still merge only on the
+  user's explicit go-ahead.
+- **PR reviews:** after every `gh pr create`, post the reviewer's guide
+  (`.claude/commands/pr-review.md`). When the user runs `gh pr view <n>
+  --web` and the head hasn't changed, point to the guide already posted
+  rather than repeating it.
+- **zsh aliases clash with short shell functions** (`g`, `gl`): wrap
+  multi-line helper scripts in `bash -c '…'`.
+- **Future idea (user, 2026-10-07), not planned or built:** payments
+  transaction data as a later "domain pack" (a possible Phase 8). The
+  governance machinery carries over (ports, deny-by-default scopes,
+  leakage evals, taint redaction, traces, the eval gate). The domain does
+  not: a structured-query archetype (SQL/metrics, not embeddings),
+  team/merchant/region scopes with row- and column-level rules, PCI and
+  card-data tokenization, an audit trail of records read,
+  numeric-exactness evals, and RBI data-localization checks. The user was
+  offered an ADR (docs only); no decision yet.
+- **A user-level kitty tab-title hook** was installed on 2026-10-07
+  (`~/.claude/hooks/kitty-tab-title.sh` + `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`
+  in `~/.claude/settings.json`; `cerberus` → `cerberus-platform`).
+  Outside the repo. Not yet confirmed that the title holds for a whole
+  session.
 
 - **NIM was heavily overloaded all of 2026-10-06** (free tier, judge and
   answers). Three 92-case sweeps: 1h47 / 2h10 / 2h48, with 130 / 160 /
@@ -2201,8 +2372,10 @@ P5-1.
   report, native-vs-LangChain comparison); ops (eval-gated PR, CI/CD
   deploy); teardown verified. The persona switcher for access control is
   the key shot. OBS for recording.
-- **Merging is the user's step.** Auto mode blocks `gh pr merge` ("Merge
-  Without Review"). Hand the user `! gh pr merge <n> --merge
+- **Merging is the user's step.** On 2026-10-05 auto mode blocked `gh pr
+  merge` ("Merge Without Review"); on 2026-10-07 it ran when the user had
+  asked for the merge (see the newer note above). Either way, merge only
+  on the user's go-ahead, or hand them `! gh pr merge <n> --merge
   --delete-branch`. `gh pr edit` still fails (Projects classic), so
   retitle through `gh api -X PATCH`.
 - **`... | tail -1` hides pytest's exit code.** On 2026-10-05 a commit
