@@ -144,6 +144,41 @@ def test_min_interval_spaces_consecutive_calls() -> None:
     assert t.sleeps == [3.0]
 
 
+def test_pacing_holds_across_threads_sharing_one_client() -> None:
+    """tessera eval --workers: every call, from any thread, starts at
+    least min_interval after the one before it (real clock, 50 ms)."""
+    import threading
+    import time
+
+    starts: list[float] = []
+    lock = threading.Lock()
+
+    class Recording(LLMClient):
+        def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+            with lock:
+                starts.append(time.monotonic())
+            return "ok"
+
+    client = RetryingLLMClient(Recording(), min_interval=0.05)
+    threads = [threading.Thread(target=lambda: [client.complete("s", "u") for _ in range(3)]) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    starts.sort()
+    assert len(starts) == 12
+    assert min(b - a for a, b in zip(starts, starts[1:])) >= 0.045  # timer slack
+
+
+def test_a_429_holds_back_every_caller_until_its_backoff_ends() -> None:
+    t = FakeTime()
+    client = make(ScriptedInner(["a"]), t)
+    client._cool_down(45.0)  # another thread's 429, just now
+    client.complete("s", "u")
+    assert t.sleeps == [45.0]
+
+
 def test_is_retryable_classification() -> None:
     assert is_retryable(HttpError(429)) and is_retryable(HttpError(500))
     assert is_retryable(HttpError(599))

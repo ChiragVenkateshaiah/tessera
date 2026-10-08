@@ -68,6 +68,11 @@ EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 # its calls out. Interactive `tessera query` doesn't need spacing, only the
 # retry/backoff.
 EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
+# Cases run at once in `tessera eval` (2026-10-08). A case is three calls
+# of 10-30 s each (route, answer, judge), so one at a time left NIM's
+# 40 rpm mostly idle while sweeps took 1-3 h. Four workers through one
+# paced client stay under 20 calls a minute (the 3 s spacing is shared).
+EVAL_DEFAULT_WORKERS = 4
 
 CHAT_EXIT_WORDS = frozenset({"exit", "quit", ":q"})
 
@@ -996,6 +1001,13 @@ def eval_command(
         help="Also write every case's result and the aggregates as JSON here.",
     ),
     stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
+    workers: int = typer.Option(
+        EVAL_DEFAULT_WORKERS,
+        "--workers",
+        min=1,
+        help="Cases run at once (threads sharing one paced client). "
+        "1 runs them one after another.",
+    ),
     case_ids: list[str] | None = typer.Option(
         None,
         "--cases",
@@ -1024,6 +1036,9 @@ def eval_command(
         )
         raise typer.Exit(code=1) from exc
 
+    # Provenance is read before the sweep, not after it: a commit made
+    # while a two-hour sweep runs must not relabel its export.
+    commit = _git_commit() if json_path is not None else None
     settings = _load_settings()
     chosen_stack = _resolve_stack(settings, stack, allow_lc=True)
     store: VectorStore = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
@@ -1060,7 +1075,7 @@ def eval_command(
     if lc is not None and lc.llms is not None:
         llms = lc.llms
     typer.echo(
-        f"Stack: {chosen_stack} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}"
+        f"Stack: {chosen_stack} · workers: {workers} · answers: {llms.name} · judge: nvidia:{settings.nvidia_model}"
         + (" · " + " · ".join(f"{k} {v}" for k, v in lc.switches.items()) if lc is not None else ""),
         err=True,
     )
@@ -1106,6 +1121,7 @@ def eval_command(
         prices=MODEL_PRICES,
         walls=walls,
         pipeline=pipeline,
+        workers=workers,
     )
 
     typer.echo(format_report(report))
@@ -1114,7 +1130,8 @@ def eval_command(
 
         meta = {
             "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "commit": _git_commit(),
+            "commit": commit,
+            "workers": workers,
             "provider": settings.llm_provider,
             "stack": chosen_stack,
             **({"lc_switches": lc.switches} if lc is not None else {}),

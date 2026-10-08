@@ -224,6 +224,35 @@ def test_eval_cases_refuses_unknown_ids_and_check(monkeypatch: pytest.MonkeyPatc
     assert seen == []
 
 
+def test_eval_runs_cases_on_workers_and_reads_the_commit_before_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    harness = sys.modules["evals.harness"]
+    order: list[str] = []
+    seen: dict[str, object] = {}
+
+    def fake_run_harness(*a, **k):
+        order.append("run")
+        seen.update(k)
+        return "report-object"
+
+    harness.run_harness = fake_run_harness
+    harness.report_to_dict = lambda report, meta: (seen.update(meta=meta), {})[1]
+    monkeypatch.setattr(cli, "_git_commit", lambda: (order.append("commit"), "abc123")[1])
+
+    default = runner.invoke(cli.app, ["eval", "--json", str(tmp_path / "x.json")])
+    assert default.exit_code == 0
+    assert seen["workers"] == cli.EVAL_DEFAULT_WORKERS
+    assert seen["meta"]["workers"] == cli.EVAL_DEFAULT_WORKERS and seen["meta"]["commit"] == "abc123"
+    assert order == ["commit", "run"]  # provenance first: a mid-sweep commit can't relabel it
+
+    one = runner.invoke(cli.app, ["eval", "--workers", "1"])
+    zero = runner.invoke(cli.app, ["eval", "--workers", "0"])
+    assert one.exit_code == 0 and seen["workers"] == 1
+    assert zero.exit_code != 0
+
+
 def _stub_harness_for_check(
     monkeypatch: pytest.MonkeyPatch, bar_passed: bool
 ) -> None:

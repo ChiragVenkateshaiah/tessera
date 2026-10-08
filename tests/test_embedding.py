@@ -52,3 +52,17 @@ def test_similar_text_embeds_closer_than_dissimilar_text(
     unrelated = embedder.embed_query("parental leave policy for employees")
 
     assert _cosine(market_a, market_b) > _cosine(market_a, unrelated)
+
+
+def test_one_embedder_is_safe_to_share_across_threads(embedder: LocalEmbedder) -> None:
+    """tessera eval --workers and FastAPI's thread pool share one embedder;
+    a fast tokenizer used by two threads at once raises "Already borrowed"."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    queries = [f"pricing strategy question {i}" for i in range(16)]
+    expected = [embedder.embed_query(q) for q in queries]
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        got = list(pool.map(embedder.embed_query, queries))
+
+    assert got == expected

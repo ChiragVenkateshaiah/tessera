@@ -11,10 +11,18 @@ Pure with respect to infrastructure per CLAUDE.md constraint #6 in the
 sense that matters here: the clock and sleep are injected (real ones by
 default), nothing is read from the environment, and progress is reported
 through a callback rather than printed.
+
+Thread-safe (2026-10-08): ``tessera eval --workers N`` runs cases on
+threads that share one client. Each call reserves the next free slot
+under a lock, so the spacing holds across threads, and a 429 pushes that
+slot out by its backoff, so every thread (the one that got it included,
+through the same ``_pace``) waits it out once instead of spending the same
+exhausted window.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 
@@ -86,14 +94,24 @@ class RetryingLLMClient(LLMClient):
         self._on_retry = on_retry
         self._sleep = sleep
         self._clock = clock
-        self._last_call_at: float | None = None
+        self._lock = threading.Lock()
+        # The earliest moment the next call may start (spacing and any
+        # 429 cool-down), shared by every thread using this client.
+        self._next_slot: float | None = None
 
     def _pace(self) -> None:
-        if self._min_interval > 0 and self._last_call_at is not None:
-            wait = self._last_call_at + self._min_interval - self._clock()
-            if wait > 0:
-                self._sleep(wait)
-        self._last_call_at = self._clock()
+        with self._lock:
+            now = self._clock()
+            start = now if self._next_slot is None else max(now, self._next_slot)
+            self._next_slot = start + self._min_interval
+        if start > now:
+            self._sleep(start - now)
+
+    def _cool_down(self, seconds: float) -> None:
+        """A 429: no thread starts a call before this one's backoff ends."""
+        with self._lock:
+            until = self._clock() + seconds
+            self._next_slot = until if self._next_slot is None else max(self._next_slot, until)
 
     def _backoff(self, attempt: int, exc: BaseException) -> float:
         advised = _retry_after_seconds(exc)
@@ -122,5 +140,10 @@ class RetryingLLMClient(LLMClient):
                 delay = self._backoff(attempt, exc)
                 if self._on_retry is not None:
                     self._on_retry(attempt, delay, exc)
-                self._sleep(delay)
+                if _status_code(exc) == 429:
+                    # The window is spent for every thread: book the wait
+                    # as the shared next slot; _pace sleeps it, once.
+                    self._cool_down(delay)
+                else:
+                    self._sleep(delay)
         raise AssertionError("unreachable")  # pragma: no cover

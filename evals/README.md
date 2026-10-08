@@ -37,6 +37,25 @@ progress and any "retrying in Ns" notices to stderr — the report itself
 stays on stdout. A 55-case sweep can still take 1–1.5 hours when NIM is
 unhealthy; that is the backoff working, not a hang.
 
+**Workers, re-runs and comparisons (2026-10-08).**
+- `tessera eval` runs **4 cases at once** by default (`--workers N`;
+  `--workers 1` is the old one-at-a-time run). A case is almost all
+  waiting on the LLM, so one at a time left the rate limit mostly idle
+  while sweeps took 1–3 h. The workers share one paced client: the 3 s
+  spacing holds across threads, and a 429 holds every thread back until
+  its backoff ends. Embedders serialize their encodes (a fast tokenizer
+  is not thread-safe). Results keep the eval set's order; the progress
+  lines arrive in finishing order.
+- `--cases ID[,ID…]` re-runs a sweep's `ERROR` rows through the same
+  path. A subset can't be checked against the bar, so `--check` is
+  refused with it. Never merge a re-run into a committed export.
+- `--json` records the commit **at the start** of the sweep (plus the
+  worker count), so a commit made while a sweep runs can't relabel it.
+- `python -m evals.compare_sweeps BASE.json CAND.json … --floor-from
+  NATIVE.json …` compares exports on the cases scored in both: routing,
+  documents, people, recall/RR, leaks and injection case by case, and the
+  judge means against a noise floor taken from the given native sweeps.
+
 ## Case schema
 
 Cases live in `evals/cases/*.yaml`, one list of entries per file:
@@ -261,4 +280,7 @@ A/C relevance (+0.10, same narrow-A cause as P2-5) and B person recall
   (candidates, evidence, scores) for a query; no LLM calls.
 - `tune_retrieval.py` — retrieval-only grid search over the A/C
   retrieval constants (P2-3); no LLM calls.
+- `compare_sweeps.py` — compares `--json` exports against a baseline on
+  the cases scored in both, with an empirical judge noise floor; no LLM
+  calls.
 - `cases/` — the YAML case files described above.

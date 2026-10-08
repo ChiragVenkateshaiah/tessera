@@ -4,6 +4,7 @@ this module lazily, only when the LangChain stack is selected.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +17,28 @@ from tessera.embedding.local import DEFAULT_MODEL_NAME
 from tessera.lc.store import LC_COLLECTION_NAME, TesseraChroma
 
 
+class SerializedEmbeddings(Embeddings):
+    """One encode at a time. A Hugging Face fast tokenizer raises "Already
+    borrowed" when two threads use it together (``tessera eval --workers``,
+    FastAPI's thread pool); the lock costs nothing next to an encode."""
+
+    def __init__(self, inner: Embeddings) -> None:
+        self.inner = inner
+        self._lock = threading.Lock()
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        with self._lock:
+            return self.inner.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        with self._lock:
+            return self.inner.embed_query(text)
+
+
 def hf_embeddings(model_name: str = DEFAULT_MODEL_NAME) -> Embeddings:
     """``HuggingFaceEmbeddings`` over the native model (unnormalized, as
-    ``LocalEmbedder`` encodes)."""
-    return HuggingFaceEmbeddings(model_name=model_name)
+    ``LocalEmbedder`` encodes), safe to share across threads."""
+    return SerializedEmbeddings(HuggingFaceEmbeddings(model_name=model_name))
 
 
 def lc_chroma(
@@ -51,9 +70,20 @@ DEFAULT_CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 def hf_cross_encoder(model_name: str = DEFAULT_CROSS_ENCODER) -> Any:
     """A local cross-encoder for the ``rerank`` retriever (zero LLM calls;
     the model downloads once, ~90 MB)."""
-    from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+    from langchain_community.cross_encoders import BaseCrossEncoder, HuggingFaceCrossEncoder
 
-    return HuggingFaceCrossEncoder(model_name=model_name)
+    class SerializedCrossEncoder(BaseCrossEncoder):
+        """One ``score`` at a time, as ``SerializedEmbeddings``."""
+
+        def __init__(self, inner: BaseCrossEncoder) -> None:
+            self.inner = inner
+            self._lock = threading.Lock()
+
+        def score(self, text_pairs: list[tuple[str, str]]) -> list[float]:
+            with self._lock:
+                return self.inner.score(text_pairs)
+
+    return SerializedCrossEncoder(HuggingFaceCrossEncoder(model_name=model_name))
 
 
 def chat_nvidia(api_key: str, model: str, *, rate_limiter: Any = None) -> Any:
