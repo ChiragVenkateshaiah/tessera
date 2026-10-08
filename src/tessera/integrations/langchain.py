@@ -86,11 +86,17 @@ def hf_cross_encoder(model_name: str = DEFAULT_CROSS_ENCODER) -> Any:
     return SerializedCrossEncoder(HuggingFaceCrossEncoder(model_name=model_name))
 
 
+# The openai SDK's default read timeout (NvidiaClient): ChatNVIDIA's 60 s
+# cut off slow-but-healthy NIM answers under load.
+NIM_TIMEOUT_SECONDS = 600.0
+
+
 def chat_nvidia(api_key: str, model: str, *, rate_limiter: Any = None) -> Any:
     """``ChatNVIDIA`` sending what ``NvidiaClient`` sends (plan §3.5): the
     model, ``temperature`` 0.0, thinking off, and **no** ``max_tokens``
     (``None`` omits it; the default sends 1024). The P5-6 parity test pins
-    the request body."""
+    the request body. ``timeout=600`` matches the openai SDK's read
+    timeout that ``NvidiaClient`` uses; ``ChatNVIDIA``'s own is 60 s."""
     from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
     return ChatNVIDIA(
@@ -100,6 +106,7 @@ def chat_nvidia(api_key: str, model: str, *, rate_limiter: Any = None) -> Any:
         max_tokens=None,
         model_kwargs={"chat_template_kwargs": {"enable_thinking": False}},
         rate_limiter=rate_limiter,
+        timeout=NIM_TIMEOUT_SECONDS,
     )
 
 

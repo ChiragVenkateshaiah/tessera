@@ -232,6 +232,8 @@ def nim(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             return r
         state["bodies"].append(json.loads(req.body))
         reply = state["replies"].pop(0)
+        if isinstance(reply, BaseException):  # e.g. requests' ReadTimeout
+            raise reply
         if isinstance(reply, int):
             r.status_code = reply
             r._content = json.dumps({"detail": "Service temporarily overloaded"}).encode()
@@ -280,6 +282,31 @@ def test_chatnvidia_errors_carry_a_status_the_retry_layer_reads(nim: dict[str, A
     with pytest.raises(LLMCallError) as err:
         LangChainLLMClient(nim["chat"], "m").complete("s", "u")
     assert err.value.status_code == 503 and is_retryable(err.value)
+
+
+def test_chatnvidia_waits_as_long_as_the_openai_sdk(nim: dict[str, Any]) -> None:
+    """NvidiaClient's openai SDK reads for 600 s; ChatNVIDIA's default is 60 s,
+    which cut off slow NIM answers in the P5-6 model_client sweep."""
+    assert nim["chat"]._client.timeout == 600.0
+
+
+def test_a_client_side_read_timeout_is_retried_on_both_paths(nim: dict[str, Any]) -> None:
+    timeout = requests.exceptions.ReadTimeout("HTTPSConnectionPool(...): Read timed out. (read timeout=600)")
+    assert status_of(timeout) == 504 and is_retryable(LLMCallError(504, timeout))
+
+    nim["replies"].extend([timeout, "OK"])
+    delays: list[float] = []
+    native = RetryingLLMClient(LangChainLLMClient(nim["chat"], "m"), sleep=delays.append, clock=lambda: 0.0)
+    assert native.complete("s", "u") == "OK" and delays == [15.0]  # the 5xx backoff
+
+    nim["replies"].extend([requests.exceptions.ConnectionError("reset by peer"), "OK"])
+    reply = with_lc_retries(nim["chat"], jitter=False).invoke("hi")
+    assert reply.content == "OK"
+
+
+def test_a_real_client_error_is_still_not_retried() -> None:
+    assert status_of(ValueError("bad json")) is None
+    assert status_of(RuntimeError("[400] bad request")) == 400
 
 
 def test_the_gemini_factory_has_native_parity_fields() -> None:

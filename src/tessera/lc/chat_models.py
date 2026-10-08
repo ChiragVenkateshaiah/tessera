@@ -13,7 +13,11 @@
   ``RetryingLLMClient`` can wrap it. Provider errors are translated to
   carry ``status_code`` (``ChatNVIDIA`` raises a bare
   ``Exception("[503] …")``; Gemini's 429 hides its code on ``__cause__``),
-  so every retry mechanism sees status codes.
+  so every retry mechanism sees status codes. A client-side read
+  timeout or dropped connection has no HTTP status; it is reported as
+  504, so it is retried as a transient error (2026-10-08: two P5-6
+  ``model_client`` cases failed outright on ``ChatNVIDIA``'s 60 s read
+  timeout, where native's openai SDK waits 600 s and retries twice).
 - ``TesseraChatModel``: the native ``LLMClient`` port as a LangChain chat
   model, so an LCEL chain can run on the native client (the
   ``prompt_chain`` switch with ``model_client`` held native). Calls go
@@ -35,6 +39,24 @@ from langchain_core.outputs import ChatGeneration, ChatResult, LLMResult
 from tessera.generation.base import Completion, LLMClient, Usage
 
 _BRACKET_STATUS = re.compile(r"^\s*\[(\d{3})\]")
+# What a client-side timeout or dropped connection is reported as: a
+# gateway timeout, i.e. transient.
+CLIENT_TIMEOUT_STATUS = 504
+
+
+def _is_client_timeout(exc: BaseException) -> bool:
+    """A timeout or connection failure raised on our side of the wire
+    (``requests`` for ``ChatNVIDIA``, ``httpx``/``aiohttp``, or the builtin
+    ``TimeoutError``/``ConnectionError``)."""
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    return bool(
+        names
+        & {"Timeout", "ReadTimeout", "ConnectTimeout", "TimeoutException", "ServerTimeoutError",
+           "ClientConnectionError", "RemoteProtocolError"}
+        or ("ConnectionError" in names and type(exc).__module__.startswith(("requests", "urllib3")))
+    )
 
 
 def status_of(exc: BaseException) -> int | None:
@@ -50,6 +72,8 @@ def status_of(exc: BaseException) -> int | None:
         match = _BRACKET_STATUS.match(str(current))
         if match:
             return int(match.group(1))
+        if _is_client_timeout(current):
+            return CLIENT_TIMEOUT_STATUS
         current = current.__cause__ or current.__context__
     return None
 
