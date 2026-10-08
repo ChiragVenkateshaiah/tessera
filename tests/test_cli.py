@@ -254,6 +254,21 @@ def test_eval_runs_cases_on_workers_and_reads_the_commit_before_the_run(
     assert zero.exit_code != 0
 
 
+def test_eval_refuses_workers_when_langchain_paces_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TESSERA_LC_RETRY=lc paces the LangChain models with their own
+    InMemoryRateLimiter, apart from the judge's pacer: more workers would
+    run two pacers against one rate limit (2026-10-08: 8 of 11 cases
+    failed)."""
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    monkeypatch.setenv("TESSERA_LC_MODEL_CLIENT", "lc")
+    monkeypatch.setenv("TESSERA_LC_RETRY", "lc")
+
+    result = runner.invoke(cli.app, ["eval", "--stack", "lc", "--workers", "2"])
+
+    assert result.exit_code == 2
+    assert "--workers 1" in result.output
+
+
 def _stub_harness_for_check(
     monkeypatch: pytest.MonkeyPatch, bar_passed: bool
 ) -> None:
@@ -510,6 +525,8 @@ def test_eval_prints_progress_and_wraps_the_llm_with_retry_and_pacing(
     assert "[1/2] q1 ok" in result.output and "[2/2] q2 ERROR" in result.output
     assert isinstance(captured["llm"], RetryingLLMClient)
     assert captured["llm"]._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert captured["llm"].pacer.adaptive
+    assert captured["llm"].pacer.max_interval == cli.EVAL_MAX_CALL_INTERVAL_SECONDS
     assert captured["sdk_max_retries"] == 0  # SDK fast retries off; ours take over
 
 
@@ -812,7 +829,7 @@ def test_eval_on_bedrock_keeps_the_judge_on_nvidia(monkeypatch: pytest.MonkeyPat
     assert nvidia_built == ["nvidia/nemotron-3-ultra-550b-a55b"]  # the judge only
     judge = captured["judge_llm"]
     assert isinstance(judge, RetryingLLMClient)
-    assert judge._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert judge._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS and judge.pacer.adaptive
     assert judge is not captured["llm"] and captured["router_llm"] is not captured["llm"]
     assert captured["prices"] is MODEL_PRICES
     assert "judge: nvidia:" in result.output

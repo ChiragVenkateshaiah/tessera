@@ -10,6 +10,7 @@ from tessera.generation.resilient import (
     MAX_BACKOFF_SECONDS,
     RATE_LIMIT_BASE_SECONDS,
     SERVER_ERROR_BASE_SECONDS,
+    Pacer,
     RetryingLLMClient,
     is_retryable,
 )
@@ -189,3 +190,64 @@ def test_rejects_zero_attempts_and_has_a_sane_default() -> None:
     with pytest.raises(ValueError):
         RetryingLLMClient(ScriptedInner([]), max_attempts=0)
     assert DEFAULT_MAX_ATTEMPTS >= 3
+
+
+# --- the shared, adaptive Pacer (2026-10-08) ---
+
+
+def test_two_clients_sharing_one_pacer_are_spaced_as_one() -> None:
+    """An eval's answer client and judge client: one rate limit, one pacer."""
+    t = FakeTime()
+    pacer = Pacer(3.0, sleep=t.sleep, clock=t.clock)
+    answers = RetryingLLMClient(ScriptedInner(["a", "b"]), pacer=pacer, sleep=t.sleep)
+    judge = RetryingLLMClient(ScriptedInner(["j"]), pacer=pacer, sleep=t.sleep)
+
+    answers.complete("s", "u")
+    judge.complete("s", "u")
+    answers.complete("s", "u")
+
+    assert t.sleeps == [3.0, 3.0]
+    assert answers.pacer is judge.pacer
+
+
+def test_an_adaptive_pacer_doubles_on_throttling_and_eases_after_a_streak() -> None:
+    t = FakeTime()
+    pacer = Pacer(3.0, max_interval=30.0, ease_by=0.5, successes_to_ease=2, sleep=t.sleep, clock=t.clock)
+    client = RetryingLLMClient(
+        ScriptedInner([HttpError(503), HttpError(429), "a", "b", "c", "d"]), pacer=pacer, sleep=t.sleep
+    )
+
+    client.complete("s", "u")  # 503, 429, then ok
+    assert pacer.interval == 12.0 and pacer.throttled_calls == 2
+    client.complete("s", "u")  # two successes in a row: ease once
+    assert pacer.interval == 11.5
+    client.complete("s", "u")
+    client.complete("s", "u")
+    assert pacer.interval == 11.0 and pacer.peak_interval == 12.0
+
+
+def test_an_adaptive_pacer_stays_between_its_bounds() -> None:
+    pacer = Pacer(3.0, max_interval=10.0, ease_by=5.0, successes_to_ease=1)
+    for _ in range(10):
+        pacer.throttled()
+    assert pacer.interval == 10.0
+    for _ in range(10):
+        pacer.succeeded()
+    assert pacer.interval == 3.0
+
+
+def test_a_fixed_pacer_never_changes_its_interval() -> None:
+    pacer = Pacer(3.0)
+    pacer.throttled()
+    pacer.succeeded()
+    assert not pacer.adaptive and pacer.interval == 3.0 and pacer.throttled_calls == 1
+    with pytest.raises(ValueError):
+        Pacer(3.0, max_interval=1.0)
+
+
+def test_a_client_error_does_not_count_as_throttling() -> None:
+    pacer = Pacer(3.0, max_interval=30.0)
+    client = RetryingLLMClient(ScriptedInner([HttpError(400)]), pacer=pacer, sleep=lambda s: None)
+    with pytest.raises(HttpError):
+        client.complete("s", "u")
+    assert pacer.throttled_calls == 0 and pacer.interval == 3.0

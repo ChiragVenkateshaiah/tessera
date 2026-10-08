@@ -48,8 +48,18 @@ unhealthy; that is the backoff working, not a hang.
   2 h 48 min and 3 ERROR rows one at a time — under throttling the
   limit is NIM's real capacity, not waiting. With
   `TESSERA_LC_RETRY=lc` the LangChain models pace separately from the
-  judge, and 4 workers failed 8 of the first 11 cases. Use more workers
-  only when NIM is healthy, until pacing adapts to 429s.
+  judge, and 4 workers failed 8 of the first 11 cases.
+- **Adaptive pacing (2026-10-08).** Every call a sweep makes (answers,
+  routing, the judge; native or LangChain clients) goes through **one**
+  `Pacer`. A 429 or 5xx doubles its interval (3 s up to 30 s); every 5
+  successes in a row take 0.5 s off. That is TCP's congestion rule on
+  the call interval: it finds NIM's real capacity instead of assuming
+  40 rpm. The sweep prints, and the export records, the throttled calls
+  and the peak interval. `--workers > 1` is refused with
+  `TESSERA_LC_RETRY=lc`, which paces the LangChain models with their own
+  `InMemoryRateLimiter` (the `retry` switch measures it). The default
+  stays 1 worker until a sweep shows more workers pay with adaptive
+  pacing.
 - `--cases ID[,ID…]` re-runs a sweep's `ERROR` rows through the same
   path. A subset can't be checked against the bar, so `--check` is
   refused with it. Never merge a re-run into a committed export.

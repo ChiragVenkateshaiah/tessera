@@ -453,3 +453,20 @@ def test_people_retriever_returns_native_find_experts() -> None:
     assert retriever.experts("pharma pricing") == find_experts("pharma pricing", BagEmbedder(), store, k=5)
     docs = retriever.invoke("pharma pricing")
     assert docs[0].metadata["person_id"] == "doer" and docs[0].metadata["evidenced"] is True
+
+
+def test_langchain_model_clients_share_the_sweeps_pacer_with_the_judge() -> None:
+    """model_client=lc, retry native: the ChatNVIDIA clients sit behind
+    RetryingLLMClient on the eval's one adaptive pacer, the same one the
+    native judge uses — one rate limit, one pacer (2026-10-08)."""
+    from tessera import cli
+    from tessera.config import Settings
+    from tessera.generation.resilient import Pacer
+
+    settings = Settings(_env_file=None, nvidia_api_key="nvapi-test", lc_model_client="lc")
+    pacer = Pacer(3.0, max_interval=30.0)
+
+    llms, _, _ = cli._lc_chat_models(settings, pacer=pacer)
+    judge = cli._build_nvidia(settings, pacer=pacer)
+
+    assert llms.answer.pacer is pacer and llms.router.pacer is pacer and judge.pacer is pacer

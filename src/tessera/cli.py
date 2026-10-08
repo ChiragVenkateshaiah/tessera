@@ -27,7 +27,7 @@ from tessera.generation.base import LLMClient
 from tessera.generation.bedrock import BedrockClient
 from tessera.generation.gemini import GeminiClient
 from tessera.generation.nvidia import NvidiaClient
-from tessera.generation.resilient import RetryingLLMClient
+from tessera.generation.resilient import Pacer, RetryingLLMClient
 from tessera.ingestion.access_loader import Walls, load_walls
 from tessera.ingestion.chunker import chunk_corpus
 from tessera.ingestion.indexing import IndexingResult, index_corpus
@@ -68,12 +68,15 @@ EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 # its calls out. Interactive `tessera query` doesn't need spacing, only the
 # retry/backoff.
 EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
+# The adaptive pacer's ceiling: 2 calls a minute when NIM is throttling hard.
+EVAL_MAX_CALL_INTERVAL_SECONDS = 30.0
 # Cases run at once in `tessera eval`. Opt-in: a fixed 3 s interval can't
 # find NIM's real capacity, which under load is far below its documented
 # 40 rpm. The 2026-10-08 native sweep with 4 workers took 2 h 44 min with
 # 11 ERROR rows (303 retries), against 2 h 48 min and 3 ERROR rows one at
 # a time the evening before; with TESSERA_LC_RETRY=lc it failed 8 of its
-# first 11 cases. Adaptive pacing is what makes more workers pay.
+# first 11 cases. The sweep's pacer now adapts (resilient.Pacer); the
+# default stays 1 until a sweep shows more workers pay with it.
 EVAL_DEFAULT_WORKERS = 1
 
 CHAT_EXIT_WORDS = frozenset({"exit", "quit", ":q"})
@@ -137,7 +140,7 @@ def _resolve_stack(settings: Settings, stack: str | None, *, allow_lc: bool = Fa
     return chosen
 
 
-def _build_nvidia(settings: Settings, *, min_interval: float = 0.0) -> RetryingLLMClient:
+def _build_nvidia(settings: Settings, *, pacer: Pacer | None = None) -> RetryingLLMClient:
     """NVIDIA NIM behind retry/backoff. The SDK's own fast retries are
     turned off so they don't multiply with ours.
     """
@@ -146,7 +149,7 @@ def _build_nvidia(settings: Settings, *, min_interval: float = 0.0) -> RetryingL
         model=settings.nvidia_model,
         sdk_max_retries=0,
     )
-    return RetryingLLMClient(inner, min_interval=min_interval, on_retry=_announce_retry)
+    return RetryingLLMClient(inner, pacer=pacer, on_retry=_announce_retry)
 
 
 def _require_aws_profile(profile: str) -> None:
@@ -236,9 +239,9 @@ class LLMs:
     name: str
 
 
-def _build_llms(settings: Settings, *, min_interval: float = 0.0) -> LLMs:
-    """Per TESSERA_LLM_PROVIDER. min_interval paces NIM calls (an eval
-    sweep); Gemini and Bedrock aren't paced.
+def _build_llms(settings: Settings, *, pacer: Pacer | None = None) -> LLMs:
+    """Per TESSERA_LLM_PROVIDER. pacer paces NIM calls (an eval sweep,
+    shared with the judge); Gemini and Bedrock aren't paced.
     """
     if settings.llm_provider == "gemini":
         project = _require_gcp(settings)
@@ -275,7 +278,7 @@ def _build_llms(settings: Settings, *, min_interval: float = 0.0) -> LLMs:
                 f"(router {settings.bedrock_router_model})"
             ),
         )
-    nvidia = _build_nvidia(settings, min_interval=min_interval)
+    nvidia = _build_nvidia(settings, pacer=pacer)
     return LLMs(answer=nvidia, router=nvidia, name=f"nvidia:{settings.nvidia_model}")
 
 
@@ -373,7 +376,7 @@ class LcRetrieval:
         return {**({"retrieve": self.retrieve} if self.retrieve else {}), **self.steps}
 
 
-def _lc_retrieval(settings: Settings, llms: LLMs, *, min_interval: float = 0.0) -> LcRetrieval:
+def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None) -> LcRetrieval:
     """The LangChain stack's layers, per the TESSERA_LC_* switches:
     retrieval (P5-4/5) and generation (P5-6). Orchestration stays native
     until P5-7."""
@@ -409,7 +412,7 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, min_interval: float = 0.0) 
             cross_encoder=hf_cross_encoder() if kind == "rerank" else None,
             parents=parent_docstore(load(settings.corpus_dir)) if kind == "parent_doc" else None,
         )
-    lc_llms, steps = _lc_generation(settings, llms, min_interval=min_interval)
+    lc_llms, steps = _lc_generation(settings, llms, pacer=pacer)
     switches: dict[str, object] = {
         "embeddings": settings.lc_embeddings,
         "store": "lc",
@@ -428,7 +431,7 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, min_interval: float = 0.0) 
 
 
 def _lc_generation(
-    settings: Settings, llms: LLMs, *, min_interval: float
+    settings: Settings, llms: LLMs, *, pacer: Pacer | None
 ) -> tuple[LLMs | None, dict[str, Callable[..., object]]]:
     """The generation layers (plan §3.5–3.6): the model clients when
     model_client=lc, and the router / LCEL chain / expertise steps."""
@@ -441,7 +444,7 @@ def _lc_generation(
     lc_llms: LLMs | None = None
     answer_model = router_model = LcModel()
     if settings.lc_model_client == "lc":
-        lc_llms, answer_model, router_model = _lc_chat_models(settings, min_interval=min_interval)
+        lc_llms, answer_model, router_model = _lc_chat_models(settings, pacer=pacer)
     steps: dict[str, Callable[..., object]] = {}
     if settings.lc_router == "lc":
         steps["route"] = route_step(router_model)
@@ -453,7 +456,7 @@ def _lc_generation(
     return lc_llms, steps
 
 
-def _lc_chat_models(settings: Settings, *, min_interval: float) -> tuple[LLMs, object, object]:
+def _lc_chat_models(settings: Settings, *, pacer: Pacer | None) -> tuple[LLMs, object, object]:
     """ChatNVIDIA / ChatGoogleGenerativeAI as the model clients. retry
     native: behind the native port in RetryingLLMClient (chains reach them
     through it). retry lc: .with_retry() + InMemoryRateLimiter pacing, and
@@ -463,7 +466,7 @@ def _lc_chat_models(settings: Settings, *, min_interval: float) -> tuple[LLMs, o
     from tessera.lc.generation import LcModel, eval_rate_limiter, with_lc_retries
 
     lc_retry = settings.lc_retry == "lc"
-    limiter = eval_rate_limiter() if lc_retry and min_interval else None
+    limiter = eval_rate_limiter() if lc_retry and pacer is not None else None
     if settings.llm_provider == "nvidia":
         chat = chat_nvidia(settings.nvidia_api_key, settings.nvidia_model, rate_limiter=limiter)
         models = {"answer": (chat, settings.nvidia_model), "router": (chat, settings.nvidia_model)}
@@ -495,7 +498,7 @@ def _lc_chat_models(settings: Settings, *, min_interval: float) -> tuple[LLMs, o
             lc_models[role] = LcModel(chat_model=chat, model_id=model_id)
         else:
             clients[role] = RetryingLLMClient(
-                LangChainLLMClient(chat, model_id), min_interval=min_interval, on_retry=_announce_retry
+                LangChainLLMClient(chat, model_id), pacer=pacer, on_retry=_announce_retry
             )
             lc_models[role] = LcModel()  # chains reach the model through the port
     if settings.llm_provider == "nvidia":
@@ -1055,9 +1058,20 @@ def eval_command(
         )
         raise typer.Exit(code=1)
 
-    llms = _build_llms(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+    if workers > 1 and chosen_stack == "lc" and settings.lc_retry == "lc":
+        typer.echo(
+            "--workers > 1 needs one shared pacer, and TESSERA_LC_RETRY=lc paces the "
+            "LangChain models with their own InMemoryRateLimiter (the switch measures it). "
+            "Run that sweep with --workers 1.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    # One pacer for every call the sweep makes (answers, routing, judge;
+    # native or LangChain clients), adaptive: see resilient.Pacer.
+    pacer = Pacer(EVAL_MIN_CALL_INTERVAL_SECONDS, max_interval=EVAL_MAX_CALL_INTERVAL_SECONDS)
+    llms = _build_llms(settings, pacer=pacer)
     lc = (
-        _lc_retrieval(settings, llms, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+        _lc_retrieval(settings, llms, pacer=pacer)
         if chosen_stack == "lc"
         else None
     )
@@ -1070,7 +1084,7 @@ def eval_command(
     judge = (
         llms.answer
         if settings.llm_provider == "nvidia"
-        else _build_nvidia(settings, min_interval=EVAL_MIN_CALL_INTERVAL_SECONDS)
+        else _build_nvidia(settings, pacer=pacer)
     )
     # The judge stays the native NIM client whatever the LangChain stack's
     # model_client switch says, so judge scores stay comparable.
@@ -1127,6 +1141,11 @@ def eval_command(
     )
 
     typer.echo(format_report(report))
+    typer.echo(
+        f"Pacing: {pacer.throttled_calls} throttled calls; interval peaked at "
+        f"{pacer.peak_interval:.1f} s, ended at {pacer.interval:.1f} s",
+        err=True,
+    )
     if json_path is not None:
         from evals.harness import report_to_dict
 
@@ -1134,6 +1153,12 @@ def eval_command(
             "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": commit,
             "workers": workers,
+            "pacing": {
+                "min_interval": pacer.min_interval,
+                "max_interval": pacer.max_interval,
+                "peak_interval": pacer.peak_interval,
+                "throttled_calls": pacer.throttled_calls,
+            },
             "provider": settings.llm_provider,
             "stack": chosen_stack,
             **({"lc_switches": lc.switches} if lc is not None else {}),
