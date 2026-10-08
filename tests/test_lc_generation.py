@@ -269,6 +269,7 @@ def test_structured_routing_on_chatnvidia_is_json_schema_and_metered(nim: dict[s
 
     assert decision.archetype is Archetype.EXPERTISE and decision.reasoning == "a person"
     assert nim["bodies"][-1]["response_format"]["type"] == "json_schema"
+    assert "tools" not in nim["bodies"][-1] and "tool_choice" not in nim["bodies"][-1]  # guided JSON, no forced call
     (call,) = recorder.summary().calls
     assert (call.model, call.input_tokens, call.output_tokens) == ("nvidia/nemotron-3-ultra-550b-a55b", 120, 9)
     assert call.latency_s >= 0

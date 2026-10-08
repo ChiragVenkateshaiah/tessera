@@ -195,6 +195,35 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
     assert "REPORT TEXT" in result.output
 
 
+def _stub_harness_with_cases(monkeypatch: pytest.MonkeyPatch, seen: list[list[str]]) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    harness = sys.modules["evals.harness"]
+    harness.load_cases = lambda cases_dir: [type("C", (), {"id": i, "forbidden_markers": {}})() for i in ("ql001", "ql002", "ql003")]
+    harness.run_harness = lambda cases, *a, **k: (seen.append([c.id for c in cases]), "report-object")[1]
+
+
+def test_eval_cases_runs_only_the_named_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+    _stub_harness_with_cases(monkeypatch, seen)
+
+    result = runner.invoke(cli.app, ["eval", "--cases", "ql003,ql001"])
+
+    assert result.exit_code == 0
+    assert seen == [["ql001", "ql003"]]  # eval-set order, not argument order
+
+
+def test_eval_cases_refuses_unknown_ids_and_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+    _stub_harness_with_cases(monkeypatch, seen)
+
+    unknown = runner.invoke(cli.app, ["eval", "--cases", "ql001", "--cases", "ql999"])
+    with_check = runner.invoke(cli.app, ["eval", "--cases", "ql001", "--check"])
+
+    assert unknown.exit_code == 1 and "ql999" in unknown.output
+    assert with_check.exit_code == 2
+    assert seen == []
+
+
 def _stub_harness_for_check(
     monkeypatch: pytest.MonkeyPatch, bar_passed: bool
 ) -> None:

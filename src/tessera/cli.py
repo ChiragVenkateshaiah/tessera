@@ -996,8 +996,20 @@ def eval_command(
         help="Also write every case's result and the aggregates as JSON here.",
     ),
     stack: str | None = typer.Option(None, "--stack", help=STACK_HELP),
+    case_ids: list[str] | None = typer.Option(
+        None,
+        "--cases",
+        help="Run only these case ids (repeat the flag, or comma-separate). "
+        "For re-running a sweep's ERROR rows through the same path; a "
+        "subset can't be checked against the bar, so --check is refused.",
+    ),
 ) -> None:
     """Run the eval harness against the persisted index and print a report."""
+    wanted = [i for raw in case_ids or [] for i in raw.split(",") if i.strip()]
+    wanted = [i.strip() for i in wanted]
+    if wanted and check:
+        typer.echo("--cases runs a subset; the quality bar is defined on the full set, so --check is refused.", err=True)
+        raise typer.Exit(code=2)
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
     try:
@@ -1053,6 +1065,12 @@ def eval_command(
         err=True,
     )
     cases = load_cases(EVAL_CASES_DIR)
+    if wanted:
+        unknown = sorted(set(wanted) - {c.id for c in cases})
+        if unknown:
+            typer.echo(f"Unknown case id(s): {', '.join(unknown)}", err=True)
+            raise typer.Exit(code=1)
+        cases = [c for c in cases if c.id in set(wanted)]
     # Traced, the eval set's engagement markers join the redaction taint set.
     tracer = _build_tracer(
         settings,
@@ -1100,6 +1118,7 @@ def eval_command(
             "provider": settings.llm_provider,
             "stack": chosen_stack,
             **({"lc_switches": lc.switches} if lc is not None else {}),
+            **({"cases": [c.id for c in cases]} if wanted else {}),
             "answers": llms.name,
             "judge": f"nvidia:{settings.nvidia_model}",
         }
