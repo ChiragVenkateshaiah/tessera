@@ -1102,7 +1102,17 @@ approximate, for P5-1 to update):
 ## 10. Decisions for the user (before or during the phase)
 
 1. **The default stack, and the one Phase 6 deploys.** Decided at P5-10 on
-   the comparison's evidence; until then, `native`.
+   the comparison's evidence; until then, `native`. **Direction set by the
+   user on 2026-10-08:** if the P5-10 sweeps pass the bar, the LangGraph
+   pipeline (`lc-defaults`) becomes the default stack; `NativePipeline`
+   stays as the reference implementation that the eval harness and
+   Phase 7's CI gate compare against (not on the default path, not
+   deleted); a cleanup pass after P5-10 removes the switches whose
+   evidence lost and documents one production profile. The user first
+   asked to disconnect native to cut sweep time; the evidence said native
+   adds no latency (the stacks never run together, pipeline code is under
+   1% of a case's time, and sweep time follows NIM load), so native stays
+   as the baseline.
 2. **How the frameworks are installed:** an optional extra (`uv sync
    --extra lc`), or core dependencies. *Recommendation: an optional extra,
    enforced by the subprocess import test.*
