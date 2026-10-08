@@ -38,14 +38,18 @@ stays on stdout. A 55-case sweep can still take 1–1.5 hours when NIM is
 unhealthy; that is the backoff working, not a hang.
 
 **Workers, re-runs and comparisons (2026-10-08).**
-- `tessera eval` runs **4 cases at once** by default (`--workers N`;
-  `--workers 1` is the old one-at-a-time run). A case is almost all
-  waiting on the LLM, so one at a time left the rate limit mostly idle
-  while sweeps took 1–3 h. The workers share one paced client: the 3 s
-  spacing holds across threads, and a 429 holds every thread back until
-  its backoff ends. Embedders serialize their encodes (a fast tokenizer
-  is not thread-safe). Results keep the eval set's order; the progress
-  lines arrive in finishing order.
+- `--workers N` runs N cases at once; the default is **1** (one at a
+  time). The workers share one paced client: the 3 s spacing holds
+  across threads, and a 429 holds every thread back until its backoff
+  ends. Embedders serialize their encodes (a fast tokenizer is not
+  thread-safe). Results keep the eval set's order; the progress lines
+  arrive in finishing order. **Measured 2026-10-08, on a throttled NIM
+  evening:** 4 workers took 2 h 44 min with 11 ERROR rows, against
+  2 h 48 min and 3 ERROR rows one at a time — under throttling the
+  limit is NIM's real capacity, not waiting. With
+  `TESSERA_LC_RETRY=lc` the LangChain models pace separately from the
+  judge, and 4 workers failed 8 of the first 11 cases. Use more workers
+  only when NIM is healthy, until pacing adapts to 429s.
 - `--cases ID[,ID…]` re-runs a sweep's `ERROR` rows through the same
   path. A subset can't be checked against the bar, so `--check` is
   refused with it. Never merge a re-run into a committed export.

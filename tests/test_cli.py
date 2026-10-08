@@ -247,9 +247,10 @@ def test_eval_runs_cases_on_workers_and_reads_the_commit_before_the_run(
     assert seen["meta"]["workers"] == cli.EVAL_DEFAULT_WORKERS and seen["meta"]["commit"] == "abc123"
     assert order == ["commit", "run"]  # provenance first: a mid-sweep commit can't relabel it
 
-    one = runner.invoke(cli.app, ["eval", "--workers", "1"])
+    assert cli.EVAL_DEFAULT_WORKERS == 1  # opt-in until pacing adapts to 429s
+    three = runner.invoke(cli.app, ["eval", "--workers", "3"])
     zero = runner.invoke(cli.app, ["eval", "--workers", "0"])
-    assert one.exit_code == 0 and seen["workers"] == 1
+    assert three.exit_code == 0 and seen["workers"] == 3
     assert zero.exit_code != 0
 
 

@@ -68,11 +68,13 @@ EVAL_CASES_DIR = REPO_ROOT / "evals" / "cases"
 # its calls out. Interactive `tessera query` doesn't need spacing, only the
 # retry/backoff.
 EVAL_MIN_CALL_INTERVAL_SECONDS = 3.0
-# Cases run at once in `tessera eval` (2026-10-08). A case is three calls
-# of 10-30 s each (route, answer, judge), so one at a time left NIM's
-# 40 rpm mostly idle while sweeps took 1-3 h. Four workers through one
-# paced client stay under 20 calls a minute (the 3 s spacing is shared).
-EVAL_DEFAULT_WORKERS = 4
+# Cases run at once in `tessera eval`. Opt-in: a fixed 3 s interval can't
+# find NIM's real capacity, which under load is far below its documented
+# 40 rpm. The 2026-10-08 native sweep with 4 workers took 2 h 44 min with
+# 11 ERROR rows (303 retries), against 2 h 48 min and 3 ERROR rows one at
+# a time the evening before; with TESSERA_LC_RETRY=lc it failed 8 of its
+# first 11 cases. Adaptive pacing is what makes more workers pay.
+EVAL_DEFAULT_WORKERS = 1
 
 CHAT_EXIT_WORDS = frozenset({"exit", "quit", ":q"})
 
