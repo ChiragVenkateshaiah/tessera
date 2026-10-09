@@ -94,5 +94,8 @@ this command reads; if something here seems missing, check whether
 
 Report concisely: what was last completed, environment/test-suite health,
 anything left dangling from git/GitHub, and what task is next with its
-acceptance check. Then stop — wait for go-ahead, don't start the task
+acceptance check. If `## Next task to pick up` has an **Open questions
+for the user** block, put those questions first in the report, each with
+the recommendation recorded beside it, and ask them (AskUserQuestion) —
+they were deferred to this session on purpose. Then stop — wait for go-ahead, don't start the task
 automatically.
