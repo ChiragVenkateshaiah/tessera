@@ -156,6 +156,12 @@ retries weren't counted, but the direction matches the mechanism.
 | Retries visible | each one printed and counted | silent, uncounted |
 | Parallel cases (`--workers`) | allowed | refused |
 
+**Not yet run:** the 2026-10-08 plan's `lc-model-client-2` sweep
+(`model_client=lc` again, with the timeout fix and adaptive pacing). It
+differs from the `retry` sweep only in the retry layer, so it is the
+clean comparison for this table; until it runs, `retry` is read against
+the native sweep.
+
 ## 5. Findings worth knowing
 
 - **`ChatNVIDIA` timed out where native waits.** Its default read

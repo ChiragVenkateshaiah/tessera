@@ -9,7 +9,9 @@ this command reads; if something here seems missing, check whether
 
 ## 1. Read status
 
-- `checkpoint.md` at repo root — the source of truth. It has six
+- `checkpoint.md` at repo root — the source of truth. On a feature
+  branch, read `main`'s copy (`git show origin/main:checkpoint.md`) if
+  `main` has commits the branch lacks. It has six
   sections: `## Status`, `## Done`, `## Next task to pick up`,
   `## Task sequence`, `## Notes / open flags`, `## Architecture & QA
   notes`. Read `## Notes / open flags` in full — that's where operational
@@ -66,7 +68,10 @@ this command reads; if something here seems missing, check whether
 - `git fetch --prune` first — a stale local view of `origin` (deleted
   remote branches still showing as `remotes/origin/...` locally) will
   make step 3 report ghosts.
-- `git log --oneline -15`, `git status`, `git branch -a --no-merged main`
+- `git log --oneline -15 origin/main` (not only the checked-out branch —
+  an end-day checkpoint can land on `main` after a feature branch's last
+  commit; on 2026-10-09 reading only the branch missed #80), then
+  `git log --oneline main..HEAD`, `git status`, `git branch -a --no-merged main`
   — the `--no-merged` filter matters: only branches with real unmerged
   work should show up here, not merged-and-already-deleted cruft.
   Anything real that's dangling (uncommitted work, an unmerged branch) —
