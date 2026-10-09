@@ -4,8 +4,7 @@ Last updated: 2026-10-09 (end of day)
 
 ## Status
 
-**Phase 5 in progress — P5-0 to P5-5 merged; P5-6 built and evidenced
-(2026-10-07…09), its PR not yet opened.**
+**Phase 5 in progress — P5-0 to P5-6 done (P5-6 on 2026-10-07…09, #81).**
 - **P5-0 to P5-2** (#71–#73, 2026-10-05/06): baseline sweeps + the judge's
   noise floor (A/C relevance ±0.03, B ±0.11); plan adoption + the `lc`
   extra + the spike; the `Pipeline` protocol and the marker split.
@@ -21,14 +20,14 @@ Last updated: 2026-10-09 (end of day)
   `ScopedStore` and one shared contract. Leak and scope-binding tests
   pass. `tessera eval --stack lc` = native generation + LangChain
   retrieval. `lc-defaults` keeps every layer at native-equal quality.
-- **P5-6** (branch `feat/p5-6-lc-generation`, PR pending): LangChain
+- **P5-6** (#81): LangChain
   router, LCEL chain, `ChatNVIDIA`/`ChatGoogleGenerativeAI`, `.with_retry()`
   retries, `PeopleRetriever`. All three acceptance items met; four
   per-switch sweeps `=> PASS`, within noise
   (`evals/reports/p5-6-generation.md`). Also `tessera eval --cases`,
   `--workers`, an adaptive shared `Pacer`, `evals/compare_sweeps.py`.
-- **Next:** the user's `lc-defaults` decision for the generation
-  switches, then the P5-6 PR; then P5-7.
+- **Next:** two questions the user deferred (lc-defaults for the
+  generation switches; CLAUDE.md wording), then P5-7.
 - **Also on 2026-10-07:** the reviewer's-guide format for PRs (#76,
   `.claude/commands/pr-review.md`).
 
@@ -2018,7 +2017,7 @@ same change and stays ungated (`QUALITY_BAR.md`).
       - Suite 555 passed. **Deferred to P5-7:** the `Send` fan-out
         multi-query.
 - [x] **P5-6 — Generation, routing, retries, expertise** (2026-10-07…09,
-      branch `feat/p5-6-lc-generation`, **PR #<pending>**; evidence
+      branch `feat/p5-6-lc-generation`, **PR #81**; evidence
       `evals/reports/p5-6-generation.md` + `.json`; sweeps
       `evals/baselines/p5-6-lc-{router,prompt-chain,model-client,retry}.json`
       and `p5-6-native.json`).
@@ -2286,9 +2285,8 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-3 — LangSmith tracing with taint redaction (native first)~~ — done (#75; live LangSmith step pending a key)
 - ~~P5-4 — LangChain ingestion and indexing~~ — done (#77)
 - ~~P5-5 — LangChain retrieval~~ — done (#78)
-- P5-6 — generation, routing, retries, expertise — **built, evidenced,
-  acceptance met; `lc-defaults` decision + PR #<pending> ← next**
-- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API **← then**
+- ~~P5-6 — generation, routing, retries, expertise~~ — done (#81; `lc-defaults` for it pending the user)
+- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API **← next**
 - P5-8 — human-review workflow
 - P5-9 — LangSmith datasets, experiments, feedback, prompt hub
 - P5-10 — comparison and exit, incl. 3 Gemini sweeps; tag `v0.5.0`
