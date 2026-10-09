@@ -18,9 +18,11 @@ routing. Any stack that implements the protocol is scored the same way.
 
 from __future__ import annotations
 
+import contextvars
 import re
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -633,6 +635,7 @@ def run_harness(
     prices: Mapping[str, ModelPrice] | None = None,
     walls: Walls | None = None,
     pipeline: Pipeline | None = None,
+    workers: int = 1,
 ) -> EvalReport:
     """Run every case and aggregate metrics across all of them.
 
@@ -650,54 +653,76 @@ def run_harness(
     aggregate below, rather than silently corrupting them.
 
     router_llm / judge_llm / prices / walls / pipeline: see run_case().
+
+    workers > 1 runs that many cases at once on threads (2026-10-08: a
+    sweep is almost all waiting on the LLM, so one case at a time left the
+    rate limit mostly unused). The ports must be safe to share: the paced
+    ``RetryingLLMClient`` reserves call slots under a lock, and the
+    embedders serialize their encodes. Each case runs in its own copy of
+    the caller's context (contextvars: tracing, the taint set). Results
+    keep the cases' order whatever order they finish in;
+    on_case_complete is called as each finishes, from one thread at a
+    time.
     Pass the same expertise_store a given pipeline searches: it marks the
     run as having attempted B (``expertise_scored``).
 
     Access-set cases (P4-5) are kept out of routing accuracy and every
     A/C and B mean; they have their own metrics below.
     """
-    case_results: list[CaseResult] = []
-    for done, case in enumerate(cases, start=1):
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+
+    def one(case: EvalCase) -> CaseResult:
         try:
-            case_results.append(
-                run_case(
-                    case,
-                    llm,
-                    embedder,
-                    store,
-                    corpus_dir,
-                    k,
-                    expertise_store,
-                    router_llm=router_llm,
-                    judge_llm=judge_llm,
-                    prices=prices,
-                    walls=walls,
-                    pipeline=pipeline,
-                )
+            return run_case(
+                case,
+                llm,
+                embedder,
+                store,
+                corpus_dir,
+                k,
+                expertise_store,
+                router_llm=router_llm,
+                judge_llm=judge_llm,
+                prices=prices,
+                walls=walls,
+                pipeline=pipeline,
             )
         except Exception as exc:
-            case_results.append(
-                CaseResult(
-                    case_id=case.id,
-                    query=case.query,
-                    expected_archetype=case.archetype,
-                    actual_archetype=None,
-                    routing_correct=None,
-                    retrieved_documents=[],
-                    recall=None,
-                    precision=None,
-                    reciprocal_rank_score=None,
-                    answer="",
-                    judge=None,
-                    latency_seconds=0.0,
-                    error=str(exc),
-                    access_set=case.access,
-                )
+            return CaseResult(
+                case_id=case.id,
+                query=case.query,
+                expected_archetype=case.archetype,
+                actual_archetype=None,
+                routing_correct=None,
+                retrieved_documents=[],
+                recall=None,
+                precision=None,
+                reciprocal_rank_score=None,
+                answer="",
+                judge=None,
+                latency_seconds=0.0,
+                error=str(exc),
+                access_set=case.access,
             )
-        if on_case_complete is not None:
-            on_case_complete(done, len(cases), case_results[-1])
 
-    all_results = case_results
+    results: list[CaseResult | None] = [None] * len(cases)
+    if workers == 1:
+        for done, case in enumerate(cases, start=1):
+            results[done - 1] = one(case)
+            if on_case_complete is not None:
+                on_case_complete(done, len(cases), results[done - 1])  # type: ignore[arg-type]
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="eval-case") as pool:
+            futures = {
+                pool.submit(contextvars.copy_context().run, one, case): i for i, case in enumerate(cases)
+            }
+            for done, future in enumerate(as_completed(futures), start=1):
+                results[futures[future]] = future.result()  # one() never raises
+                if on_case_complete is not None:
+                    on_case_complete(done, len(cases), results[futures[future]])  # type: ignore[arg-type]
+
+    all_results: list[CaseResult] = [r for r in results if r is not None]
     access_results = [r for r in all_results if r.access_set is not None and r.error is None]
     case_results = [r for r in all_results if r.access_set is None]
 

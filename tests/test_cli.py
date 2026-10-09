@@ -195,6 +195,80 @@ def test_eval_resolves_and_drives_the_evals_harness_module(
     assert "REPORT TEXT" in result.output
 
 
+def _stub_harness_with_cases(monkeypatch: pytest.MonkeyPatch, seen: list[list[str]]) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    harness = sys.modules["evals.harness"]
+    harness.load_cases = lambda cases_dir: [type("C", (), {"id": i, "forbidden_markers": {}})() for i in ("ql001", "ql002", "ql003")]
+    harness.run_harness = lambda cases, *a, **k: (seen.append([c.id for c in cases]), "report-object")[1]
+
+
+def test_eval_cases_runs_only_the_named_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+    _stub_harness_with_cases(monkeypatch, seen)
+
+    result = runner.invoke(cli.app, ["eval", "--cases", "ql003,ql001"])
+
+    assert result.exit_code == 0
+    assert seen == [["ql001", "ql003"]]  # eval-set order, not argument order
+
+
+def test_eval_cases_refuses_unknown_ids_and_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+    _stub_harness_with_cases(monkeypatch, seen)
+
+    unknown = runner.invoke(cli.app, ["eval", "--cases", "ql001", "--cases", "ql999"])
+    with_check = runner.invoke(cli.app, ["eval", "--cases", "ql001", "--check"])
+
+    assert unknown.exit_code == 1 and "ql999" in unknown.output
+    assert with_check.exit_code == 2
+    assert seen == []
+
+
+def test_eval_runs_cases_on_workers_and_reads_the_commit_before_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    harness = sys.modules["evals.harness"]
+    order: list[str] = []
+    seen: dict[str, object] = {}
+
+    def fake_run_harness(*a, **k):
+        order.append("run")
+        seen.update(k)
+        return "report-object"
+
+    harness.run_harness = fake_run_harness
+    harness.report_to_dict = lambda report, meta: (seen.update(meta=meta), {})[1]
+    monkeypatch.setattr(cli, "_git_commit", lambda: (order.append("commit"), "abc123")[1])
+
+    default = runner.invoke(cli.app, ["eval", "--json", str(tmp_path / "x.json")])
+    assert default.exit_code == 0
+    assert seen["workers"] == cli.EVAL_DEFAULT_WORKERS
+    assert seen["meta"]["workers"] == cli.EVAL_DEFAULT_WORKERS and seen["meta"]["commit"] == "abc123"
+    assert order == ["commit", "run"]  # provenance first: a mid-sweep commit can't relabel it
+
+    assert cli.EVAL_DEFAULT_WORKERS == 1  # opt-in until pacing adapts to 429s
+    three = runner.invoke(cli.app, ["eval", "--workers", "3"])
+    zero = runner.invoke(cli.app, ["eval", "--workers", "0"])
+    assert three.exit_code == 0 and seen["workers"] == 3
+    assert zero.exit_code != 0
+
+
+def test_eval_refuses_workers_when_langchain_paces_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TESSERA_LC_RETRY=lc paces the LangChain models with their own
+    InMemoryRateLimiter, apart from the judge's pacer: more workers would
+    run two pacers against one rate limit (2026-10-08: 8 of 11 cases
+    failed)."""
+    _stub_harness_for_check(monkeypatch, bar_passed=True)
+    monkeypatch.setenv("TESSERA_LC_MODEL_CLIENT", "lc")
+    monkeypatch.setenv("TESSERA_LC_RETRY", "lc")
+
+    result = runner.invoke(cli.app, ["eval", "--stack", "lc", "--workers", "2"])
+
+    assert result.exit_code == 2
+    assert "--workers 1" in result.output
+
+
 def _stub_harness_for_check(
     monkeypatch: pytest.MonkeyPatch, bar_passed: bool
 ) -> None:
@@ -451,6 +525,8 @@ def test_eval_prints_progress_and_wraps_the_llm_with_retry_and_pacing(
     assert "[1/2] q1 ok" in result.output and "[2/2] q2 ERROR" in result.output
     assert isinstance(captured["llm"], RetryingLLMClient)
     assert captured["llm"]._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert captured["llm"].pacer.adaptive
+    assert captured["llm"].pacer.max_interval == cli.EVAL_MAX_CALL_INTERVAL_SECONDS
     assert captured["sdk_max_retries"] == 0  # SDK fast retries off; ours take over
 
 
@@ -753,7 +829,7 @@ def test_eval_on_bedrock_keeps_the_judge_on_nvidia(monkeypatch: pytest.MonkeyPat
     assert nvidia_built == ["nvidia/nemotron-3-ultra-550b-a55b"]  # the judge only
     judge = captured["judge_llm"]
     assert isinstance(judge, RetryingLLMClient)
-    assert judge._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS
+    assert judge._min_interval == cli.EVAL_MIN_CALL_INTERVAL_SECONDS and judge.pacer.adaptive
     assert judge is not captured["llm"] and captured["router_llm"] is not captured["llm"]
     assert captured["prices"] is MODEL_PRICES
     assert "judge: nvidia:" in result.output
@@ -1008,7 +1084,7 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
     monkeypatch.setattr(
         cli,
         "_lc_retrieval",
-        lambda settings, llms: cli.LcRetrieval(
+        lambda settings, llms, **kw: cli.LcRetrieval(
             store=lc_store, embedder="lc-embedder", retrieve=lc_retrieve,  # type: ignore[arg-type]
             switches={"retriever": "lc"},
         ),

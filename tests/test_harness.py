@@ -1162,3 +1162,111 @@ def test_any_pipeline_is_scored_through_the_protocol() -> None:
     assert other.asked == [("q?", None)]
     assert result.routing_correct is True and result.recall == 1.0
     assert result.answer == "Other stack [1]." and never.calls == []
+
+
+def _sleepy_stack(delays: dict[str, float], fail: set[str] = frozenset()):  # type: ignore[assignment]
+    """A Pipeline whose cases take the given seconds; ``fail`` ids raise."""
+    import threading
+    import time
+
+    from tessera.generation.answer import GeneratedAnswer
+    from tessera.pipeline import AnswerResult, PipelineRun
+    from tessera.retrieval.retriever import RetrievalResult
+    from tessera.retrieval.router import RoutingDecision
+
+    hit = _result("data/corpus/methodology/a.md", 0.9)
+
+    class Sleepy:
+        def __init__(self) -> None:
+            self.lock = threading.Lock()
+            self.running = 0
+            self.peak = 0
+
+        def run(self, query, principal=None):
+            with self.lock:
+                self.running += 1
+                self.peak = max(self.peak, self.running)
+            try:
+                time.sleep(delays[query])
+                if query in fail:
+                    raise RuntimeError("[503] overloaded")
+                retrieval = RetrievalResult(query=query, archetype=Archetype.LOOKUP, results=[hit])
+                return PipelineRun(
+                    answer=AnswerResult(query, Archetype.LOOKUP, "A [1].", []),
+                    decision=RoutingDecision(query, Archetype.LOOKUP, "x"),
+                    retrievals=(retrieval,),
+                    shown=(hit,),
+                    generated=GeneratedAnswer(query, Archetype.LOOKUP, "A [1].", []),
+                )
+            finally:
+                with self.lock:
+                    self.running -= 1
+
+    return Sleepy()
+
+
+def _lookup_cases(n: int) -> list[EvalCase]:
+    return [
+        EvalCase(id=f"c{i}", query=f"q{i}", archetype=Archetype.LOOKUP,
+                 relevant_sources=["methodology/a.md"], ideal_answer="")
+        for i in range(n)
+    ]
+
+
+def test_workers_run_cases_at_once_and_keep_the_eval_set_order() -> None:
+    cases = _lookup_cases(6)
+    # Later cases finish first, so completion order is the reverse.
+    stack = _sleepy_stack({f"q{i}": 0.05 * (6 - i) for i in range(6)}, fail={"q3"})
+    progress: list[tuple[int, str]] = []
+
+    report = run_harness(
+        cases, ScriptedLLMClient({}), FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR,
+        pipeline=stack, workers=3,
+        on_case_complete=lambda done, total, r: progress.append((done, r.case_id)),
+    )
+
+    assert [r.case_id for r in report.case_results] == [c.id for c in cases]
+    assert [d for d, _ in progress] == [1, 2, 3, 4, 5, 6]
+    assert {i for _, i in progress} == {c.id for c in cases}
+    assert stack.peak == 3  # bounded: never more than the workers
+    (failed,) = [r for r in report.case_results if r.error]
+    assert failed.case_id == "c3" and "503" in failed.error
+    assert report.mean_recall == 1.0  # the error row stays out of the means
+
+
+def test_one_worker_is_the_sequential_run() -> None:
+    cases = _lookup_cases(3)
+    stack = _sleepy_stack({f"q{i}": 0.0 for i in range(3)})
+    progress: list[str] = []
+
+    run_harness(cases, ScriptedLLMClient({}), FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR,
+                pipeline=stack, on_case_complete=lambda d, t, r: progress.append(r.case_id))
+
+    assert progress == ["c0", "c1", "c2"] and stack.peak == 1
+    with pytest.raises(ValueError):
+        run_harness(cases, ScriptedLLMClient({}), FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR,
+                    pipeline=stack, workers=0)
+
+
+def test_each_case_runs_in_its_own_copy_of_the_callers_context() -> None:
+    """Tracing and the redaction taint set live in contextvars: a worker
+    thread must see the caller's values, and one case's writes must not
+    reach another case."""
+    import contextvars
+
+    var: contextvars.ContextVar[str] = contextvars.ContextVar("v", default="unset")
+    var.set("caller")
+    seen: list[str] = []
+    inner = _sleepy_stack({f"q{i}": 0.01 for i in range(4)})
+
+    class Taints:
+        def run(self, query, principal=None):
+            seen.append(var.get())
+            var.set(query)  # a case's own taint
+            return inner.run(query, principal)
+
+    run_harness(_lookup_cases(4), ScriptedLLMClient({}), FakeEmbedder(), FakeVectorStore([]), CORPUS_DIR,
+                pipeline=Taints(), workers=2)
+
+    assert seen == ["caller"] * 4
+    assert var.get() == "caller"

@@ -84,6 +84,15 @@ class UsageRecorder(LLMClient):
             self._calls.append(completion.usage)
         return completion
 
+    def add(self, usage: Usage | None) -> None:
+        """Record a call made outside this recorder — a LangChain chain
+        calling a chat model directly reports its usage here through a
+        callback (Phase 5, P5-6), so it is metered with the rest."""
+        if usage is None:
+            self._unmetered += 1
+        else:
+            self._calls.append(usage)
+
     def summary(self) -> UsageSummary:
         return UsageSummary(calls=tuple(self._calls), unmetered_calls=self._unmetered)
 

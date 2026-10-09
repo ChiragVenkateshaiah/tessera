@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from sentence_transformers import SentenceTransformer
 
 from tessera.embedding.base import Embedder
@@ -18,19 +20,26 @@ class LocalEmbedder(Embedder):
     model (it has no query/passage distinction) — the split still exists on
     the interface (see Embedder) so a model that does need it is a drop-in
     swap, not an interface change.
+
+    Safe to share across threads: encodes are serialized, because the
+    model's fast tokenizer raises "Already borrowed" under concurrent use
+    (``tessera eval --workers``, FastAPI's thread pool).
     """
 
     def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
         self._model = SentenceTransformer(model_name)
+        self._lock = threading.Lock()
 
     @property
     def dimension(self) -> int:
         return self._model.get_embedding_dimension()
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        embeddings = self._model.encode(list(texts), show_progress_bar=False)
+        with self._lock:
+            embeddings = self._model.encode(list(texts), show_progress_bar=False)
         return embeddings.tolist()
 
     def embed_query(self, text: str) -> list[float]:
-        embedding = self._model.encode([text], show_progress_bar=False)
+        with self._lock:
+            embedding = self._model.encode([text], show_progress_bar=False)
         return embedding[0].tolist()

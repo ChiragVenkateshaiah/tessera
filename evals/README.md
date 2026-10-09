@@ -37,6 +37,39 @@ progress and any "retrying in Ns" notices to stderr — the report itself
 stays on stdout. A 55-case sweep can still take 1–1.5 hours when NIM is
 unhealthy; that is the backoff working, not a hang.
 
+**Workers, re-runs and comparisons (2026-10-08).**
+- `--workers N` runs N cases at once; the default is **1** (one at a
+  time). The workers share one paced client: the 3 s spacing holds
+  across threads, and a 429 holds every thread back until its backoff
+  ends. Embedders serialize their encodes (a fast tokenizer is not
+  thread-safe). Results keep the eval set's order; the progress lines
+  arrive in finishing order. **Measured 2026-10-08, on a throttled NIM
+  evening:** 4 workers took 2 h 44 min with 11 ERROR rows, against
+  2 h 48 min and 3 ERROR rows one at a time — under throttling the
+  limit is NIM's real capacity, not waiting. With
+  `TESSERA_LC_RETRY=lc` the LangChain models pace separately from the
+  judge, and 4 workers failed 8 of the first 11 cases.
+- **Adaptive pacing (2026-10-08).** Every call a sweep makes (answers,
+  routing, the judge; native or LangChain clients) goes through **one**
+  `Pacer`. A 429 or 5xx doubles its interval (3 s up to 30 s); every 5
+  successes in a row take 0.5 s off. That is TCP's congestion rule on
+  the call interval: it finds NIM's real capacity instead of assuming
+  40 rpm. The sweep prints, and the export records, the throttled calls
+  and the peak interval. `--workers > 1` is refused with
+  `TESSERA_LC_RETRY=lc`, which paces the LangChain models with their own
+  `InMemoryRateLimiter` (the `retry` switch measures it). The default
+  stays 1 worker until a sweep shows more workers pay with adaptive
+  pacing.
+- `--cases ID[,ID…]` re-runs a sweep's `ERROR` rows through the same
+  path. A subset can't be checked against the bar, so `--check` is
+  refused with it. Never merge a re-run into a committed export.
+- `--json` records the commit **at the start** of the sweep (plus the
+  worker count), so a commit made while a sweep runs can't relabel it.
+- `python -m evals.compare_sweeps BASE.json CAND.json … --floor-from
+  NATIVE.json …` compares exports on the cases scored in both: routing,
+  documents, people, recall/RR, leaks and injection case by case, and the
+  judge means against a noise floor taken from the given native sweeps.
+
 ## Case schema
 
 Cases live in `evals/cases/*.yaml`, one list of entries per file:
@@ -261,4 +294,7 @@ A/C relevance (+0.10, same narrow-A cause as P2-5) and B person recall
   (candidates, evidence, scores) for a query; no LLM calls.
 - `tune_retrieval.py` — retrieval-only grid search over the A/C
   retrieval constants (P2-3); no LLM calls.
+- `compare_sweeps.py` — compares `--json` exports against a baseline on
+  the cases scored in both, with an empirical judge noise floor; no LLM
+  calls.
 - `cases/` — the YAML case files described above.

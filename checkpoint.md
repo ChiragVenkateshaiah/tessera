@@ -1,10 +1,10 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-08 (end of day)
+Last updated: 2026-10-09 (end of day)
 
 ## Status
 
-**Phase 5 in progress — P5-0 to P5-5 done; P5-6 in progress (2026-10-08).**
+**Phase 5 in progress — P5-0 to P5-6 done (P5-6 on 2026-10-07…09, #81).**
 - **P5-0 to P5-2** (#71–#73, 2026-10-05/06): baseline sweeps + the judge's
   noise floor (A/C relevance ±0.03, B ±0.11); plan adoption + the `lc`
   extra + the spike; the `Pipeline` protocol and the marker split.
@@ -20,14 +20,15 @@ Last updated: 2026-10-08 (end of day)
   `ScopedStore` and one shared contract. Leak and scope-binding tests
   pass. `tessera eval --stack lc` = native generation + LangChain
   retrieval. `lc-defaults` keeps every layer at native-equal quality.
-- **P5-6 in progress** on `feat/p5-6-lc-generation` (pushed, **no PR
-  yet**): code + zero-call tests done; 4 of 6 live sweeps done, all
-  `=> PASS` (router, prompt_chain, model_client, native); left:
-  `lc-model-client-2` and `lc-retry` (1 worker each), the P5-6 report,
-  the PR. Also on the branch: `tessera eval --cases`/`--workers`,
-  adaptive pacing (one shared `Pacer` per sweep), start-of-sweep
-  provenance, `evals/compare_sweeps.py`, and the `ChatNVIDIA` timeout
-  parity fix. Details under "Next task to pick up".
+- **P5-6** (#81): LangChain router, LCEL chain,
+  `ChatNVIDIA`/`ChatGoogleGenerativeAI`, `.with_retry()` retries,
+  `PeopleRetriever`. All three acceptance items met; five sweeps
+  `=> PASS`, every switch within noise but one explained dip
+  (`evals/reports/p5-6-generation.md`). Also `tessera eval --cases`,
+  `--workers`, an adaptive shared `Pacer`, `evals/compare_sweeps.py`.
+- **Next:** two questions the user deferred to the next session
+  (`lc-defaults` for the generation switches; whether to run the planned
+  `lc-model-client-2` sweep), then P5-7.
 - **Decided 2026-10-08 (user):** LangGraph becomes the default stack
   after P5-10 if its sweeps pass; native stays as the eval/CI reference
   (plan §10.1).
@@ -2019,87 +2020,105 @@ same change and stays ungated (`QUALITY_BAR.md`).
         (neither sweep uses BM25), stated on the PR.
       - Suite 555 passed. **Deferred to P5-7:** the `Send` fan-out
         multi-query.
+- [x] **P5-6 — Generation, routing, retries, expertise** (2026-10-07…09,
+      branch `feat/p5-6-lc-generation`, **PR #81**; evidence
+      `evals/reports/p5-6-generation.md` + `.json`; sweeps
+      `evals/baselines/p5-6-lc-{router,prompt-chain,model-client,retry}.json`
+      and `p5-6-native.json`).
+      - `lc/generation.py`: `ChatPromptTemplate`s with the `prompts.py`
+        text; the grounded chain `RunnableParallel` →
+        `RunnablePassthrough.assign(RunnableLambda(format_source_group))`
+        → `RunnableBranch` → model → `StrOutputParser`; structured routing
+        `with_structured_output(RouteDecision, method="json_schema")` (no
+        `include_raw` — `ChatNVIDIA` raises on it; usage comes from a
+        `RecorderCallback`); `with_lc_retries` (`.with_retry()` on errors
+        translated to `TransientLLMError`) + `eval_rate_limiter()`.
+      - `lc/chat_models.py`: `UsageCallback` (tokens **and** latency, under
+        the configured model id), `LangChainLLMClient` (LangChain model
+        behind the native port; errors carry `status_code`; client-side
+        timeouts read as 504), `TesseraChatModel` (native port as a chat
+        model). `lc/expertise.py`: `PeopleRetriever` around native
+        `find_experts`.
+      - Shared code changed: `generation/answer.py`
+        (`citations_for`/`finish_answer`), the `UsageRecorder`;
+        `generation/resilient.py`: a thread-safe `Pacer`, adaptive (AIMD,
+        3–30 s) in sweeps and shared by every client.
+      - `tessera eval`: `--cases ID…` (re-runs ERROR rows; refuses
+        `--check`), `--workers N` (default 1; refused with `retry=lc`),
+        pacing summary in the export's meta. `evals/compare_sweeps.py`:
+        case-by-case and judge-mean comparison on cases scored in both,
+        with `--floor-from` (max pairwise spread of native sweeps).
+      - Sweeps (NIM, one switch `lc` each, retriever native): `router` 46
+        min, 0 ERROR; `prompt_chain` 2 h 51, 0 ERROR; `model_client` 3 h
+        39, 5 ERROR (2 `ChatNVIDIA` 60 s read timeouts → fixed `ea1dbf9`,
+        `timeout=600`); `retry` 56 min, 2 ERROR; native (4 workers) 2 h
+        44, 11 ERROR. All `=> PASS`; every ERROR row scored on a re-run
+        alone. Against native, every judge mean is within the 7-sweep
+        floor (A/C relevance ±0.03, groundedness ±0.06, B relevance ±0.12)
+        **except `router` A/C relevance −0.06**: two cases (`ql017`,
+        `fr005`) with the same route, documents and generator in both
+        sweeps — answer sampling, not the router. The only routing
+        changes are the Cobalt flip cases `ac-a06`/`ac-l06`.
+      - **Retry finding:** in the same calm sweep the native judge
+        recovered from 19 throttles; `.with_retry()` (≈ 31 s over six
+        attempts, no `Retry-After`) lost 2 answer calls. Proposed
+        `lc-defaults`: router/prompt_chain/model_client `lc`, retry
+        `native`, expertise the user's call — **awaiting the user.**
+      - Suite 610 passed, 8 skipped, 1 xfailed. **Deferred to P5-7 (per
+        plan):** `RunnableBranch` vs conditional edges, `RetryPolicy`,
+        time to first token.
 
 ## Next task to pick up
 
-**P5-6 — Generation, routing, retries, expertise** (`docs/Tessera_Phase5_Plan.md`
-§3.5–3.6, §5) — **in progress, finish it.** Branch
-`feat/p5-6-lc-generation` (pushed, head `e3b1c67`, no PR yet).
+**Open questions for the user** (deferred by the user on 2026-10-09 to
+the next session — ask these first, with the recommendations):
 
-**Done on the branch (2026-10-07 late + 2026-10-08):**
-- Code + zero-call tests (`e1b15e6`): `lc/chat_models.py`,
-  `lc/generation.py` (ChatPromptTemplates, the LCEL chain, structured
-  routing, `RecorderCallback`, `.with_retry()`, `InMemoryRateLimiter`),
-  `lc/expertise.py`, switches `TESSERA_LC_ROUTER/PROMPT_CHAIN/
-  MODEL_CLIENT/RETRY/EXPERTISE`. Prompt-identity, fake-chat-model,
-  fault-injection tests; redaction extended to prompt/model/parser runs.
-- `search_ef` exact HNSW for the store-parity test (`c93544e`).
-- `tessera eval --cases ID[,ID…]` (`6c61734`); the routing test proves
-  `ChatNVIDIA`'s structured output sends `response_format: json_schema`
-  and no `tools` (its `method=` is ignored, it chooses itself).
-- `tessera eval --workers N` (thread-safe pacing, serialized embedders,
-  per-case contexts), start-of-sweep provenance, `compare_sweeps.py`
-  (`6700ece`); default back to 1 worker (`0385349`); **adaptive pacing**
-  — one `Pacer` per sweep shared by every client, AIMD 3–30 s, refuses
-  `--workers > 1` with `retry=lc` (`50e818a`).
-- **`ChatNVIDIA` timeout parity** (`ea1dbf9`): 600 s like the openai SDK
-  (its default is 60 s), and client-side timeouts/connection drops are
-  reported as 504 so both retry layers retry them.
-- Sweeps (exports in `evals/baselines/`, all `--check` `=> PASS`;
-  `TESSERA_LC_RETRIEVER=native`, so only the generation switch differs):
-  | Export | Commit | Time | ERROR rows (kept) | Re-run alone, same commit |
-  |---|---|---|---|---|
-  | `p5-6-lc-router` | 6c61734 | 46 min | 0 | — |
-  | `p5-6-lc-prompt-chain` | 6c61734 | 2 h 51 | 0 | — |
-  | `p5-6-lc-model-client` | 6c61734 | 3 h 39 | 5 (ac-l10, q005: 60 s timeout; ac-i04, nm004, ql018: 503) | all 5 pass (ac-l10 no leak, ac-i04 contract held, nm004 no-match OK, q005 recall 0.60 G5/R5, ql018 person recall 1.00 G5/R5) |
-  | `p5-6-native` (shared code) | ea1dbf9, 4 workers | 2 h 44 | 11 | all pass (ql026 needed two re-runs): ac-l04 no leak; 7 cases recall 1.00 G5/R5; ql011 0.80 G5/R4; ql034 0.75 RR 0.50 G5/R5 |
-- `python -m evals.compare_sweeps evals/baselines/p5-5-native.json
-  evals/baselines/p5-6-*.json --floor-from evals/baselines/p5-0-native-1.json
-  … p5-5-native.json` (empirical floor over 6 native sweeps: A/C relevance
-  ±0.03, A/C groundedness ±0.05, B relevance ±0.12): native — routing,
-  documents and recall identical on all 78 cases (the shared change is
-  neutral), A/C relevance +0.03 from one case (`ql017` 4→5); router,
-  prompt_chain, model_client — no judge mean outside the floor, 0 leaks;
-  all three route `ac-a06`/`ac-l06` to A where native said D.
+1. **`lc-defaults` for the generation switches.** The P5-6 PR merged
+   with all five at `native` (the pre-P5-6 defaults); nothing changed.
+   `evals/reports/p5-6-generation.md` §6 has the evidence.
+   **Recommendation:** `TESSERA_LC_ROUTER=lc`,
+   `TESSERA_LC_PROMPT_CHAIN=lc`, `TESSERA_LC_MODEL_CLIENT=lc` (each within
+   noise; P5-5's rule picks the LangChain layer at native-equal quality);
+   `TESSERA_LC_RETRY=native` (honours `Retry-After`, counted, shares the
+   pacer, allows `--workers`; in the `retry` sweep `.with_retry()` lost 2
+   answer calls while the native judge recovered from all 19 throttles —
+   question 2's sweep firms this up); `TESSERA_LC_EXPERTISE=native` (`PeopleRetriever` only wraps
+   native `find_experts`, no sweep measured it alone, and P5-7's `all-lc`
+   sweep measures it anyway). Once decided: change `config.py` +
+   `.env.example`, turn §6 from "Proposed" into the decision, small PR —
+   this changes the `lc` stack's defaults, so it needs a `--stack lc`
+   `tessera eval --check` in the PR body (P5-7's `lc-defaults` sweep can
+   be that sweep if the change goes in with P5-7's first PR).
+2. **Run the planned `lc-model-client-2` sweep?** The 2026-10-08 plan had
+   six P5-6 sweeps: the `model_client` switch again (with the timeout
+   fix and adaptive pacing), then `retry` compared with it. On 2026-10-09
+   only `retry` ran (start-of-day read the feature branch's log and
+   missed #80's plan on `main`), and `retry` was compared with the native
+   sweep instead. The P5-6 acceptance is met without it, and #81 merged.
+   **Recommendation: yes, at the start of a calm morning** (free on NIM,
+   ~1 h on 10-09's load):
+   `TESSERA_LC_RETRIEVER=native TESSERA_LC_MODEL_CLIENT=lc tessera eval
+   --check --stack lc --workers 1 --json evals/baselines/p5-6-lc-model-client-2.json`.
+   It isolates `.with_retry()` (the only difference from the `retry`
+   sweep) and re-checks `model_client` with the timeout fix. Add it to
+   `evals/reports/p5-6-generation.md` §3–4 in a small PR.
 
-**Left to do:**
-1. `TESSERA_LC_RETRIEVER=native TESSERA_LC_MODEL_CLIENT=lc tessera eval
-   --check --stack lc --workers 1 --json evals/baselines/p5-6-lc-model-client-2.json`
-   (the model_client switch again, with the timeout fix + adaptive pacing).
-2. `… TESSERA_LC_MODEL_CLIENT=lc TESSERA_LC_RETRY=lc … --workers 1 --json
-   evals/baselines/p5-6-lc-retry.json` (`retry=lc` needs
-   `model_client=lc`; compare it with `model-client-2`). Expect
-   `.with_retry()` to struggle: its 1–10 s jitter can't outlast a NIM 429
-   window (native waits 45–120 s and honours `Retry-After`).
-3. Re-run any ERROR rows alone (`--cases`, same commit), then
-   `evals/reports/p5-6-generation.md` (per-switch table against the
-   floor, the timeout finding, the retry comparison, the pacing evidence).
-4. PR + reviewer's guide; paste each sweep's `=> PASS` and re-run scores.
-   Start sweeps **early in the day** (each 1–3 h on NIM).
+**Then P5-7.**
 
-**Acceptance (plan §5, verbatim):**
-- the prompt-identity, fake-chat-model and fault-injection tests pass;
-- per-switch sweeps are reported against the noise floor;
-- the redaction test is extended to LLM, prompt and parser runs.
+**Then P5-7 — LangGraph orchestration, the corrective subgraph, `Send`,
+the Functional API** (`docs/Tessera_Phase5_Plan.md` §3.7, §5). Read §3.7
+in full first. **Acceptance (plan §5, verbatim):**
+- equivalence on fakes and replay is exact, with concurrent usage isolated;
+- the scope-binding test is extended to the loop;
+- the corrective-variant sweeps are reported;
+- `lc-defaults` `=> PASS`, and `all-lc` is reported;
+- the redaction test is extended to graph runs and streamed events.
 
-**What earlier tasks already settled:**
-- **`ChatNVIDIA`** (spike item 6): thinking is **on** by default (turn it
-  off via `chat_template_kwargs={"enable_thinking": False}`); it sends
-  `max_tokens=1024`; errors are a bare `Exception("[503] …")`, so the
-  `retry` switch must parse the message prefix;
-  `with_structured_output(include_raw=True)` raises.
-- **`ChatGoogleGenerativeAI`** (item 7): `.content` is a list of blocks;
-  `max_retries=6` by default (set 0 under the native `retry` value);
-  automatic function calling is not disabled.
-- **Per-switch sweeps** = one NIM sweep each for `router`,
-  `prompt_chain`, `model_client` and `retry` (plan §4.3), every other
-  switch held native. Free on NIM, 1–3 h each on a bad day: plan them
-  early in the day.
-- **Wiring:** `tessera eval --stack lc` already builds the native
-  pipeline with LangChain retrieval (`cli._lc_retrieval`). P5-6 adds the
-  generation-layer switches there.
-- **Redaction:** `test_langsmith_redaction.py` grows by LLM, prompt and
-  parser run types; the tracer wraps steps through `native_steps()`.
+P5-7 also picks up what P5-6 deferred: `RunnableBranch` vs
+conditional edges, LangGraph's `RetryPolicy` (against
+`RetryingLLMClient`), time to first token under streaming, the `Send`
+multi-query, and runtime-context usage recorders (multi-query's
+unmetered calls).
 
 **Still open from P5-3:** the live LangSmith step (needs the user's
 LangSmith key). Doesn't block.
@@ -2279,9 +2298,8 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-3 — LangSmith tracing with taint redaction (native first)~~ — done (#75; live LangSmith step pending a key)
 - ~~P5-4 — LangChain ingestion and indexing~~ — done (#77)
 - ~~P5-5 — LangChain retrieval~~ — done (#78)
-- P5-6 — generation, routing, retries, expertise — **in progress**
-  (`feat/p5-6-lc-generation`, PR pending: 2 sweeps + report left) **← next**
-- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API
+- ~~P5-6 — generation, routing, retries, expertise~~ — done (#81; `lc-defaults` for it pending the user)
+- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API **← next**
 - P5-8 — human-review workflow
 - P5-9 — LangSmith datasets, experiments, feedback, prompt hub
 - P5-10 — comparison and exit, incl. 3 Gemini sweeps; tag `v0.5.0`
@@ -2293,6 +2311,41 @@ destroy for the LinkedIn video. CLAUDE.md carries this numbering since
 P5-1.
 
 ## Notes / open flags
+
+- **Start-of-day miss (2026-10-09):** `/start-day` read `git log` on the
+  checked-out feature branch, not `main`, and missed #80 (10-08's
+  end-of-day checkpoint, merged to `main` after the branch's last
+  commit). The day's checkpoint was first written as if 10-08 had no
+  end-day, and the P5-6 PR hit a merge conflict; fixed by merging `main`
+  and rebuilding this file on #80's version. **Read `git log main` and
+  `checkpoint.md` on `main`** (`git show main:checkpoint.md`) when a
+  feature branch is checked out.
+- **NIM spend 2026-10-09 (free tier):** the `retry` sweep (56 min, 1
+  worker; the judge throttled 19×, pacer peaked at 30 s) + 2 single-case
+  re-runs, ≈ 300 calls. **The calmest NIM yet** (14:09–15:05 IST).
+- **Adaptive pacing, first live run** (the `retry` sweep): 19 throttled
+  calls, the interval rose to its 30 s cap and ended there, 56 min for
+  92 cases. It only paced the native judge (`retry=lc`'s models use their
+  own limiter), so it is not yet measured on a sweep where it paces
+  every call; the next native or `retry=native` sweep is that test.
+- **`.with_retry()` retries are silent and uncounted**: LangChain gives no
+  hook. A counter in `with_lc_retries`'s translating wrapper would fix
+  the count without changing behaviour. Its backoff is tenacity's
+  exponential jitter, ≈ 1+2+4+8+16 s over six attempts.
+- **Per-call latency isn't in the exports.** A case's `latency_seconds`
+  is wall time including pacing, backoff and worker waits.
+  `Usage.latency_s` has the per-call figure plan §4.2 wants; export its
+  per-case sum before P5-7's latency comparison.
+- **The native noise floor underestimates answer sampling.** `router`'s
+  −0.06 A/C relevance (vs `p5-6-native`) came from two re-sampled answers
+  (`ql017`, `fr005`) on unchanged routes and retrieval. Read a 1–2-case
+  judge swing as noise when the deterministic fields are identical.
+  The report's baseline is `p5-6-native` with a 7-sweep floor (A/C
+  groundedness ±0.06); 10-08's numbers below used `p5-5-native` and 6
+  sweeps (±0.05). Both are recorded; the conclusions agree.
+- **Cobalt flip cases** `ac-a06`/`ac-l06` route A or D at random across
+  sweeps. `routing_accuracy` excludes access cases, so it stays 100%;
+  `compare_sweeps` shows them as routing Δ.
 
 - **NIM spend 2026-10-08 (free tier):** 5 full sweeps (router 46 min;
   prompt_chain 2 h 51; model_client 3 h 39; native 2 h 44 with 4

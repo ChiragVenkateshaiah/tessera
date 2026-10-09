@@ -1,0 +1,295 @@
+{
+ "baseline": "p5-6-native.json",
+ "noise_floor": {
+  "ac_relevance": 0.032258064516129004,
+  "b_relevance": 0.125,
+  "ac_groundedness": 0.06060606060606055,
+  "b_groundedness": 0.0
+ },
+ "noise_floor_source": "max over 7 native sweeps, pairwise",
+ "comparisons": [
+  {
+   "name": "p5-6-lc-router",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "native",
+    "router": "lc",
+    "prompt_chain": "native",
+    "model_client": "native",
+    "retry": "native",
+    "expertise": "native",
+    "orchestration": "native"
+   },
+   "commit": "6c6173468a88a1342ab40d1d31f9f0c89c0e27b0",
+   "scored_in_both": 81,
+   "errors": [],
+   "routing_changed": [
+    "ac-l06 D\u2192A",
+    "ac-a06 D\u2192A"
+   ],
+   "documents_changed": [
+    "ac-l06",
+    "ac-a06"
+   ],
+   "people_changed": [],
+   "recall_changed": [
+    "ac-a06 recall None\u21921.0",
+    "ac-a06 reciprocal_rank_score None\u21921.0"
+   ],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.96969696969697,
+     4.909090909090909
+    ],
+    "b_relevance": [
+     4.777777777777778,
+     4.888888888888889
+    ],
+    "ac_groundedness": [
+     4.96969696969697,
+     4.909090909090909
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_relevance": [
+     "fr005 5\u21924",
+     "ql017 5\u21924"
+    ],
+    "ac_groundedness": [
+     "ql017 5\u21923"
+    ],
+    "b_relevance": [
+     "ql019 3\u21924"
+    ]
+   },
+   "latency": [
+    285.5454384640987,
+    26.201302963222194
+   ],
+   "tokens": [
+    [
+     154501,
+     26226
+    ],
+    [
+     159001,
+     26309
+    ]
+   ]
+  },
+  {
+   "name": "p5-6-lc-prompt-chain",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "native",
+    "router": "native",
+    "prompt_chain": "lc",
+    "model_client": "native",
+    "retry": "native",
+    "expertise": "native",
+    "orchestration": "native"
+   },
+   "commit": "6c6173468a88a1342ab40d1d31f9f0c89c0e27b0",
+   "scored_in_both": 81,
+   "errors": [],
+   "routing_changed": [
+    "ac-a06 D\u2192A"
+   ],
+   "documents_changed": [
+    "ac-a06"
+   ],
+   "people_changed": [],
+   "recall_changed": [
+    "ac-a06 recall None\u21921.0",
+    "ac-a06 reciprocal_rank_score None\u21921.0"
+   ],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.96969696969697,
+     4.9393939393939394
+    ],
+    "b_relevance": [
+     4.777777777777778,
+     4.777777777777778
+    ],
+    "ac_groundedness": [
+     4.96969696969697,
+     4.9393939393939394
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_relevance": [
+     "ql017 5\u21924"
+    ],
+    "ac_groundedness": [
+     "ql017 5\u21924"
+    ]
+   },
+   "latency": [
+    285.5454384640987,
+    85.58544345676543
+   ],
+   "tokens": [
+    [
+     154501,
+     26226
+    ],
+    [
+     156647,
+     26851
+    ]
+   ]
+  },
+  {
+   "name": "p5-6-lc-model-client",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "native",
+    "router": "native",
+    "prompt_chain": "native",
+    "model_client": "lc",
+    "retry": "native",
+    "expertise": "native",
+    "orchestration": "native"
+   },
+   "commit": "6c6173468a88a1342ab40d1d31f9f0c89c0e27b0",
+   "scored_in_both": 76,
+   "errors": [
+    "ac-i04",
+    "ac-l10",
+    "nm004",
+    "q005",
+    "ql018"
+   ],
+   "routing_changed": [
+    "ac-l06 D\u2192A"
+   ],
+   "documents_changed": [
+    "ac-l06"
+   ],
+   "people_changed": [],
+   "recall_changed": [],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.96875,
+     5.0
+    ],
+    "b_relevance": [
+     4.75,
+     4.75
+    ],
+    "ac_groundedness": [
+     4.96875,
+     4.96875
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_groundedness": [
+     "q002 5\u21924",
+     "ql004 4\u21925"
+    ],
+    "ac_relevance": [
+     "ql004 4\u21925"
+    ]
+   },
+   "latency": [
+    290.4601315262105,
+    94.74365652210547
+   ],
+   "tokens": [
+    [
+     146360,
+     24638
+    ],
+    [
+     148714,
+     24195
+    ]
+   ]
+  },
+  {
+   "name": "p5-6-lc-retry",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "native",
+    "router": "native",
+    "prompt_chain": "native",
+    "model_client": "lc",
+    "retry": "lc",
+    "expertise": "native",
+    "orchestration": "native"
+   },
+   "commit": "e3b1c67260dce14e86f5fdde9848aa192be0fb3f",
+   "scored_in_both": 79,
+   "errors": [
+    "ql001",
+    "ql042"
+   ],
+   "routing_changed": [],
+   "documents_changed": [],
+   "people_changed": [],
+   "recall_changed": [],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.96875,
+     4.9375
+    ],
+    "b_relevance": [
+     4.75,
+     4.75
+    ],
+    "ac_groundedness": [
+     4.96875,
+     4.96875
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_relevance": [
+     "q005 5\u21924"
+    ]
+   },
+   "latency": [
+    280.32771751692405,
+    25.359451424430173
+   ],
+   "tokens": [
+    [
+     150354,
+     25527
+    ],
+    [
+     150354,
+     24465
+    ]
+   ]
+  }
+ ]
+}

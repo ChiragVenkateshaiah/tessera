@@ -489,3 +489,47 @@ def test_langchain_retriever_runs_are_redacted_too(
     assert leaks(captured_text(sent), forbidden) == []
     names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
     assert LC_RETRIEVER_RUNS[kind] <= names, f"missing LangChain runs: {LC_RETRIEVER_RUNS[kind] - names}"
+
+
+# --- P5-6: LangChain's LLM, prompt and parser runs ---
+
+LC_GENERATION_RUNS = {
+    "ChatPromptTemplate",
+    "TesseraChatModel",
+    "StrOutputParser",
+    "PydanticOutputParser",
+    "grounded_answer",
+}
+
+
+def test_langchain_generation_runs_are_redacted_too(
+    sent: list[Any],
+    documents: list[Document],
+    store: ChromaVectorStore,
+    embedder: LocalEmbedder,
+    access_cases: list[EvalCase],
+    walls: Walls,
+    forbidden: dict[str, Any],
+) -> None:
+    """Every access case with the LangChain router and the LCEL
+    grounded-answer chain swapped in, on the leaky echo model (through
+    ``TesseraChatModel``): the prompt template, chat-model and parser runs
+    — which hold the rendered prompt and the model's echo of it — nest
+    under Tessera's traced steps and send nothing restricted."""
+    from tessera.lc.generation import LcModel, generate_step, route_step
+
+    tracer = make_tracer(documents)
+    llm = LeakyLLM()
+    pipeline = NativePipeline(
+        tracer.llm(llm, "answer"),
+        embedder,
+        store,
+        router_llm=tracer.llm(llm, "router"),
+        **tracer.native_steps(route=route_step(LcModel()), generate=generate_step(LcModel())),
+    )
+    for case in access_cases:
+        tracer.run(pipeline, case.query, case_principal(case, walls), tracer.new_trace_id())
+
+    assert leaks(captured_text(sent), forbidden) == []
+    names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
+    assert LC_GENERATION_RUNS <= names, f"missing LangChain runs: {LC_GENERATION_RUNS - names}"
