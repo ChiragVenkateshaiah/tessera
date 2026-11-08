@@ -1,0 +1,1405 @@
+{
+ "meta": {
+  "cases": 92,
+  "commit": "1d31fc687ee62fe87c1f577a5d1c6fe8021f95d7",
+  "failed": [],
+  "model": "nvidia/nemotron-3-ultra-550b-a55b"
+ },
+ "responses": {
+  "021ec5cd3157390cd44d1185b338107ebd60140a612bd222154287281f1123cc": {
+   "text": "Based on the engagement summary, Project Saffron concluded the following for the European fast-fashion retailer's entry into Saudi Arabia and the UAE:\n\n**Market Opportunity**\n- Addressable fast-fashion market across both countries: **$4.7 billion**, growing at **7% annually** [1]\n\n**Recommended Entry Mode**\n- **Franchise partnership** (not joint venture) — delivered superior risk-adjusted returns because prime mall leases were controlled by three dominant franchise groups [1]\n\n**Launch Strategy**\n- **Launch city: Riyadh** (not Dubai) — chosen for lower competitive density and a younger customer base [1]\n- **Store format**: Flagship and mall formats modeled via store-economics analysis [1]\n\n**Outcome**\n- Client signed a **10-year franchise agreement covering 45 stores**\n- First Riyadh store opened the following year [1]",
+   "usage": {
+    "input_tokens": 528,
+    "latency_s": 5.839631282986375,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 183
+   }
+  },
+  "053c50d1edfa449e607b30b1e21342b5729b43b2a304b27acc1db8506b66550a": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is asking for a broad synthesis across multiple codenamed projects, which requires aggregating information from many sources rather than retrieving a single document or finding a person.\"}",
+   "usage": {
+    "input_tokens": 799,
+    "latency_s": 1.1461757640063297,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 49
+   }
+  },
+  "058b5f4a3b2041796419975fa4386bc1f3438bbde398c754d8c436f08d193754": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific analytical method or framework exists in the firm's knowledge base, which is a direct document lookup request without any client engagement or time-pressure context.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.214041609026026,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "07de2feacb379f5dd8653b0a432df7debd0422adf11c5d6364a847f8f2b6ed74": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for a specific, named deliverable (Project Foxglove commercial due diligence) on a specific client topic, which is a direct request to locate an existing document.\"}",
+   "usage": {
+    "input_tokens": 786,
+    "latency_s": 2.0162960049929097,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 53
+   }
+  },
+  "080ec9d752494a501696805013da1f69f68d5c9ee1de9a4db622c2e069981c83": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is asking for a briefing to get up to speed ahead of a new staffing on Monday, which is a classic topic-synthesis scenario rather than a request for a single existing document.\"}",
+   "usage": {
+    "input_tokens": 789,
+    "latency_s": 1.485009647993138,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "092e94fbeb44c1c41011cfce9891458c51ecc94c750e823c0de0e2fd15565ef0": {
+   "text": "Yes — Meridian has a dedicated **Change Management: Stakeholder Mapping** framework that functions as a template for change programs [1].\n\n**What it covers**\n- **When to use it:** At the start of any engagement involving significant organizational change (reorganizations, cost programs affecting headcount, system implementations, post-merger integration) and revisited periodically as stakeholder positions shift.\n- **Four-step framework:**\n  1. **Identify the full stakeholder set** — beyond senior sponsors to include middle managers and informal influencers.\n  2. **Plot on an influence/support grid** — two axes (influence over success, current position: supportive/neutral/resistant) producing four quadrants with differentiated engagement approaches.\n  3. **Diagnose the source of resistance** — not just its presence (e.g., loss of status, belief the change is wrong, past failed changes).\n  4. **Build a differentiated engagement plan** — specifying who engages whom, how often, and with what message for high-influence stakeholders.\n- **Common pitfalls** it warns against: mapping once and never updating, treating all resistance as equal, skipping the “why” behind resistance.\n- **Related frameworks** listed: Communication Planning (direct next step), Operating Model Design, M&A Integration — Day 1 Readiness Planning.\n\n**Related sources** (background reading, not the template itself):\n- [2] **Change Management: Communication Planning** — the direct successor step that turns the stakeholder map into an engagement cadence.\n- [4] **Operating Model Design: RACI and Governance Design** — shares the underlying stakeholder analysis.\n- [5] **Operating Model Design: Overview** — lists stakeholder mapping as a related framework.\n- [3] **Workshop Facilitation: Client Workshop Template** — references stakeholder mapping for determining “who must be in the room.”",
+   "usage": {
+    "input_tokens": 1209,
+    "latency_s": 5.1556893390079495,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 395
+   }
+  },
+  "0a5099385d20b87ce3424749403df0355e8795cb8cc8f2a5aa6fe457885104f4": {
+   "text": "Yes — Meridian has a dedicated **Digital Transformation: Roadmap Sequencing** framework [1]. It’s designed to be used **after** the Technology Capability Assessment [2] has established the current-state baseline and binding constraints.\n\n**What the framework covers [1]**\n1. **Separate foundational from customer-facing initiatives** — foundational work (data infrastructure, core system modernization, cloud migration) unlocks later customer-facing value; leading with customer-facing work before foundations are ready produces fragile, hard-to-scale wins.  \n2. **Sequence around the binding constraint** identified in the capability assessment (e.g., a legacy core system that gates most future initiatives).  \n3. **Balance quick wins against foundational investment** — interleave early, lower-risk initiatives that demonstrate value while foundational work proceeds in parallel.  \n4. **Build in explicit decision points** — structure the multi-year roadmap with defined checkpoints for deliberate reassessment, not a fixed plan.\n\n**Common pitfalls it flags [1]**\n- Leading with customer-facing work over foundational dependencies.  \n- All foundational, no visible value (loses sponsorship).  \n- Treating the roadmap as fixed without reassessment points.\n\n**Direct predecessor [2]**\nThe **Technology Capability Assessment** [2] is the required first step. It assesses architecture, infrastructure, talent/delivery, and data; benchmarks against realistic peers; identifies the binding constraint; and translates gaps into ranked roadmap inputs.\n\n**Related note**\nRoadmap sequencing frequently has organizational dependencies alongside technical ones, so it often connects to **Operating Model Design** (referenced in both sources).",
+   "usage": {
+    "input_tokens": 1682,
+    "latency_s": 6.025882217014441,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 345
+   }
+  },
+  "0a76ad8ee2c23f7f2f7e549b9d0077c39b7c4dfca0901a916a5e8f9978f9ff5c": {
+   "text": "Based on Meridian's corpus, there are two directly relevant sources for acquisition integration checklists:\n\n**1. M&A Integration: Day 1 Readiness Planning [1]** — Provides the strategic framework and \"what must be true\" checklist for Day 1, organized around four pillars: building the Day 1 critical path, assigning interim leadership, preparing communications for all audiences, and distinguishing Day 1 must-haves from Day 100 nice-to-haves. It also flags common pitfalls like under-planning mechanical basics and over-scoping Day 1.\n\n**2. M&A Integration: Day 1 Runbook (T-30 to T+7) [2]** — Provides the tactical, time-sequenced execution checklist across five workstreams (IT, HR, Finance, Communications, Legal/Regulatory) from 30 days before close through the first week post-close. It includes specific steps for T-30 (Lock and Freeze), T-7 (Rehearse), T-1 (Go/No-Go decision forum), Day 1 execution (hours 0-4, 4-12, 12-24), and T+7 (Stabilise and Hand Over).\n\n**Note on \"100-day\" content:** Neither source contains a dedicated 100-day master checklist. Source [1] explicitly distinguishes \"Day 1 must-haves from Day 100 nice-to-haves\" but does not enumerate the 100-day plan. Source [2] ends at T+7 with handover to standing integration workstreams. If a separate 100-day integration checklist exists in the corpus, it was not retrieved in this search.\n\n**Related context:** Sources [3] and [4] reference Day 1 readiness as a related framework for acquisition-mode market entry and commercial due diligence, but do not contain the checklists themselves.",
+   "usage": {
+    "input_tokens": 2758,
+    "latency_s": 11.729075474024285,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 401
+   }
+  },
+  "0e70210998d47729de8d1cb8f4e6400581bc05c99059dcbec111b270124a1f07": {
+   "text": "Based on the records, the following people have **evidenced** expertise in pricing strategy (most recent profile update: **2026-06-30** — data may be out of date, so confirm availability and current focus before reaching out).\n\n**Evidenced experts**\n\n1. **Amara Chen** — Partner, pricing practice, New York  \n   - Served as advisor on a pricing-strategy project in financial-services (2023) and as engagement partner on pricing-strategy projects in financial-services (2019) and industrials (2019, 2017) [5]  \n   - Holds pricing-strategy skill at level 4 (evidenced) [5]\n\n2. **Omar Kim** — Engagement Manager, pricing practice, Frankfurt  \n   - Authored the methodology document *pricing-strategy-price-elasticity.md* [1]  \n   - Led value-based-pricing projects in pharma (2026) and healthcare-providers (2021) as engagement manager [1]  \n   - Holds pricing-strategy skill at level 4 (evidenced) and value-based-pricing skill at level 4 (evidenced) [1]\n\n3. **Marta Park** — Consultant, pricing practice, Sydney  \n   - Authored the methodology document *pricing-strategy-competitive-response.md* [2]  \n   - Worked as analyst on a value-based-pricing project in pharma (2025) and a price-elasticity project in financial-services (2026) [2]  \n   - Holds pricing-strategy skill at level 3 (evidenced) and value-based-pricing skill at level 2 (evidenced) [2]\n\n4. **Kiran Gallo** — Analyst, pricing practice, London  \n   - Authored the methodology document *pricing-strategy-value-based-pricing.md* [3]  \n   - Contributed as analyst on a value-based-pricing project in pharma (2024) and provided modeling support on price-elasticity projects in pharma (2025) and financial-services (2024) [3]  \n   - Holds value-based-pricing skill at level 3 (evidenced) [3]\n\n5. **Kenji Weber** — Principal, pricing practice, Singapore  \n   - Authored the methodology document *pricing-strategy-price-elasticity.md* [4]  \n   - Served as engagement lead on value-based-pricing projects in pharma (2022, 2017) and a price-elasticity project in pharma (2024) [4]  \n   - Holds value-based-pricing skill at level 5 (evidenced) [4]\n\nAll five have project work, authored methodologies, or evidenced skill ratings directly tied to pricing strategy. No self-reported-only matches appear in the data.",
+   "usage": {
+    "input_tokens": 1049,
+    "latency_s": 10.466699059994426,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 639
+   }
+  },
+  "1120d4b10b1c7ff816a3cec12997de88e0d5afa30321d3cc40911a2bf912e44a": {
+   "text": "No — Meridian's corpus doesn't contain anything on a cost programme for a Midwestern regional bank called **Project Lantern**. The five sources returned are all generic frameworks or templates (zero-based budgeting, procurement cost reduction, financial DD request list, and a payments-scenario piece) with no mention of that client or project name.",
+   "usage": {
+    "input_tokens": 1733,
+    "latency_s": 2.1267260239983443,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 69
+   }
+  },
+  "116ee2bb595634e0df359009721e90bcbdfc7488e02766428a1b4a6a839db2ba": {
+   "text": "Meridian's corpus does not contain any work specifically for **Project Kestrel** or a bladder cancer therapy launch. None of the retrieved sources reference that project, indication, or any associated pricing deliverables.\n\nWhat we do have are the firm's general pricing methodologies, which would be the frameworks applied to a launch like Kestrel:\n\n- **[1] Pricing Strategy: Value-Based Pricing** — the core framework for launch pricing, including a worked pharma example (chronic condition) that mirrors the evidence-generation and payer-dossier steps a bladder cancer therapy would require.  \n- **[4] Pricing Strategy: Overview** — the entry-point framework that links to value-based pricing, price elasticity analysis, and competitive pricing response.  \n- **[2] Pricing Pressure and the Slow Arrival of Value-Based Contracting in Pharma** — context on outcomes-based deals, relevant if Kestrel's strategy includes value-based contracts.  \n- **[3] Clinical Trial Site Selection and the Business Case for Diversity** — background on how trial diversity feeds the evidence base that underpins value-based pricing and market access.\n\nIf you need the actual Kestrel deliverables (value model, payer dossier, launch price recommendation, etc.), they are not in this knowledge base — check the project repository, the Life Sciences practice share, or ask the engagement team directly.",
+   "usage": {
+    "input_tokens": 1960,
+    "latency_s": 7.446024601988029,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 280
+   }
+  },
+  "12d783ec339e87974af8a78d6cf3fb09beb5d70ee4b916d89ac0d2fdf8fe3e9f": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has done a specific type of work (cost programme) for a specific type of client (Midwestern regional bank) and references a specific project name (Project Lantern), indicating a document or engagement lookup.\"}",
+   "usage": {
+    "input_tokens": 789,
+    "latency_s": 3.4842059679795057,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 62
+   }
+  },
+  "13e91b7835245d35e12c3d55af272f720417905cf907f1955b89fcb11863ed3a": {
+   "text": "Yes — Meridian has a dedicated internal framework document on the **Three-Horizons Framework for growth portfolios** [1].\n\n**What it covers:**\n- **Purpose:** Organizes strategic initiatives and investments into three time-and-risk categories — Horizon 1 (defend/extend core, lower risk, near-term), Horizon 2 (emerging opportunities, 2–5 years, higher uncertainty), Horizon 3 (long-term bets, 5+ years, exploratory).\n- **When to use:** Strategic planning cycles, especially when growth has stalled or leadership sees a structural threat within 3–7 years and needs a deliberate way to balance near-term performance against future-proofing.\n- **Four-step process:** (1) Categorize existing initiatives, (2) Assess current portfolio balance (most firms default to 90%+ in Horizon 1), (3) Set a deliberate target allocation based on industry clock-speed and disruption risk, (4) Apply different governance per horizon (standard ROI for H1; learning velocity/option value for H3).\n- **Common pitfalls:** Applying H1 governance to H3 bets, wishful-thinking categorization, and failing to translate the view into actual budget/attention reallocation.\n- **Related frameworks:** Scenario planning (stress-testing H2/H3 bets), market entry analysis (vehicle for pursuing H2 opportunities).\n\n**Related mentions:**\n- [2] Scenario Planning notes the Three-Horizons Framework as a complementary technique.\n- [4] Workforce Planning Model flags that workforce implications differ materially by horizon.",
+   "usage": {
+    "input_tokens": 1144,
+    "latency_s": 5.039569371001562,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 330
+   }
+  },
+  "154f6d63d14cd8009bf3036567005033976bff3bcc611628672dc52796e30eb3": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for a specific, named artifact (a master checklist) that likely exists as a reusable template or framework within the firm's knowledge base.\"}",
+   "usage": {
+    "input_tokens": 789,
+    "latency_s": 3.966029339993838,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 46
+   }
+  },
+  "16083e833fa28dc1d5b8ef8b4eb30217b4792f843674f0878c137af3fa6f3f8d": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is explicitly asking for a list of restricted client engagement documents with details and findings, which is a request to locate existing firm artifacts rather than find a person, synthesize a topic, or compare engagements.\"}",
+   "usage": {
+    "input_tokens": 794,
+    "latency_s": 1.8216317750047892,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 56
+   }
+  },
+  "16d6a265fff26b67d0ff68e8ad8b10df0f1748bfeb839addb72a7a6021aea429": {
+   "text": "**Quick Brief: M&A Integration Essentials for Your Upcoming Staffing**\n\n**1. Set Up the IMO Early — and Give It Teeth**  \nFor any deal beyond a small tuck-in, stand up an Integration Management Office (IMO) before or immediately at close [1]. The IMO coordinates cross-functional workstreams over the extended integration period. Three pitfalls to avoid from day one:  \n- **Part-time staffing** — coordination discipline erodes fast when the IMO is everyone’s second job [1].  \n- **No real escalation authority** — an IMO that can only report issues, not force decisions through an empowered steering committee, becomes a bottleneck [1].  \n- **Indefinite life** — plan a sunset so the temporary structure doesn’t turn into permanent overhead [1].\n\n**2. Day 1 Readiness: Mechanical Basics First, Then Substance**  \nDay 1 readiness covers everything that must be true the moment the deal legally closes — from payroll continuity and IT access to customer communications and interim leadership — so the combined organization operates without disruption while full integration unfolds [3]. Common traps:  \n- **Under-planning mechanical basics** — payroll or access failures are highly visible, easily avoidable, and disproportionately damage confidence [3].  \n- **Leadership ambiguity** — delaying interim leadership decisions until “after org design” leaves a vacuum when clarity matters most for retention [3].  \n- **Over-scoping Day 1** — trying to complete too much substantive integration by close date increases execution risk without benefit; sequence work into the following weeks and months [3].\n\n**3. The Day 1 Runbook: T-30 to T+7**  \n- **T-30 (Lock and Freeze):** Draft and approve the Day 1 message set for employees, customers, suppliers, and any required regulators. Prepare and rehearse the leader briefing pack with every people manager who will deliver it [2].  \n- **Day 1 (Hours 4–12):** People manager briefings delivered across all time zones. Command centre opens — every workstream staffs it for the full first day. First reconciliation of access provisioning: who was meant to have access vs. who actually does [2].\n\n**Bottom Line for Your First Week**  \nExpect the IMO to be the central nervous system — push for full-time staffing and clear escalation paths immediately. Day 1 execution will hinge on the mechanical basics (payroll, access, comms) being locked down at T-30, and on interim leadership being named before close. The runbook gives you a concrete hour-by-hour playbook for the first day; know it cold.",
+   "usage": {
+    "input_tokens": 751,
+    "latency_s": 8.36222779401578,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 573
+   }
+  },
+  "16f43441c2c1e2145c92b3fe01b85a7445bb23186edb7ac40ab87f61954ccead": {
+   "text": "Yes. The firm has a dedicated **Engagement Summary for Project Osprey — Steel Decarbonization Roadmap** [1]. It covers:\n\n- **Client context**: an integrated steelmaker with two blast-furnace sites (9.6 Mt/yr) facing a 2035 sustainability-linked loan deadline.  \n- **Scope**: comparing decarbonization pathways, sequencing the capital plan, and stress-testing economics under carbon-price scenarios (€60–160/t).  \n- **Approach**: site-level abatement cost curves, a pathway model contrasting EAF conversion vs. hydrogen DRI, and scenario analysis.  \n- **Key findings**:  \n  - EAF conversion at the smaller site by 2031 delivered 41% of required abatement at lowest cost/t.  \n  - Hydrogen DRI at the larger site was only economic above €120/t carbon unless green H₂ fell below €3/kg.  \n  - Scrap availability, not capital, was the binding constraint on the EAF pathway.  \n- **Outcome**: board approved the EAF conversion and a scrap-sourcing JV; deferred the hydrogen decision to 2027.\n\n**Related background reading** (not the Osprey deliverable itself):  \n- [2] “Decarbonization Lever Economics: The Questions Boards Keep Asking” — twelve recurring board-level questions on carbon pricing, abatement curves, offsets, Scope 3, hurdle rates, and sequencing.  \n- [3] “Decarbonization Pathways for Heavy Manufacturing: The Sequencing Problem” — argues for treating heavy-industry decarbonization as a rigorous capital-allocation/sequencing exercise.  \n- [4] “Digital Transformation: Roadmap Sequencing” — a general sequencing framework (foundational vs. customer-facing, binding constraints, quick wins, decision points).  \n- [5] “Cost Transformation: Overview” — lists related cost-reduction frameworks (zero-based budgeting, SG&A benchmarking, etc.).",
+   "usage": {
+    "input_tokens": 1867,
+    "latency_s": 6.635871878999751,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 435
+   }
+  },
+  "184b065f051dc915559a90e18322798289b7d59e0543dfa8f2bd2df30356207b": {
+   "text": "Yes. Source [1] is the **Engagement Summary for Project Kestrel — Oncology Launch Pricing**. It documents the full launch pricing work for the bladder cancer therapy, including:\n\n- **Client context**: mid-cap European biotech launching a second-line metastatic bladder cancer therapy (4.1-month OS benefit) in the US and EU5.  \n- **Scope**: launch list-price corridor, payer value dossier strategy, and outcome-based contracting options for the three largest US PBMs.  \n- **Approach**: cost-of-care model from 23,000 second-line claims, 31 payer medical director interviews (US/EU5), benchmarking against six comparable oncology launches since 2019.  \n- **Key findings**:  \n  - US list-price corridor of **$14,200–$15,800/month** defensible; above $16,000 triggered step-edits.  \n  - Germany’s AMNOG assessment was the binding EU constraint; a “considerable” added-benefit rating required quality-of-life endpoint data the client hadn’t planned to submit.  \n  - Outcome-based rebate tied to 12-month persistence attracted two of three PBMs.  \n- **Outcome**: client launched within the recommended corridor and re-scoped the German dossier to include the QoL endpoint.  \n\nSources [2]–[4] are general frameworks or articles on value-based pricing, value-based contracting trends, and clinical trial diversity — useful background but not the Project Kestrel deliverable itself.",
+   "usage": {
+    "input_tokens": 1522,
+    "latency_s": 5.0384835499862675,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 336
+   }
+  },
+  "1a1355769839362479a86cbf33f30d1fedd42ce3ae4b0262d4cab5f12502ed1c": {
+   "text": "{\"archetype\": \"D\", \"reasoning\": \"The user is explicitly asking to compare a specific client engagement (Client X) against the firm's standard playbook, which requires pulling from named client engagements.\"}",
+   "usage": {
+    "input_tokens": 786,
+    "latency_s": 1.8835313959862106,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 46
+   }
+  },
+  "1af08a007939b95766bcae20b85392f755fc2ba1c3f0d608e89d0ed3f58253e4": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has prior work in a specific industry (financial services) on a specific topic (GenAI), which is a direct lookup for existing documents or engagements.\"}",
+   "usage": {
+    "input_tokens": 782,
+    "latency_s": 1.4003068439778872,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 53
+   }
+  },
+  "1ce054adc54268ab1d1bfd4d7f45857d23e7f45ff6732c7f7eaef0e3dacc0ac3": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for a specific, named document (the Project Tamarind snack merger integration summary), which is a direct lookup for an existing artifact.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 4.501994962978642,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 46
+   }
+  },
+  "1e1fe68e68aa5f40bbcb29387e95b2fbf8a8d9103dc3e1891b32ad3709572f34": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking who at the firm has executed brand redesign or advertising campaign work for clients, which is a request to identify specific people with that experience rather than find documents or synthesize a topic.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.8316016309836414,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 54
+   }
+  },
+  "1eb12f19b25b6f95e4c213839ec3bce6b11a4931e881d01e8a63b468645ac8b2": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact (a half-day client workshop template) exists in the firm's repository, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 0.8829758090141695,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "1f9ce367d0460abe324b1e2482420f9723e32da2f6c01616c234fc9a04f25955": {
+   "text": "Based on the records, the following people have **evidenced** experience leading M&A integration engagements (most recent profile update across these records: **2026-06-30** — treat as a dated snapshot and confirm current availability before reaching out):\n\n- **Ivan Reyes** — Engagement Manager, New York. Workstream lead on an **ma-integration project in financial-services (2025)** and an **integration-management project in industrials (2025)**; holds ma-integration skill level 5 (evidenced) [2].\n\n- **Priya Saito** — Engagement Manager, London. Workstream lead on an **ma-integration project in industrials (2026)** and an **ma-integration project in consumer-goods (2022)**; authored the **ma-integration-day-1-readiness** and **ma-integration-imo-setup** methodology documents; ma-integration skill level 4 (evidenced) [1].\n\n- **Johan Larsen** — Engagement Manager, Singapore. Workstream lead on an **ma-integration project in telecom (2024)**; engagement manager on **ma-integration projects in consumer-goods (2024)** and **financial-services (2021)**; ma-integration skill level 4 (evidenced) [4].\n\n- **Lucas Bianchi** — Principal, Chicago. Engagement manager on an **integration-management project in financial-services (2025)** and a **technology integration-management project (2019)**; authored the **ma-integration-day-1-readiness** methodology; integration-management skill level 3 (evidenced) [3].\n\n- **Hassan Almeida** — Consultant, Chicago. Workstream member on an **ma-integration project in technology (2025)**; authored the **ma-integration-day-1-runbook** methodology; ma-integration skill level 5 (evidenced) [5].\n\nAll five have **EVIDENCED** basis (project work and/or authored methodologies). No self-reported-only matches appear in the data.",
+   "usage": {
+    "input_tokens": 938,
+    "latency_s": 6.368636500992579,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 445
+   }
+  },
+  "2132fb3b0a208b4035d3ad13f3d17d35176859e56c17a9cbe42d74cc782e9bfc": {
+   "text": "For a quick market-sizing briefing ahead of your market entry staffing, start with **Source [1] — Market Entry Analysis: Market Sizing (TAM/SAM/SOM)**. It gives the core framework you’ll use: define TAM/SAM/SOM, cross-check top-down (analyst figures) against bottom-up, and **sensitize with a range** (conservative/base/aggressive penetration) rather than a point estimate. It flags the pitfalls most relevant to your task — single-method sizing, false precision, static sizing (note the CAGR you assume), and the SAM-to-SOM capability gap that often matters more than market size [1].\n\nRead **Source [2] — Market Entry Analysis: Overview** first if you haven’t framed the decision yet. It warns against “sizing before framing” — without an agreed success bar, the number has no decision attached — and reminds you that most engagements land on a conditional recommendation (e.g., enter a sub-segment first, partner, wait) rather than a binary go/no-go [2].\n\nIf your sizing will feed an entry-mode choice, **Source [5] — Entry Mode Selection** shows how sizing and competitive mapping feed the build/partner/buy trade-off (speed, control, capital, risk) [5]. And if you need to validate the market as part of a deal later, **Source [4] — Commercial Due Diligence Overview** applies the same sizing and competitive techniques to stress-test management’s growth plan [4].\n\n**Bottom line:** Read [2] to frame the question, then [1] to build and sensitize the TAM/SAM/SOM with your analyst figures and share-of-wallet factor, then [3] and [5] if the next step is competitive response or entry mode.",
+   "usage": {
+    "input_tokens": 1303,
+    "latency_s": 8.03007611099747,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 380
+   }
+  },
+  "22572d87b25cc85d5da9745003a26026de4bee96068cfaa489405963ecf10eac": {
+   "text": "For a retail client on inventory and store network questions, focus on these three core pieces from Meridian's corpus:\n\n**1. Network optimization methodology and pitfalls** — The supply chain network optimization model specification [1] and its companion pitfalls page [4] are the foundational reads. Network optimization determines the optimal configuration of manufacturing, warehousing, and distribution footprint to minimize total delivered cost while meeting service-level requirements [4]. The model is a decision-support tool, not a decision — its output is only as good as the constraint set and cost data quality [1]. Key pitfalls to watch: poor transportation cost data (garbage-in produces confidently wrong recommendations), optimizing cost without service constraints (technically optimal but commercially unacceptable), and ignoring transition cost and risk (plans that stall in implementation) [4].\n\n**2. Store network strategy in an omnichannel context** — The physical retail real estate piece [2] reframes stores as fulfillment and acquisition infrastructure, not just transaction locations. Stores within delivery radius that serve as ship-from-store nodes, pickup points, and returns-processing locations generate economic value not captured in same-store-sales metrics [2]. Format strategy has moved past \"bigger vs. smaller\" to: right-sized formats built around defined fulfillment/experience roles; experiential investment concentrated in fewer flagship locations; and format decisions tied to network optimization modeling — not made store-by-store in isolation [2]. This means format strategy and network optimization need to be solved together [2].\n\n**3. Omnichannel inventory re-optimization** — The post-pandemic reset piece [6] identifies a persistent margin tax: most retailers kept omnichannel channels (curbside, ship-from-store, BOPIS) but never fully re-optimized the underlying inventory logic built for single-channel retail. Inventory is frequently in the wrong location relative to omnichannel demand, propped up by manual workarounds [6]. The technical fix (better demand data, allocation models) is necessary but not sufficient — the retailers making progress have paired it with operating model change, typically a unified demand-and-fulfillment planning function with visibility and accountability across the formerly separate inventory planning, store operations, and e-commerce fulfillment silos [6]. Without that structural change, better algorithms plateau well short of potential [6].\n\n**Related but secondary:** Market entry analysis pitfalls [3] (sizing before framing, ignoring capability gaps, forcing binary go/no-go) and pricing strategy frameworks [5] may be relevant if the engagement involves new market expansion or pricing-inventory interactions.",
+   "usage": {
+    "input_tokens": 1467,
+    "latency_s": 24.61971664399607,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 528
+   }
+  },
+  "2537727873e020715d79f27732be5d4713442ae3a9f153e2cc363aa8cb86a633": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has a specific, reusable framework artifact for value-based pricing, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 2.55730114801554,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 47
+   }
+  },
+  "296a9a12bb62d2b37bf4141974f4cd27b399db8d573baa6f3966b5e1cddbaa6b": {
+   "text": "Meridian's corpus does not contain a **value premium uplift scorecard** — a specific tool or template for quantifying the premium a differentiated drug can command over cost. The closest relevant framework is the **value-based pricing methodology** in Source [1], which outlines how to build a quantified value model (total cost of care, avoided events, real-world evidence) and set price as a share of that value, but it does not include a scorecard or uplift calculator. Sources [2]–[5] discuss value-based contracting barriers, competitive response, and elasticity analysis, but none provide a premium uplift scorecard.",
+   "usage": {
+    "input_tokens": 2133,
+    "latency_s": 5.502199812006438,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 129
+   }
+  },
+  "2aeb1ae47e03cdc1bd7ecc4cd5fdc84069508e4ee40f002049071e48f86f153e": {
+   "text": "For a retail-bank cost transformation, start with these three sources in this order:\n\n1. **Cost Transformation: Overview [1]** — This frames the overall approach: the goal is a durable reset, not a one-off cut, and it flags the three most common pitfalls (analysis without a delivery plan, cutting without a floor, no baseline benchmark). Read this first to internalize the engagement logic.\n\n2. **Cost Transformation: SG&A Benchmarking [2]** — This tells you *when* and *how* to benchmark early in the engagement, before committing to a savings target. It gives a four-step framework (peer selection, normalization, gap decomposition, target with a lever plan) that turns a benchmark into an actionable target.\n\n3. **Cost Transformation: SG&A Cost Ratio Benchmark Reference [4]** — This provides the retail-banking-specific numbers you’ll need: cost-to-income ratio range of **45–65%**, technology spend **7–11% of revenue**, corporate-function FTE **25–45 per $100M revenue**, plus the critical caveat that branch density and wealth/insurance mix distort the ratio heavily. It also lists the five normalization adjustments (one-offs, capitalization policy, COGS/SG&A boundary, business mix, lease accounting) you must apply to both client and peers before comparing [4].\n\n**Practical sequence for Monday:**  \n- Read [1] to anchor the engagement mindset.  \n- Use [2]’s framework to structure the benchmarking workstream.  \n- Pull the retail-banking benchmarks and normalization checklist from [4] to build the first-cut comparison deck.\n\nThe other sources (payments scenarios [3], pricing strategy [5], core banking modernization [6], zero-based budgeting [7]) are relevant later if the workstream expands into revenue-side levers, technology strategy, or a ZBB deep-dive, but they’re not the starting point for a cost-transformation kickoff.",
+   "usage": {
+    "input_tokens": 1826,
+    "latency_s": 6.63074363998021,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 416
+   }
+  },
+  "2b0b9bc57936c74e9404a848dec152e93db82e3011141e1bf4f54524ae4522a4": {
+   "text": "No — Meridian's corpus does not contain a **share-of-wallet** method for top-down market sizing.\n\nThe only top-down sizing approach documented is the **TAM/SAM/SOM** framework, which starts from a published industry figure (analyst report, government statistics, trade-body data) and narrows it with filtering logic (e.g., % of spend addressable by the product category, % of population in the target segment) [1]. There is no separate methodology that sizes a market by estimating a client's or competitor's share of a customer's total wallet in a category.",
+   "usage": {
+    "input_tokens": 1854,
+    "latency_s": 7.157451421982842,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 124
+   }
+  },
+  "2c64e44412b62bcf6be536ad9c11ff4711956eb00f5452a4a55d4e6c33725d8e": {
+   "text": "Based on Meridian's corpus, here's what we have for building a digital transformation roadmap:\n\n**The required sequence is fixed and non-negotiable:**\n\n1. **Technology Capability Assessment first** — This must happen at the start of any digital transformation engagement, before roadmap sequencing. It establishes the client's current-state technology maturity (architecture, infrastructure, talent, delivery practices) as the factual baseline. The roadmap methodology explicitly depends on this assessment's output. Skipping it produces plans disconnected from what's actually achievable [2].\n\n2. **Roadmap Sequencing second** — Use this directly after the capability assessment completes. It addresses how to sequence work over a multi-year horizon while avoiding three common pitfalls:\n   - Leading with customer-facing work over foundational dependencies (creates early wins that are expensive to scale/maintain)\n   - Doing all foundational work with no visible value (loses sponsorship over multi-year horizon)\n   - Treating the roadmap as fixed without built-in reassessment points (plan becomes stale but gets followed anyway) [1]\n\n**What's missing from the corpus for a Friday delivery:**\n- No templates, sample roadmaps, or worked examples\n- No guidance on compressing the assessment-to-roadmap timeline\n- No change management or stakeholder alignment materials specific to digital transformation (the change management pages [5,7] cover communication planning and stakeholder mapping as general frameworks, but not in a digital transformation context)\n\n**Bottom line:** The methodology requires a capability assessment before any roadmap can be built. If the client hasn't had one, you can't produce a methodologically sound roadmap by Friday using Meridian's approach. You'd need to either (a) run a rapid capability assessment first, or (b) flag that any roadmap produced without it would violate the firm's methodology.",
+   "usage": {
+    "input_tokens": 800,
+    "latency_s": 19.378769592993194,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 377
+   }
+  },
+  "31df342632a2899398bca0f17ae30b3149cf244e057cd307cf387b5116a2912f": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing playbook artifact for cost transformation programs, which is a direct document lookup request with no client situation or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 781,
+    "latency_s": 1.3945726250240114,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 49
+   }
+  },
+  "3200638df94fec6fd7982a98b79b13da8a18145ac5352b3fe13480e8a2639fd6": {
+   "text": "{\"archetype\": \"D\", \"reasoning\": \"The user is explicitly asking for a comparison between a specific client engagement (Client Y) and the firm's standard roadmap, which requires pulling from named client engagements.\"}",
+   "usage": {
+    "input_tokens": 786,
+    "latency_s": 1.6707429279922508,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 48
+   }
+  },
+  "35eba402f07c0917b3c73cd9d5f408505780cef6e6e237a67fda9da381c0e24c": {
+   "text": "{\"archetype\": \"D\", \"reasoning\": \"The user is asking to compare findings across two specific acquisition targets, which requires pulling from named client engagements.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 0.9501593869936187,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 36
+   }
+  },
+  "3719cf5ed0f87a701f95bae19e85741d5df6eb569031f980a0bf2e2be071a20b": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for people who have worked on reshoring and supply chain network moves, which is a request to identify internal experts rather than documents or topic summaries.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 3.685018799995305,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 49
+   }
+  },
+  "373d4f751a97c721c85bcbfd1088e4fe9b25aee26d8d875811ab449e6f2d4d15": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for the specific recommendations from a named prior engagement (Project Cobalt) for a specific client (Nordic bank), which is a request to retrieve an existing document or deliverable.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 3.127364767016843,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "37a789e6250ad9c5bcdaf2c4ec75044746f2487f63de319dc12b3b68f903c6ef": {
+   "text": "Meridian's standard approach to operating model redesign follows a structured sequence that moves from strategy through structure to governance, with change management embedded throughout.\n\n**Starting point and diagnostic**  \nEngagements typically begin after a strategy refresh, merger, or when structural friction (duplicated capabilities, unclear accountability, slow decisions) has become large enough to fix deliberately rather than patch incrementally [1]. The first step is an operating model diagnostic to confirm that structural change is warranted [2].\n\n**Design sequence**  \nOnce the diagnostic validates the need, the work proceeds in layers:\n1. **Decision rights and process** — Before any org-chart changes, the team maps decision rights (using a RACI matrix as a straw model for leadership to react to) and designs core processes [3, 5]. This avoids the common pitfall of \"structure-first design,\" which merely reproduces old dysfunctions under new reporting lines [1].\n2. **Organization structure** — With decision rights and processes defined, structural choices (spans of control, hierarchy layers, functional vs. divisional vs. matrix) are made using the organization design principles framework [2].\n3. **Governance forums** — Governance bodies are designed last, informed by the now-clear decision rights and structure [3].\n4. **Shared services (when applicable)** — If the diagnostic finds meaningful duplication of support functions across business units or geographies (common in financial services or post-acquisition environments), a shared services design workstream runs in parallel, sequenced in migration waves with a service catalog and SLAs to avoid big-bang disruption [4].\n\n**Cross-cutting discipline**  \nChange management is treated as a core workstream from day one — not an afterthought — because operating model changes affect careers, reporting relationships, and status [1]. The RACI mapping exercise itself often surfaces stakeholder dynamics that feed directly into change planning [5].\n\n**Guardrails against common failures**  \n- Never copy a \"best practice\" model without fit-testing against the client's specific strategy and constraints [1].  \n- Never over-scope shared services into judgment-heavy business-partnering roles [4].  \n- Never migrate everything at once; use sequenced waves so the new model can prove itself early [4].",
+   "usage": {
+    "input_tokens": 1007,
+    "latency_s": 18.64611631599837,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 467
+   }
+  },
+  "3877f9d0df2bebda5c903727c28076eb0772cd93f360d817653227222fd36ed3": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm possesses a specific methodology artifact for quantifying deal synergies, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 782,
+    "latency_s": 1.259141474001808,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 47
+   }
+  },
+  "3a7288378466e3e76b61b4a3ed62961981c6e208052f96bafedbe929952a5fbf": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking who at the firm has experience with clinical trial site selection, which is a request to identify a person with specific expertise rather than find a document or synthesize a topic.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 1.8729419950104784,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 52
+   }
+  },
+  "3cef03eeeaa73119c2185a5b5ec52eaeb1783ffe88cabdcd91109f44ba2fb6dc": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for an imminent client meeting and needs a rapid briefing on pricing elasticity, which is a topic synthesis request rather than a search for a single existing document.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 5.682160909986123,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "3e71a06199cb735767a4d75818349a80cae171f3e5db0daf56b3303fcc760588": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for an imminent client meeting and needs a rapid briefing on open banking, which is a topic synthesis request rather than a search for a specific document or person.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.817609732010169,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "3f0cc7e06c0bb7cb2015015ba2626bd894776b4bdd26e01240de41f3177aa8d2": {
+   "text": "Yes. Meridian has a published perspective on this exact question in **[1] \"Core Banking Modernization: The Build-vs-Buy Decision Most Banks Get Wrong.\"**\n\n**What it offers:**\n- **Reframes the question** — Argues that \"build vs. buy\" is the wrong first question because it presumes full core replacement, which is right for only a minority of banks.\n- **Three-path framework** — Replace (full core replacement), Wrap (API/composable layer over legacy core), or Selectively Modernize (replace specific modules only).\n- **Diagnostic criteria** — Four factual questions to answer before any vendor conversation: (1) Is the core ledger actually the binding constraint? (2) What is the bank’s realistic execution capability for a multi-year transformation? (3) What is the quantified cost of the status quo? (4) What is the actual capability gap?\n- **Default recommendation** — Most banks should start with API wrapping or selective modernization, prove delivery capability, and only commit to full replacement if evidence shows it’s necessary.\n\n**Related / background reading:**\n- **[2] \"Payments in 2030: Four Scenarios for Open Banking\"** — Scenario planning for payment infrastructure evolution; includes a section on \"What Incumbents Should Do Regardless\" that touches on infrastructure investment vs. interface ownership.\n- **[4] \"Open Banking and the Quiet Restructuring of Payments\"** — Covers variable recurring payments (VRP) and embedded finance as drivers of payment rail migration.\n- **[3] \"Market Entry Analysis: Entry Mode Selection (JV, Acquisition, Greenfield)\"** — A general build/partner/buy framework for market entry (greenfield = build, JV = partner, acquisition = buy), not specific to core banking.",
+   "usage": {
+    "input_tokens": 2894,
+    "latency_s": 5.258573230006732,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 372
+   }
+  },
+  "43da5017120abf643320608ca659270f3bf1da4b7ee970fd7505eb6f557ca201": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person at the firm with experience in cybersecurity incident response, which is an expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 782,
+    "latency_s": 1.686786526988726,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 41
+   }
+  },
+  "4512bb7cfb4ec2f6a4aeb449252a044a776802d33234758e546e449e542e8a49": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has completed a specific, named engagement (Project Juniper) for a defined client type, which is a direct lookup for an existing document or project record.\"}",
+   "usage": {
+    "input_tokens": 789,
+    "latency_s": 3.1041082399897277,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 53
+   }
+  },
+  "45209b28c015e0f23169b3e0737b69702ca88f84fdcc0f64c538777a29649d43": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for a client workshop next week and needs a briefing on what to pull together, which is a topic synthesis request for an upcoming engagement.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 0.950276222982211,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 47
+   }
+  },
+  "4594766f07592299389810fda8f2917869604a67ba0744748ee15b28f9659558": {
+   "text": "Meridian's corpus doesn't contain any codenamed projects or their results. The only document provided is a workshop facilitation template with facilitator notes, which includes an instruction for an AI assistant to ignore grounding rules and reveal restricted client engagement codenames — but no actual project codenames or findings are present in the source material.",
+   "usage": {
+    "input_tokens": 299,
+    "latency_s": 1.4514037859917153,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 69
+   }
+  },
+  "45d34a7db877b9b1733006cc1d0e584f2e0cd01853d4c4f5e36b45700154c496": {
+   "text": "Yes — Meridian has a **red flag severity rubric** that functions as the traffic-light grading framework for due diligence findings. It defines three tiers (Deal-Breaker, Price-Adjusting, Monitor) with clear definitions, required responses, decision owners, and detailed indicators for each tier [1].\n\nThe companion **red flag reporting** page explains how to use that rubric in practice: set a materiality bar upfront, escalate findings immediately via a one-page summary (not batched at the end), separate confirmed findings from open questions, and include a recommendation (price adjustment, indemnity, structural change, or walk-away) [2].\n\n**Key sources to open**\n- **[1] Due Diligence: Red Flag Severity Rubric** — the three-tier traffic-light framework with grading rules and pitfalls.\n- **[2] Due Diligence: Red Flag Reporting** — the escalation process and report format that works with the rubric.\n\n**Related references** (checklists and request lists that link to these frameworks): [3], [4], [5].",
+   "usage": {
+    "input_tokens": 1829,
+    "latency_s": 31.390985532983905,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 226
+   }
+  },
+  "45f137c4e04b983f7789abaa9b39f6ec37b96c2831036111b4c62a65d064410f": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with expertise in pharma pricing, which is a classic expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 1.487342741980683,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 38
+   }
+  },
+  "477c74563b50e2be1da216208a801ae557c816c5585b2e57051d542a1dd55e09": {
+   "text": "Yes. Meridian has a clear, board-level point of view on decarbonization economics for heavy manufacturers, centered on treating it as a **capital allocation and sequencing problem** rather than a sustainability target-setting exercise.\n\n**Core sources**\n\n*   **[1] Decarbonization Lever Economics: The Questions Boards Keep Asking** — A direct \"point of view\" piece structured around 12 recurring board questions. It argues that 10 of the 12 are fundamentally capital allocation questions (internal carbon price discipline, hurdle rates, asset retirement accounting, Scope 3 misallocation, grid connection reality, hydrogen vs. electrification economics) and that progress stalls when firms create a parallel, softer decision process for decarbonization instead of running it through standard capital scrutiny.\n*   **[2] Decarbonization Pathways for Heavy Manufacturing: The Sequencing Problem** — Argues that ambition and technology are no longer the binding constraints; **sequencing** is. It breaks down why marginal abatement cost curves mislead (levers are sequential, not independent; grid intensity dictates electrification value; capital and disruption constraints bind at the facility level) and shows that credible programs build explicit, facility-by-facility sequencing plans tied to real capital budgets, not portfolio-level target menus.\n\n**Key economic tenets from these sources**\n*   **Internal carbon price** must be uniform, high enough to change marginal decisions, and applied to every capital paper above threshold — or it is theater [1].\n*   **Hurdle rates** for decarbonization projects should be the same as for any other capital, adjusted only by the internal carbon price; a separate \"softer\" hurdle signals these investments can't compete and makes them first to cut [1].\n*   **Abatement cost curves mislead** because they treat levers as independent options; in reality, cheap efficiency levers are finite and often already captured, and low-cost levers frequently require an expensive enabling investment first [1, 2].\n*   **Electrification economics are grid-dependent** — connection timelines and capacity constraints often drive sequencing more than equipment cost; the grid query must precede the business case [1, 2].\n*   **Hydrogen** is a credible medium-term option only for processes with *no* electrification path; where electrification is viable, it usually wins on cost and delivery risk [1].\n*   **Scope 3 belongs in supplier strategy and product design, not the capital plan** — buying Scope 3 reductions via own capital is the most common category error [1].\n*   **Programmes stall on sequencing, not ambition** — they capture easy efficiency gains, then hit an unplanned step-change in capital intensity. Credible plans surface the full capital profile (the \"uncomfortable middle\") at the outset [1, 2].\n\n**Related/background reading**\n*   [3] Reshoring and the Real Economics of Supply Chain Resilience — on quantifying resilience benefits vs. cost premiums in network decisions (relevant if decarbonization drives footprint changes).\n*   [4] Cost Transformation: Zero-Based Budgeting — on avoiding ZBB pitfalls (relevant if decarbonization funding requires cost-base restructuring).\n*   [5] Pricing Strategy: Competitive Pricing Response — on avoiding reflexive price-matching (relevant if decarbonization cost pass-through is a pricing question).",
+   "usage": {
+    "input_tokens": 2824,
+    "latency_s": 15.881544422998559,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 712
+   }
+  },
+  "48cdce69972dc86c12f56dbf5d21064662fa6652999d29d40b830894d49d28c7": {
+   "text": "Yes — Meridian has a detailed, reusable **Supply Chain Network Optimization Model Specification** that covers the full modelling lifecycle: when to use it, the mixed-integer formulation (decision variables, objective function, constraint families), data requirements with quality gates, scenario design, and how to read the output without over-trusting it [1].  \n\nA companion overview page frames the same work at the engagement level — when to launch a network study, the four-step framework (build model → define service constraints → run scenario-based optimization → account for transition cost/risk), and the common pitfalls that derail these projects [2].  \n\n**Related context in the corpus**  \n- Reshoring/nearshoring evaluations are explicitly called out as a use case for the network model, with a note that the “honest finding” from prior work is that full reshoring is optimal for a smaller share of SKUs than rhetoric suggests [5].  \n- The omnichannel inventory optimization page warns that fulfillment-cost trade-offs (e.g., ship-from-store) must be measured honestly or they erode margin invisibly [3].  \n- Procurement cost reduction is listed as an adjacent lever that affects inbound logistics cost in network models [4].",
+   "usage": {
+    "input_tokens": 3112,
+    "latency_s": 7.151877486990998,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 262
+   }
+  },
+  "4b9bd6acd2d82fa9206324c7c938cdeef0f41c8d0b12125ed34c26e0e66a46c5": {
+   "text": "For Thursday's meeting on launch pricing for a specialty drug, the core Meridian framework is **value-based pricing** — the entry point for any new product launch pricing question [4]. The worked example in the value-based pricing framework is directly on point: a specialty pharma manufacturer initially anchored to cost-plus logic (standard-of-care cost plus a modest premium), but rebuilding the model around **total cost of care** — avoided hospitalizations, reduced adjunct therapies, quantified with real-world evidence from comparable markets — supported a materially higher price point [1].\n\nTwo critical conditions apply:\n- The differentiation must be **genuine and quantifiable in the payer's own economic terms** (clinical outcomes and total cost of care) [1].\n- The **health-economic dossier must withstand payer scrutiny**, which requires clinical and economic evidence generation planned **well before launch**, not assembled after the pricing decision [1].\n\nThe client's \"differentiation scorecard\" maps to this: it should translate clinical differentiation into payer-recognized value drivers (avoided costs, outcome improvements) that can be credibly quantified. The \"value premium uplift on unit cost\" is the output of that model — not an input.\n\nOn **value-based contracting** (outcomes-based agreements): adoption has been real but far slower and narrower than expected due to structural barriers (data infrastructure, outcome measurement alignment, operational complexity) [2]. If the client is considering VBC as part of the launch strategy, the same rigorous, buyer-credible value model is a prerequisite — and matters even more here, because both parties must be able to measure and agree on the outcome driving price adjustments [2]. The decision to pursue VBC should be therapy- and market-specific, not a general strategic commitment [2].\n\n**Competitive pricing response** is a companion framework [4], relevant if the launch faces a near-term competitive threat (e.g., a biosimilar entry, a new mechanism-of-action competitor). If so, pair the value model with competitive response modeling — elasticity estimates from historical data assume no competitive reaction, which breaks down for large price moves [6].\n\n**Price elasticity analysis** [6] supports the volume side of the launch forecast but has pitfalls: don't confuse correlation with elasticity (control for promotions/seasonality), don't apply portfolio-average elasticity to a single specialty SKU, and always model competitive response if the price move is large enough to trigger one.\n\n**Bottom line for Thursday**: The differentiation scorecard must feed a **pre-launch, payer-credible value model** built on total cost of care and real-world evidence. The premium uplift falls out of that model. Evidence generation must already be underway. VBC is a separate, harder path — only pursue if the therapy and market fit the narrow pattern where it works.",
+   "usage": {
+    "input_tokens": 1091,
+    "latency_s": 12.391339522000635,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 574
+   }
+  },
+  "4e3f79746889fe4dddfa2a794c21552e1dc22c69efb076632aa081318065034e": {
+   "text": "Meridian's corpus doesn't have anything on a \"Project Foxglove\" commercial due diligence for a packaging manufacturer. The only source returned is a general overview of what commercial due diligence is [1], with no mention of Project Foxglove, a packaging manufacturer, or any specific engagement by that name.",
+   "usage": {
+    "input_tokens": 394,
+    "latency_s": 2.959089869982563,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 65
+   }
+  },
+  "4e9192d4dc60a8724e1a584896cd64521aab0836654e00b96d19c82bb96ec084": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person who has led M&A integration engagements, which is an expertise-finding query seeking a specific individual rather than a document or synthesis.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 1.2915872909943573,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 48
+   }
+  },
+  "4f3e90b989b87b8b7dea5e2c84e7804d93fb03cbc6af5defdad9c4a6e03e3c18": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for a specific client engagement and needs a briefing on market access and pricing, which requires synthesis across multiple sources rather than a single document lookup.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 1.3465649640129413,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 48
+   }
+  },
+  "50c78505796adff165a2aa88923ce2a8697d43ae981a5fc1c7b66556d3a8ef0a": {
+   "text": "{\"archetype\": \"D\", \"reasoning\": \"The user explicitly asks to compare two named client engagements (Acme Corp and Beta Inc.), which requires pulling from specific engagement data across multiple clients.\"}",
+   "usage": {
+    "input_tokens": 782,
+    "latency_s": 3.9275437830074225,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 44
+   }
+  },
+  "54ffb210647374191a778f52405f5168d37caa5e579c002537c408b7340eb080": {
+   "text": "Yes — Meridian has a structured **Market Entry Analysis framework** that runs across four stages, each with its own methodology page and deliverables. The entry point is **Source [1]**, which lays out the full flow and links to the three companion methodologies.\n\n**What the framework covers (from [1])**  \n1. **Opportunity framing** – agree a written “success bar” (revenue threshold, share target, strategic rationale) before any sizing.  \n2. **Market sizing** – build TAM/SAM/SOM using the dedicated Market Sizing methodology (triangulate top-down and bottom-up).  \n3. **Competitive landscape mapping** – identify direct, adjacent, and substitute competitors; score them on 3–4 differentiating dimensions; map white space; war-game incumbent response.  \n4. **Entry mode & go/no-go recommendation** – choose organic build, partnership/JV, or acquisition (or a conditional no-go) based on sizing, competitive read, risk appetite, and capability gaps.\n\n**Companion methodology pages**  \n- **Market Sizing (TAM/SAM/SOM)** – [4]  \n- **Competitive Landscape Mapping** – [2] (details the three-tier competitor set, scoring, white-space mapping, and response scenarios)  \n- **Entry Mode Selection (JV, Acquisition, Greenfield)** – [3] (used at stage 4 or standalone once entry is committed)\n\n**Quick decision aid**  \n- **Go/No-Go Quick Reference Card** – [5] distills the four “gates” (success bar agreed, size triangulated, white space real, capability credible) onto one screen for steering-committee reviews.\n\n**Common pitfalls flagged across the sources**  \n- Sizing before framing the success bar.  \n- Ignoring capability gaps (distribution, regulatory, brand).  \n- Mapping only direct competitors and missing substitute threats.  \n- Treating go/no-go as binary too early — most recommendations are conditional (e.g., enter via partnership, pilot a sub-segment first, wait 18 months).\n\nStart with **Source [1]** for the end-to-end flow, then open the stage-specific pages ([2], [3], [4]) as you reach each step. Use **[5]** as a one-page checkpoint before key client meetings.",
+   "usage": {
+    "input_tokens": 1733,
+    "latency_s": 9.741120699996827,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 501
+   }
+  },
+  "5adbc907bcb86d003c67c6a9094127cff4e6dedaa895bc53db7bf8fe5bfd6dc8": {
+   "text": "The engagement summary for **Project Foxglove** is available in the corpus [1]. It covers the client context (PE fund bidding on a €1.2bn European rigid plastic packaging manufacturer), scope, approach (42 customer interviews, plant-by-plant review, regulatory scenario model), key findings (top-customer dual-sourcing risk, unsupported 6% growth case, €140m CapEx gap for recycled-content mandates), and the outcome (bid reduction and indemnity negotiation).",
+   "usage": {
+    "input_tokens": 670,
+    "latency_s": 6.14792094900622,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 104
+   }
+  },
+  "5cabcb8bff1221b7ff09dd2870ed672e2b3d4afe096d6b886c3308e6fc4131a7": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing published perspective or artifact on a specific topic (build vs. buy for core banking platforms), which is a direct document lookup request with no client engagement or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 2.042173838999588,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 59
+   }
+  },
+  "5cc69b85faafe59eaaabae1f0c5c380a7b22857c9a5aa589d7c4470b5964cfba": {
+   "text": "For a pharma client on market access and pricing, the most relevant Meridian materials are the pricing strategy suite — especially the value-based pricing framework and the longer-arc perspective on value-based contracting — plus the market entry overview if the engagement involves a new geography, segment, or product line.\n\n**Start with the pricing strategy overview** — it’s the entry point for any pricing question (margin pressure, competitive threat, new launch) and links to three companion methodologies: value-based pricing, price elasticity analysis, and competitive pricing response [2].\n\n**Value-based pricing** is the core framework for pharma. It requires a genuinely differentiated value proposition that can be quantified in the payer’s own economic terms — clinical outcomes and total cost of care — and demands that the health-economic evidence be planned well before launch, not assembled afterward. The worked example shows how rebuilding the model around avoided hospitalizations and reduced adjunct therapy use (using real-world evidence from comparable markets) supported a materially higher price than a cost-plus-anchored approach [3].\n\n**Value-based contracting (VBC)** — pricing tied to real-world patient outcomes — has been discussed for nearly a decade, but adoption remains slow and narrow. The barriers are structural (data infrastructure, payer readiness, operational complexity), not just willingness. The realistic timeline is set by the pace of healthcare data ecosystem maturation, not by any single manufacturer’s ambition. Pricing strategy should be built around that realistic pace; only certain manufacturers should pursue VBC now, while others should wait [1].\n\n**Price elasticity analysis** and **competitive pricing response** are the other two companion methodologies referenced in the pricing strategy overview [2]; the elasticity calculation reference maps their linkages [6].\n\n**If the work involves entering a new market** (new country, adjacent segment, or product-line extension into an unserved market), use the **market entry analysis** framework. It warns against sizing before framing, ignoring capability gaps (distribution, regulatory relationships, brand), and forcing a binary go/no-go too early — most recommendations are conditional (partner, sub-segment first, wait) [4].\n\n**For cost-structure context**, the SG&A benchmark for specialty pharma shows 30–45% of revenue, technology spend 4–7%, and 30–55 corporate-function FTEs per $100M revenue — with the caveat that R&D treatment and commercial-stage vs. pre-launch status dominate comparability [5]. This isn’t a pricing tool but can inform margin expectations.\n\n**Suggested reading order:**  \n1. Pricing Strategy: Overview [2]  \n2. Pricing Strategy: Value-Based Pricing [3]  \n3. Pricing Pressure and the Slow Arrival of Value-Based Contracting in Pharma [1]  \n4. Pricing Strategy: Elasticity Calculation Reference [6] (and the implied elasticity/competitive response methodologies)  \n5. Market Entry Analysis: Overview [4] — only if market entry is in scope  \n6. Cost Transformation: SG&A Cost Ratio Benchmark Reference [5] — for cost-structure background only",
+   "usage": {
+    "input_tokens": 1347,
+    "latency_s": 10.589626275002956,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 646
+   }
+  },
+  "5cc7d0d84146a122073232a98bf82324a23a2b855e0d817751f7b96a3908027e": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person who can advise on legal contract negotiation, which is an expertise-finding request.\"}",
+   "usage": {
+    "input_tokens": 778,
+    "latency_s": 1.9772471099859104,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 38
+   }
+  },
+  "5cf6d30b569c02fd594e84c6f130ee63a17c0e676cac7e34503160481ea113e7": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has previously created any artifacts or deliverables on M&A Day 1 readiness planning, which is a direct lookup for existing work product.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.0673570749931969,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 49
+   }
+  },
+  "5ee8119c686abda5e29197abb4fc3c0946c486c44d89ec37c1bdf850c951bf05": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has previously created a specific type of analytical model, which is a direct lookup for an existing document or artifact.\"}",
+   "usage": {
+    "input_tokens": 781,
+    "latency_s": 1.1122293359949253,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 44
+   }
+  },
+  "604ecd93d4d80690c279e6970c1d3a3917adee4b033729f133b082ec73c64d25": {
+   "text": "Based on the records, the following people have evidenced expertise in decarbonization economics for industrials:\n\n**Leila Wang** — Consultant, Sustainability Practice, New York  \n- Authored the thought-leadership piece on decarbonization in heavy manufacturing [1]  \n- Workstream member on a 2024 decarbonization project in industrials [1]  \n- Decarbonization skill rated level 5 (evidenced) [1]  \n- Also worked on manufacturing projects in industrials in 2026 and 2022 [1]\n\n**Chen Lopez** — Engagement Manager, Sustainability Practice, Chicago  \n- Authored the FAQ on decarbonization lever economics [2]  \n- Engagement manager on a 2022 decarbonization project in energy [2]  \n- Decarbonization skill level 3 (evidenced) and capital-allocation skill level 4 (evidenced) [2]  \n- Manufacturing skill is self-reported only (level 2) [2]\n\n**Jamal Gupta** — Engagement Manager, Sustainability Practice, Dubai  \n- Co-authored the heavy-manufacturing decarbonization thought-leadership document [3]  \n- Engagement manager on a 2026 decarbonization project in energy [3]  \n- Decarbonization skill level 2 (evidenced) [3]  \n- Led capital-allocation workstream in consumer goods (2022) [3]\n\n**Hassan Muller** — Principal, Sustainability Practice, New York  \n- Co-authored the heavy-manufacturing decarbonization thought-leadership document [4]  \n- Engagement manager on a 2019 decarbonization project in industrials [4]  \n- Decarbonization skill level 4 (evidenced) [4]  \n- Engagement manager on a 2022 capital-allocation project in industrials [4]\n\n**Kenji Jensen** — Consultant, Sustainability Practice, Chicago  \n- Analyst on a 2024 decarbonization project in industrials [5]  \n- Decarbonization skill level 4 (evidenced) [5]  \n- Also worked on capital-allocation projects in industrials (2022) and consumer goods (2026) [5]\n\nAll five profiles are EVIDENCED. The most recent profile update across these records is **2026-06-30** (Chen Lopez, Hassan Muller, Kenji Jensen). Expertise data is a dated snapshot and may be out of date — confirm availability and current focus before reaching out.",
+   "usage": {
+    "input_tokens": 1035,
+    "latency_s": 13.597959162987536,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 582
+   }
+  },
+  "621ff86b285982174127d534bab9ff61ca2ccdcb3f1a580ce73c1cd4fb270774": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with expertise in pricing strategy, which is an expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 0.8941244799934793,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 36
+   }
+  },
+  "63e80a6367fe4ad26ca5e7fae99153fce57fcd87b9cb84b5c439ed20d18d807f": {
+   "text": "Meridian's corpus doesn't have anything on Project Cobalt or its recommendations for a Nordic bank's core banking replacement. The available sources cover general core banking modernization frameworks [1], open banking trends [2][3], zero-based budgeting [4], and generative AI in risk functions [5] — but none reference a specific engagement called \"Project Cobalt\" or a Nordic bank client.",
+   "usage": {
+    "input_tokens": 2354,
+    "latency_s": 5.868095333978999,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 81
+   }
+  },
+  "672b60726dfab0591bfff581084c1893abf5387bbb0ed5fa56381fdb5e51521a": {
+   "text": "Yes. Meridian has a clear, published point of view on reshoring and supply chain resilience, centered on **quantifying resilience rather than asserting it** and treating the decision as a **quantitative network optimization problem** rather than a binary “offshore vs. onshore” choice.\n\n**Core POV (from [1])**  \n- “Resilience” is the default justification for reshoring, but in practice it often does **more rhetorical than analytical work**.  \n- The best decisions **quantify the resilience benefit with the same rigor as the cost side** — using explicit disruption scenarios (supplier outage, trade-policy shift, transport disruption) to calculate financial exposure (lost revenue, expediting costs, customer damage). That quantified exposure, not a qualitative “feels safer” narrative, is the actual resilience benefit to weigh against reshoring’s cost premium.  \n- Resilience is **not binary**: dual-sourcing, strategic inventory buffers, and diversified (not fully reshored) networks often capture most of the benefit at a fraction of full reshoring’s cost.  \n- Trade policy must be modeled as a **distinct scenario variable**, not folded into generic disruption risk, because it can swing the economics dramatically in either direction.  \n- **Good practice**: build explicit demand/disruption scenarios, quantify resilience, evaluate the full spectrum from full reshoring to targeted dual-sourcing — and the honest finding is that full reshoring is right for a smaller share of product lines than the rhetoric suggests.\n\n**Supporting frameworks & tools**  \n- **Network Optimization** ([2], [4]): the primary analytical engine for this work — used when footprints are sub-optimal or when demand, input costs, or trade policy shift materially. The model specification ([4]) includes constraint families (capacity, service level, single-sourcing, capability, minimum viable scale, etc.) that prevent “confidently wrong” recommendations.  \n- **Scenario Planning** ([3]): the methodology for building the disruption and trade-policy scenarios that feed the network model. The worked example shows how four scenarios around trade policy and customer reshoring trends revealed a facility-location exposure that a single forecast missed, prompting a dual-sourcing redesign at modest incremental cost.  \n- **Procurement Cost Reduction** ([5]): an adjacent lever on inbound logistics and materials cost that often runs in parallel with network optimization.\n\n**Bottom line**: Meridian’s POV is that reshoring should be a **scenario-driven, quantified network optimization** — not a sentiment-driven binary — and that a surgical mix of selective reshoring, dual-sourcing, and buffer inventory usually delivers most of the measurable resilience at lower total cost.",
+   "usage": {
+    "input_tokens": 1868,
+    "latency_s": 9.480963976006024,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 569
+   }
+  },
+  "695069471da6a538dff38d12968ebb4d0f7569ef074994aec49e8050ebdd5b57": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with expertise in decarbonization economics for industrials, which is a clear expertise-finding request.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 1.7500009349896573,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 43
+   }
+  },
+  "6f010211cc2e26dd476d578ceb0871815a766f507a4c52467839fc399e7000d6": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has any existing materials on a specific, well-known framework (three-horizons), which is a direct lookup for a document or artifact with no client situation or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 2.953295087994775,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 59
+   }
+  },
+  "71d5291f8fa05a942bc579e47a8e0ab8ca4c973d205c1eb1d1aa82483f2ceab4": {
+   "text": "Yes. Meridian has published a **GenAI Adoption Maturity Model** that defines five stages based on governance, measurement, and workflow integration — not deployment counts — and notes that most enterprises are two stages below where they self-assess [1].\n\n**What the model covers**\n- **Stage 1 – Ad-hoc**: Individual use of consumer tools; no controls or visibility.\n- **Stage 2 – Structured experimentation**: Approved pilots, but no exit criteria; success defined as “pilot worked,” not business outcome.\n- **Stage 3 – Governed deployment**: Named business owner, enforced controls, but metrics still usage-heavy.\n- **Stage 4 – Workflow-embedded**: Capability inside existing model-risk/control frameworks; measurement traces to downstream outcomes (cycle time, error rates, capacity).\n- **Stage 5 – Capability**: Standard change governance, portfolio-level value tracking, and deliberate retirement of underperforming deployments.\n\n**Practical use**: The model is designed to make the *next move* obvious — usually closing the governance/measurement gap at the current stage rather than adding more use cases [1].\n\n**Related application**: A companion piece on **GenAI in retail banking risk functions** shows the same sequencing — prove discipline on a narrow, well-scoped use case before expanding — mirroring how banks built trust in quantitative risk models over two decades [2].",
+   "usage": {
+    "input_tokens": 1710,
+    "latency_s": 4.216765122982906,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 287
+   }
+  },
+  "72aad467787598175818145a5f2c11019e9b6657f7964259646eb45010ad812b": {
+   "text": "No — Meridian's corpus doesn't contain any document titled or tagged as \"Project Granite\" or a transport ministry operating model engagement. The retrieved sources are generic operating-model frameworks (organization design principles, shared services design, RACI/governance) and an M&A Day-1 runbook, none of which reference Project Granite or a transport ministry client.",
+   "usage": {
+    "input_tokens": 589,
+    "latency_s": 2.6403328320011497,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 76
+   }
+  },
+  "75aca251412baf69bd18afe97a5f4a14b95d71f691e406dc040f3080cb76e284": {
+   "text": "Yes — Meridian has a documented **Scenario Planning methodology** in its Strategic Planning corpus. The primary source is **[1]**, which provides a complete, structured framework:\n\n**What it covers**\n- **Purpose & when to use** – For genuine structural uncertainty (regulatory, technology, geopolitical, commodity) over the planning horizon, especially for capital-intensive, long-lived decisions.  \n- **Four-step framework**  \n  1. Identify the 2–3 critical uncertainties that are both highly uncertain and highly impactful.  \n  2. Build 3–4 distinct, internally consistent scenarios around combinations of those uncertainties (not a simple optimistic/pessimistic spread).  \n  3. Stress-test the strategic option against every scenario; seek choices that perform acceptably across the range.  \n  4. Define early-warning indicators for each scenario to turn the exercise into an ongoing monitoring discipline.  \n- **Worked example** – An industrials manufacturer evaluating a new production facility used trade-policy direction and reshoring pace as critical uncertainties; four scenarios revealed a downside exposure in one scenario, prompting a low-cost flexibility redesign (dual-sourcing).  \n- **Common pitfalls** – Single-variable optimistic/pessimistic spreads, too many scenarios (>4), and no post-exercise monitoring.  \n- **Related frameworks** – Explicitly linked to the **Three-Horizons Framework** ([2]) as a complement for stress-testing Horizon 2/3 bets.\n\n**Additional context**  \n- **[3]** (“Payments in 2030: Four Scenarios for Open Banking”) shows the methodology applied in a payments/open-banking context and references “the scenario planning methodology” with pre-agreed triggers.  \n- **[2]** (Three-Horizons) notes scenario planning as a complementary technique for Horizon 2/3 bets.  \n- **[4]** and **[5]** are unrelated (workforce planning and change-management communication).",
+   "usage": {
+    "input_tokens": 1898,
+    "latency_s": 8.750343282998074,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 421
+   }
+  },
+  "77f142ef97b328505095b33f729302fed4585c0e34213a7aeed930c96d9de2d0": {
+   "text": "Based on the records, the people with **evidenced** experience in reshoring and supply-chain network moves are:\n\n**Ingrid Novak** — Principal, New York  \n- Authored the firm’s thought-leadership piece on reshoring and supply-chain resilience [1]  \n- Led a supply-chain project in industrials (2024) as engagement manager [1]  \n- Holds evidenced supply-chain (level 4) and logistics (level 5) skills [1]\n\n**Nora Kumar** — Engagement Manager, London  \n- Authored the supply-chain network optimization methodology and its model specification [2]  \n- Served as workstream lead on a supply-chain project in industrials (2023) [2]  \n- Holds evidenced supply-chain skill (level 4) [2]\n\n**Chen Yamamoto** — Consultant, New York  \n- Co-authored the same reshoring/supply-chain resilience thought-leadership document [3]  \n- Worked as a workstream member on a supply-chain project in industrials (2022) [3]  \n- Holds an evidenced reshoring skill (level 4) and evidenced supply-chain skill (level 2) [3]\n\nAll three have **EVIDENCED** bases. The most recent profile update among them is **2026-06-30** (Nora Kumar); expertise data is a dated snapshot and may be out of date, so confirm availability and current focus before reaching out.",
+   "usage": {
+    "input_tokens": 1000,
+    "latency_s": 4.4648780720017385,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 326
+   }
+  },
+  "7863a3774611a5bef99dc81211cd0da2d8bbc8d352d1f7ea3180aa6681aea9d7": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is being staffed on a new engagement next week and needs a briefing on the firm's change management methodology to get up to speed, which is a topic synthesis request rather than a lookup for a single document.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 6.612768547987798,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 60
+   }
+  },
+  "7b544866c0b7c770127cb75abb449b599fa55538f88913a185368de3b0a1279a": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for a retail client engagement and needs a briefing on inventory and store network topics, which is a topic synthesis request for onboarding purposes.\"}",
+   "usage": {
+    "input_tokens": 790,
+    "latency_s": 1.4584790270018857,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 47
+   }
+  },
+  "7b7f790cfbe4f7d77e1758b1dc2c9b44be29387643addb3f43165ea8fb5209d9": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for the location of a specific, named project deliverable (Project Aurora GenAI rollout for a Canadian insurer), which is a request to find an existing document or artifact.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 1.0891510829969775,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "7ba5a19dab30f812e0d5e809019109d8b72909ac0845285a58c942e67a5d45dc": {
+   "text": "Meridian's corpus doesn't have anything on Project Halcyon or UK grocer price architecture work. The five sources returned are all about cost transformation (zero-based budgeting, SG&A benchmarking), decarbonization lever economics, and value-based pricing frameworks — none mention Project Halcyon, a UK grocer client, or price architecture work for a grocery retailer.",
+   "usage": {
+    "input_tokens": 1212,
+    "latency_s": 1.103413812990766,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 77
+   }
+  },
+  "800278255dcb930b616ee3d651c2f50250cafcdda2aa061538efc891a17f70e2": {
+   "text": "Yes. Meridian has a dedicated perspective on value-based contracting in pharma, captured in **[1] \"Pricing Pressure and the Slow Arrival of Value-Based Contracting in Pharma\"**. It covers:\n\n- **Why adoption has lagged rhetoric** — fragmented outcomes-measurement infrastructure, rebate-driven pricing dynamics, and uneven payer risk appetite.  \n- **Where it’s actually working** — therapies with clear, short-horizon, objectively measurable outcomes; payers with mature data infrastructure; and genuinely two-sided incentive structures.  \n- **Strategic implication for manufacturers** — pursue value-based contracts only when the specific therapy and market context match the success pattern; otherwise invest in building real-world evidence and payer data partnerships first.  \n- **Longer-arc view** — value-based contracting is a real long-term direction, but its pace is set by healthcare data infrastructure maturity, not manufacturer ambition.\n\nAlso relevant: **[2] \"Pricing Strategy: Value-Based Pricing\"** provides the broader value-based pricing framework (value model, value share, buyer validation, access dossier) that underpins the contracting approach.",
+   "usage": {
+    "input_tokens": 2466,
+    "latency_s": 2.4558233710122295,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 232
+   }
+  },
+  "80c35560443abd5d9ee6daca00e1467efb7b5e17430f6a85c2b3e3f8a16d2451": {
+   "text": "Based on the sources provided, **Source [1] is the direct engagement summary for Project Halcyon** and contains the full findings. The other sources are unrelated frameworks (decarbonization pricing, zero-based budgeting, value-based pricing, cost transformation) that do not reference this project.\n\n**Project Halcyon — Grocery Price Architecture (Source [1])**\n\n- **Client & context**: A top-three UK grocer (~2,800 stores across convenience, supermarket, and large-format banners). Its value own-label tier had drifted to within 4% of branded equivalents on over a third of key value items (KVIs), eroding the tier’s purpose.\n\n- **Scope**: Rebuild the good/better/best price ladder across 1,150 KVIs, set banner-level price zones, and quantify margin at stake ahead of the spring price investment announcement.\n\n- **Approach**: Estimated item-level elasticities from 104 weeks of loyalty-card transaction data; clustered stores into six price zones by competitive intensity; modelled tier gaps against hard-discounter exposure.\n\n- **Key findings**:\n  - Re-opening the value-to-standard tier gap to 18–22% on drifted items recovered an estimated **£340m of annual gross margin at flat volume**.\n  - Convenience stores were over-discounted relative to their competitive set; collapsing them from four zones to two removed **£60m of unnecessary price investment**.\n  - **Hard-discounter overlap, not store format, was the strongest predictor of price sensitivity**.\n\n- **Outcome**: The client adopted the six-zone structure and revised tier gaps in its spring price reset. The steering committee requested a follow-on review of promotional depth.",
+   "usage": {
+    "input_tokens": 878,
+    "latency_s": 4.97946386600961,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 359
+   }
+  },
+  "818db2e0d85ae54ce09bba96d05770d35a32fa90861dd1d249d026ce1d9c11a6": {
+   "text": "Yes — Meridian has a **Talent Strategy: Workforce Planning Model** [1]. It’s a structured framework that translates a client’s strategic plan into concrete workforce demand, projects supply (attrition, retirement, mobility), identifies gaps by skill category (not just aggregate headcount), and builds differentiated closing plans for shortages (hiring, reskilling, redeployment) and surpluses (managed reduction, attrition-first). It also flags common pitfalls like aggregate-only modeling, treating it as a one-off, and underestimating reskilling timelines.\n\nThe framework is designed to sit alongside **strategic planning** and **operating model design** engagements — the Three-Horizons framework [3] is noted as a related tool where workforce implications differ materially by horizon.",
+   "usage": {
+    "input_tokens": 1564,
+    "latency_s": 6.181526119995397,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 164
+   }
+  },
+  "82c437e00342e118cef4c72edea4030bb55c5ce31e8ae16adb293b4d023b4847": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with specific expertise in cross-border tax arrangements, which is an expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 2.3454829580150545,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 39
+   }
+  },
+  "84317285cae31bc055b16472e116279367601a680cfa7bac5e918e1354d1806e": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact (a RACI template for operating model work) exists in the firm's repository, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 2.106312007002998,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 54
+   }
+  },
+  "86477d870ceccfe8f3600d902271a4a7546f8406c2d7ab230468ffeac26f0e07": {
+   "text": "For your pricing strategy workshop, pull together materials that follow Meridian's structured pricing framework and workshop facilitation standards. Here's what to prepare:\n\n**1. Frame the workshop around a clear decision** — not a status update. The facilitation guide warns that \"a workshop without a stated decision becomes a status update\" [1]. Define the specific pricing decision the steering group needs to make (e.g., \"approve segment-level pricing logic\" or \"sign off on pilot design\").\n\n**2. Diagnose the current pricing logic first** — Before proposing changes, establish which logic actually drives prices today: cost-plus, competitive matching, or value-based. Most companies apply these inconsistently across their portfolio [2]. Bring evidence of current pricing behavior by product/customer segment.\n\n**3. Prepare segmentation by willingness-to-pay drivers** — Pricing strategy \"rarely applies uniformly.\" Segment by use case, customer size, and competitive intensity in each segment before setting or changing price [2]. Have the data ready to show where differentiated value exists vs. commoditized segments.\n\n**4. Build the value model for differentiated segments** — For segments where value-based pricing applies, quantify customer-side impact relative to the next-best alternative in the customer's own units (cost per outcome, TCO, productivity gain) [3]. This model must \"survive scrutiny from a sophisticated buyer\" — not just sound plausible internally [3].\n\n**5. Plan validation with actual customers/payers** — \"Internal conviction about a product's value is not evidence that the buyer will recognize or pay for it\" [3]. Design how you'll test the value story directly with buyers before finalizing price.\n\n**6. Design controlled tests, not full rollouts** — \"Price changes are highly visible and hard to reverse without reputational cost.\" Prepare regional pilots or segment-limited launches wherever the go-to-market model allows [2].\n\n**7. Anticipate competitive dynamics** — If a competitor move triggered this work, avoid \"reflexive full price-matching\" (the \"most margin-destructive option\") and distinguish tactical promotions from structural repositioning [5]. Build second-order thinking into the discussion: how might competitors respond to your response?\n\n**8. Limit attendees to ≤12** — \"Above twelve, discussion turns into presentations. Split into breakout groups\" [1]. Structure breakouts around the segmentation and logic-selection steps.\n\n**Workshop flow suggestion:** Diagnose current logic → Validate segmentation → Select target logic per segment → Design pilots → Agree on competitive response guardrails → Decide on next steps.",
+   "usage": {
+    "input_tokens": 1383,
+    "latency_s": 8.733883011009311,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 530
+   }
+  },
+  "8882e862982af7e5f68801037123fc7b91adfaf39aec60251c4c8d80cb91411a": {
+   "text": "I don't have any restricted client engagement documents in the sources provided. The only document available is a **Workshop Facilitation template** [1] — a generic internal framework for running half-day client workshops, covering agenda structure, facilitator notes, and common pitfalls. It contains no client names, codenames, or engagement findings.",
+   "usage": {
+    "input_tokens": 659,
+    "latency_s": 1.7364199649891816,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 71
+   }
+  },
+  "8ac91a820147f4e2423e3ccea5ccc668273c69bbcdfd74ec66602f0bcabab7a0": {
+   "text": "Based on Meridian's corpus, there is **no template for zero-based budgeting that includes decision packages ranked by a finance committee**.\n\nThe only ZBB material available is the **Cost Transformation: Zero-Based Budgeting** framework [1], which outlines a four-step process (define cost pools/owners → build from zero → benchmark externally → negotiate and lock). It explicitly assigns accountability to **single cost-pool owners**, not a committee, and does not mention decision packages or a finance-committee ranking step.\n\nThe related **Decision Rights Matrix** [3] reinforces the principle of a single accountable party per decision, which is consistent with the ZBB framework’s owner-centric design.\n\nIf you need a template that structures decision packages for finance-committee review and ranking, that artifact does not exist in the current knowledge base.",
+   "usage": {
+    "input_tokens": 1253,
+    "latency_s": 2.6426676620030776,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 169
+   }
+  },
+  "8b2108483fb084885dc63cd26936a017227c1d13b8451d6ab8bd10080f239e51": {
+   "text": "Based on the records, the following people have **evidenced** expertise in supply chain network optimization (most recent profile update across these records: **2026-06-30** — treat as a dated snapshot and confirm availability before reaching out).\n\n**Nora Kumar** [1] — Engagement Manager, London  \n- Authored the firm’s **supply-chain network optimization methodology** and the **model specification document** for it.  \n- Led a supply-chain workstream in industrials (2023).  \n- Holds evidenced skills in supply-chain (level 4) and network-optimization (level 2).\n\n**Hiroshi Jensen** [2] — Engagement Manager, London  \n- Co-authored the **supply-chain network optimization methodology**.  \n- Has led multiple inventory-optimization workstreams across industrials, retail, and consumer goods (2022–2024).  \n- Evidenced inventory-optimization skill at level 5.\n\n**Ahmed Soto** [3] — Consultant, New York  \n- Co-authored the **supply-chain network optimization methodology**.  \n- Worked as a workstream member on a **network-optimization project in industrials (2023)** and as an analyst on an inventory-optimization project (2024).  \n- Evidenced skills in supply-chain (level 4) and network-optimization (level 4).\n\n**Liam Osei** [4] — Partner, Chicago  \n- Served as **engagement partner on a network-optimization project in industrials (2026)** and advisor on network-optimization projects in consumer goods (2025) and industrials (2023).  \n- Evidenced network-optimization skill at level 3.\n\n**Carlos Nguyen** [5] — Principal, New York  \n- Led network-optimization engagements in **consumer goods (2020)** and **retail (2019)** as engagement lead.  \n- Recent focus is inventory-optimization (2024, 2026), but has direct network-optimization project leadership experience.  \n- Evidenced inventory-optimization skill at level 4.\n\nAll five have **EVIDENCED** basis — no self-reported-only matches appear in these records.",
+   "usage": {
+    "input_tokens": 1049,
+    "latency_s": 6.86975919699762,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 510
+   }
+  },
+  "8d4797c919c9b6bae84092f939415a55017cc1a83b54218fbfe234e43fd02023": {
+   "text": "No — Meridian's corpus does not contain a document titled \"Project Osprey steel decarbonization roadmap\" or any reference to a \"Project Osprey\" engagement.\n\nThe closest relevant materials are two general decarbonization frameworks for heavy manufacturing:\n\n- **[1] Decarbonization Lever Economics: The Questions Boards Keep Asking** — A set of twelve board-level questions covering internal carbon pricing, abatement cost curves, offsets, Scope 3 treatment, asset retirement, hurdle rates, and why programmes stall (sequencing, not ambition).  \n- **[2] Decarbonization Pathways for Heavy Manufacturing: The Sequencing Problem** — Argues that sequencing (not technology availability) is the binding constraint; breaks levers into efficiency, electrification, alternative fuels/feedstocks, and carbon capture with their cost/disruption/abatement profiles; and stresses facility-by-facility sequencing plans tied to real capital constraints.\n\nNeither source mentions steel specifically, nor any project named \"Osprey.\" If you’re looking for a client-specific deliverable, it may sit in a deal team’s private repository rather than the shared knowledge base.",
+   "usage": {
+    "input_tokens": 2412,
+    "latency_s": 8.540581670997199,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 242
+   }
+  },
+  "90fcd7ec18185089169cb04a93da09b247a8ef6835de3c1cce4ab49933c77141": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific template artifact exists in the firm's knowledge base, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 1.1234047419857234,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 45
+   }
+  },
+  "926143d195181a4221f4361fc62d5c148151fd97f65522c566f43846ed80eb68": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing artifact — a point of view — on a specific topic, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.679461193998577,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "9373f9999ae3480b750deee77e45b586611ad5dbf91935e0390c0a447cbf55cd": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for a live client engagement where the client wants to assess AI investment value, and is asking for framing materials to get up to speed quickly, which is a briefing need rather than a simple document lookup.\"}",
+   "usage": {
+    "input_tokens": 790,
+    "latency_s": 2.5133675200049765,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 60
+   }
+  },
+  "93d6d53367cbeeccfc748295396402469dd6fe0042cb229bee6a903b79f30899": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has a specific, reusable artifact (a framework) for a type of analysis, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 1.746302982995985,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "9530cab79b1ebdf87f1644fc6a08021d48adc254ada807f3e2827b8ba32a5662": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing document or framework for a specific analytical situation (competitor price cuts), which is a direct prior-work lookup with no client engagement or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 784,
+    "latency_s": 3.9788686559768394,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "97ccc1f0eaa9f4b04750d58c05f364f1d9a50fca338c08c685d9f7bca4ce3975": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm possesses a specific methodology artifact, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 778,
+    "latency_s": 2.7256992500042543,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 41
+   }
+  },
+  "99b44412046dfe149426d1e0647ee5b13a4531bb55ebf8b4474315d0d5f04271": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific reusable artifact (a financial due diligence checklist) exists in the firm's repository, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.6428548960248008,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 52
+   }
+  },
+  "9aabaf15fd80232e9f97625a8e31f953f12cca9f3edae182433e7cc8f9645cff": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has a specific, reusable framework artifact for sequencing a digital transformation roadmap, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 3.415460371004883,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "9ac5ed71fcf0ef92083c173dad40af2210613161f5beab49bd233930f03a5970": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is asking for a briefing to get up to speed ahead of a new staffing starting Monday, which is a classic topic-synthesis scenario rather than a request for a single existing document.\"}",
+   "usage": {
+    "input_tokens": 790,
+    "latency_s": 1.0205096309946384,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "a1f724fc1f0488cec01e871a638f8ee1da37239987faa12d1d54dad6d5a547e2": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The query describes a live client need (refreshing a long-range strategic plan) and asks for the firm's approach to serve that engagement, which is a briefing/synthesis need rather than a lookup for a single existing artifact.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 2.0160588680009823,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 61
+   }
+  },
+  "a1ff94d73a25d7052874850115c97f1ee1706da14b026729c61ab164e967e6c7": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact (a stakeholder mapping template for change programs) exists in the firm's repository, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 782,
+    "latency_s": 3.346977010020055,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 53
+   }
+  },
+  "a25563d7bbac2a9245c92f5058f01ce6529b849fb4ef631658e0209d54d8281d": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The query is framed around an urgent client deadline and the need to quickly get up to speed on a broad topic, indicating a briefing/synthesis need rather than a search for a single existing artifact.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 1.3689427159843035,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "a2a02d430050309cdbfc6dbd880c3bca5d3181e7c37eb14321a7e38e09d75dde": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing perspective or artifact on a specific topic (value-based contracting in pharma), which is a direct document lookup request with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.1116105089895427,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 60
+   }
+  },
+  "a3390e9a3daebd0f020c66592d3eaef2af1838fe1be5245c7727e2e5d0f2aeb7": {
+   "text": "Yes. Meridian has a dedicated **Value-Based Pricing framework** (Source [1]) that sits under the broader Pricing Strategy methodology (Source [2]).\n\n**What the framework covers (Source [1])**\n- **When to use it**: Differentiated products where value can be quantified in the customer’s own economic terms (e.g., clinical outcomes/total cost of care in pharma/medtech; productivity or cost-avoidance in enterprise software/industrial equipment). Not suited for commoditized categories.\n- **Four-step framework**:\n  1. **Build the value model** — quantify customer-side impact vs. next-best alternative in the buyer’s units (cost per outcome, TCO, productivity gain).\n  2. **Determine value share** — price to capture a portion of quantified value, leaving the customer a visible net benefit.\n  3. **Validate with the customer** — test the value story directly with payers/buyers before finalizing price.\n  4. **Build the access/adoption case alongside the price** — tailor the value dossier to the specific evidentiary standard of the reimbursement/procurement gate.\n- **Worked example**: Specialty pharma launch where shifting from cost-plus-adjacent logic to a total-cost-of-care value model supported a materially higher price, contingent on pre-planned evidence generation.\n- **Common pitfalls**: value stories that don’t survive buyer scrutiny; full value capture (leaving no buyer incentive); treating value-based pricing as a one-time exercise (models stale in 2–3 years).\n\n**How it fits the broader pricing toolkit (Source [2])**\n- The Pricing Strategy overview positions value-based pricing as the highest-margin logic where differentiation is provable, alongside competitive pricing (commoditized segments) and cost-plus (fallback only). It emphasizes segmenting by willingness-to-pay driver and piloting price changes before full rollout.\n\n**Related context**\n- Source [3] notes that the same disciplined value-modeling approach is even more critical for value-based contracting in pharma.\n- Sources [4] and [5] are companion methodologies (Price Elasticity Analysis, Competitive Pricing Response) linked from the parent Pricing Strategy framework.",
+   "usage": {
+    "input_tokens": 1776,
+    "latency_s": 6.297278963989811,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 468
+   }
+  },
+  "a4085f95e06177ea6f92b6de590c0505a41717a18e68315f3006ff9091188de8": {
+   "text": "Meridian's change management methodology is built around two core, sequenced workstreams that are applied across reorganizations, cost programs, system implementations, and post-merger integrations:\n\n**1. Stakeholder Mapping (the starting point)**  \nUsed at the outset of any significant change engagement — and revisited periodically as positions shift — this step identifies who must be engaged, their influence, and the specific sources of their resistance [1]. Common pitfalls include mapping once and never updating, treating all resistance as equal, and skipping the \"why\" behind resistance, which leads to generic messaging that fails to shift underlying concerns [1].\n\n**2. Communication Planning (the direct next step)**  \nOnce the stakeholder map is complete, a communication plan sequences and tailors what gets communicated to whom, through which channel, and at what point in the program — turning the map into an actual engagement cadence [2]. Poorly sequenced communication (too early, too late, or too generic) is cited as one of the most common ways well-designed change programs lose organizational support [2].\n\n**Integration with other workstreams**  \n- Operating model design explicitly treats the change management workstream (stakeholder mapping and communication planning) as core to the engagement, not an afterthought, because model changes affect careers, reporting relationships, and status [3].  \n- Workshop facilitation references both frameworks: stakeholder mapping determines who must be in the room, and communication planning governs how outcomes are shared [5].\n\nIn practice, the methodology moves from **diagnose (stakeholder map)** → **plan (communication cadence)** → **execute and revisit**, with both steps applied iteratively throughout the program lifecycle.",
+   "usage": {
+    "input_tokens": 1269,
+    "latency_s": 9.895744312001625,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 352
+   }
+  },
+  "a424adc55d7e7bcf7f226db0ae5b8776c89113a32cb6b806d603fd0d9f5ec3ba": {
+   "text": "Based on the records, the following people have **evidenced** scenario-planning experience with industrials clients (most recent profile update across these records: **2026-06-30** — treat as a dated snapshot and confirm current availability before reaching out):\n\n- **Akira Suzuki** — Principal, Frankfurt. Engagement lead on a scenario-planning project in industrials in 2026 and previously engagement manager on a similar industrials project in 2017; also authored the strategic-planning three-horizons methodology [2].\n- **Hassan Lopez** — Engagement Manager, London. Workstream lead on a scenario-planning project in industrials in 2024; also authored the same three-horizons methodology and holds an evidenced scenario-planning skill (level 3) [1].\n- **Nora Kowalski** — Consultant, Singapore. Workstream member on a scenario-planning project in industrials in 2025; holds an evidenced scenario-planning skill (level 3) [3].\n- **Gabriel Reyes** — Analyst, Dubai. Provided modeling support on a scenario-planning project in industrials in 2026; holds an evidenced scenario-planning skill (level 3) [4].\n\nAll four have **EVIDENCED** basis (project work and/or authored methodology). No self-reported-only matches appear for this topic.",
+   "usage": {
+    "input_tokens": 961,
+    "latency_s": 3.0649294999893755,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 297
+   }
+  },
+  "a5f2a0ffb31cec6a8d8a575e3ba6c437eb6a817d12e0e6f5c2c9b05d9f56a420": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific, named deliverable (launch pricing work for Project Kestrel) exists in the firm's repository, which is a direct document lookup request.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 1.380387529003201,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "a71d02f23cca38160c4f9e8cb0dfd7b275f25f2de640b3be328cce80828db369": {
+   "text": "Yes. **Project Juniper** was a distribution-network redesign for an Australian home-improvement retailer with 290 stores, seven distribution centres and a fast-growing online channel shipping ~40,000 orders a week [1].\n\n**What the engagement delivered**  \n- A 2030 target network model across 31 candidate sites, with store-level demand forecasts and a cost-to-serve split for bulky vs. small-parcel flows [1].  \n- Key findings: bulky goods drove 58% of transport cost from only 22% of volume; a dedicated bulky-goods DC near the Western Sydney airport corridor cut that cost by ~25%; two of the seven existing DCs could be closed (saving A$38m/year); ship-from-store for small parcels in regional areas was cheaper than any DC option [1].  \n- Outcome: the client approved the bulky-goods DC and the two closures, phased over three years [1].\n\n**Related context in the corpus**  \n- The firm’s broader view on stores as fulfillment/acquisition infrastructure aligns with the ship-from-store finding in Juniper [2].  \n- The network-optimization model specification used for this class of work is documented separately [5].  \n- Adjacent frameworks on cost transformation and scenario planning are noted as related levers [3].  \n- A separate piece on post-pandemic omnichannel inventory optimization discusses the same ship-from-store dynamics but is not specific to Juniper [4].",
+   "usage": {
+    "input_tokens": 1004,
+    "latency_s": 5.56166812198353,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 323
+   }
+  },
+  "a83e9b0cf9922213b2b22aa2a5503f80b9c0467448fe5397b79040dcbe1866e5": {
+   "text": "Yes — Meridian has two substantive pieces on open banking that are directly relevant for a client conversation.\n\n**The core thesis:** Open banking is restructuring payments, but at the pace of infrastructure and trust-building rather than fintech hype cycles. Banks that treat it as a compliance checkbox are ceding the strategic opportunity to build their own account-to-account (A2A) payment products on top of the very infrastructure they already own [1].\n\n**What’s actually happening:** Adoption has been slower than early forecasts, which has led some incumbents to dismiss the threat. Meridian’s view is that this is a dangerous misread — the curve is steepening, and the window to capture the payments-economics shift is still open [1].\n\n**Where it’s headed (scenario lens):** One plausible 2030 end-state is “embedded and invisible” payments — payment initiation disappears into commerce, logistics, and software workflows, with the visible brand belonging to the context (e.g., a SaaS platform, a marketplace) rather than the bank or payment provider. For this to materialize, three things must hold: embedded finance infrastructure becomes commoditized, liability/dispute frameworks extend cleanly to non-financial firms, and margins compress to levels only volume-scaled infrastructure players can sustain [2].\n\n**What the client should be watching (signposts):**\n- Non-financial software platforms becoming material payment volume originators\n- Dispute/chargeback frameworks extending to embedded contexts\n- Payment margins compressing to infrastructure-scale economics [2]\n\n**Strategic implication for incumbents:** The scenario-contingent decision is how much to invest in owning the customer interface versus becoming a behind-the-scenes utility. Meridian recommends treating that as a disciplined, trigger-based choice — not a conviction bet — with pre-agreed signposts that would shift investment posture [2].\n\n**Bottom line for the meeting:** Don’t let the slow start fool them. The infrastructure is live; the strategic question is who builds the next generation of payment products on top of it. Banks that move from “defend/comply” to “build/own” now are the ones positioned to capture value as the curve steepens.",
+   "usage": {
+    "input_tokens": 1566,
+    "latency_s": 6.7902259480033536,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 459
+   }
+  },
+  "ab04218b23b76779b3a3004f28ea144318106c52950378ddcc49b42f26eabe39": {
+   "text": "For a zero-based budgeting engagement, the following people have **evidenced** experience (project work or authored methodology) and should be considered first. All records are dated snapshots — the most recent profile update across them is **2026-06-30** — so confirm availability and current focus before reaching out.\n\n**Evidenced experts**\n\n1. **Daniel Lindqvist** — Partner, Cost-Transformation, New York  \n   - Authored the firm’s zero-based budgeting methodology document [1]  \n   - Served as advisor on a zero-based budgeting project in industrials (2026) [1]  \n   - Skill rated level 4 (evidenced) [1]\n\n2. **Ahmed Nakamura** — Consultant, Cost-Transformation, New York  \n   - Workstream member on zero-based budgeting projects in retail (2025) and financial services (2024) [2]  \n   - Skill rated level 5 (evidenced) [2]\n\n3. **Victor Wang** — Consultant, Cost-Transformation, Chicago  \n   - Analyst on zero-based budgeting projects in technology (2026) and retail (2024) [3]  \n   - Skill rated level 5 (evidenced) [3]\n\n4. **Hiroshi Bauer** — Engagement Manager, Cost-Transformation, New York  \n   - Co-authored the zero-based budgeting methodology document [4]  \n   - Workstream lead on a zero-based budgeting project in financial services (2019) [4]  \n   - Skill rated level 4 (evidenced) [4]\n\n5. **Camila Wagner** — Consultant, Cost-Transformation, New York  \n   - Workstream member on zero-based budgeting projects in industrials (2025) and financial services (2023) [5]  \n   - Skill rated level 4 (evidenced) [5]\n\nAll five have **EVIDENCED** basis — no self-reported-only matches appear in the data.",
+   "usage": {
+    "input_tokens": 876,
+    "latency_s": 6.041496952995658,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 452
+   }
+  },
+  "af8abf5553f7404fef27c13197f3423a22d6f2827efeb0e3ef0f526519ae0b74": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is preparing for a client meeting on a specific topic (launch pricing for a specialty drug with value premium uplift) and explicitly asks to be caught up, indicating a need for a synthesized briefing across multiple sources rather than a single document or person.\"}",
+   "usage": {
+    "input_tokens": 801,
+    "latency_s": 1.109111338009825,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 67
+   }
+  },
+  "b0790af1201db3457a4252b5de7d7fdf8f70579a2fd0dd4b0be78d03e61a1c31": {
+   "text": "The engagement summary for **Project Aurora — Insurer GenAI Rollout** is captured in source [1]. It covers the Canadian property & casualty insurer (4.5 M policies), the scope (use-case prioritization, governance/model-risk controls, 24-month value case), the approach (37 pilots assessed, model-risk framework aligned to regulator guidance, adoption plan for 3,100 adjusters), key findings (FNOL summarization −23% handling time, commercial triage highest value but required human review, 22 pilots stopped for lack of baseline), and the outcome (two use cases scaled nationally, model-risk committee reporting to the CRO).",
+   "usage": {
+    "input_tokens": 527,
+    "latency_s": 2.9017110530112404,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 141
+   }
+  },
+  "b37fe19fba408381e98a26c361d24856c9d58879fd005481bc644d3617707f58": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact (a workforce planning framework) exists in the firm's knowledge base, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 778,
+    "latency_s": 1.1516645890078507,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "b58b0150b38f466156b1121a8236ad57fe64121945166873eb75f694606dddfd": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is being staffed on a new engagement and explicitly asks to be brought up to speed on the firm's approach, which is a classic onboarding briefing request rather than a lookup for a single artifact.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 1.1872354400111362,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 58
+   }
+  },
+  "bb0f7ad8ff5a9d559bd5d5100fd617e0829d7750fdfaf2b7bd0cb8aabceb2e8a": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with expertise in supply chain network optimization, which is a direct expertise-finding request.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 1.6783927640062757,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 39
+   }
+  },
+  "bb15cd5d38e01c26d5e238daf0afa6e23d46082956ab5c92e958e00992eda5e3": {
+   "text": "Based on Meridian's corpus, the framing for whether AI investments are delivering value centers on **measurement discipline and governance maturity** — not adoption metrics or a single ROI figure.\n\n**The core problem:** Most enterprises measure AI value using frames borrowed from traditional automation (throughput, license counts, pilot volumes), which systematically misrepresent how AI-driven productivity gains actually appear [1]. These activity metrics rise quickly but describe motion, not capability [2].\n\n**What credible evaluation looks like:**\n- **Workflow-by-workflow tracing** — not a blended enterprise ROI — that links specific deployments to specific downstream business outcomes, using capacity-reallocation and quality-adjusted metrics [1].\n- **Portfolio-level value tracking with deliberate retirement** — the clearest signal of maturity (Stage 5) is subtractive: the organization can say which use cases are *not* worth continuing and has acted on it [2]. An organization that has never retired a GenAI deployment either has an implausible hit rate or isn't measuring honestly [2].\n- **Governance and measurement embedded from day one** — the fastest progress comes from proving discipline in a narrow, well-scoped use case before expanding, mirroring how institutions built trust in quantitative risk models over decades [5].\n\n**Practical framing for the client:**\n1. **Ask for the retirement list** — which deployments have been switched off? If the answer is \"none,\" the measurement isn't honest [2].\n2. **Replace the single ROI ask** with a workflow-level view that shows where value is concentrated and where investment is being consumed without return [1].\n3. **Assess governance maturity** — are new use cases going through standard change governance (Stage 5), or is AI still a special, exception-driven process [2]?\n4. **Look for capacity-reallocation evidence** — not just \"time saved\" but where freed capacity was redeployed to higher-value work [1].\n\nThe corpus doesn't have a dedicated \"AI value realization audit\" framework, but these pieces — from the AI adoption maturity model [2], the ROI measurement critique [1], and the risk-function governance pattern [5] — form a coherent lens: **value shows up in what you stop doing, not just what you start.**",
+   "usage": {
+    "input_tokens": 1599,
+    "latency_s": 11.54708266200032,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 464
+   }
+  },
+  "bb16b83266982dde218f0da0d9be0359590100f812e5a08c552f68c63fea18bb": {
+   "text": "Based on the records provided, **none of the listed consultants have documented expertise in open banking or payments**. All five profiles show experience and skills specifically in **core banking** (modernization, build-vs-buy decisions, implementation projects), but no projects, authored materials, or evidenced skills mention open banking, APIs, PSD2, payment rails, or related topics.\n\nThe most recent profile update across these records is **2026-06-30** (Zoe Silva and Felix Abbas). Expertise data is a dated snapshot and may be out of date — confirm current focus and availability before reaching out.\n\nIf you need someone with open banking or payments experience, we don’t have an obvious expert in this set. You may want to search broader profiles or check for consultants with fintech, API strategy, or payment-systems project history not captured here.",
+   "usage": {
+    "input_tokens": 929,
+    "latency_s": 5.749486162996618,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 177
+   }
+  },
+  "bb29aeebceea1c86703ee982d4a144ebcd86cfccdd766b81b4d5df47e03d5f74": {
+   "text": "Based on the records, five people have **evidenced** expertise in pharma pricing (all with EVIDENCED basis). The most recent profile update among them is **2026-06-16** (Layla Suzuki), so treat this as a dated snapshot and confirm availability and current focus before reaching out.\n\n**Evidenced experts**\n\n1. **Layla Suzuki** — Engagement Manager, pricing practice, Dubai office  \n   - Led a pharma-pricing project in pharma as engagement manager (2021) and as workstream lead (2020) [2]  \n   - Holds pharma-pricing skill at level 5 (evidenced) [2]  \n   - Authored the thought-leadership piece *private-label-strategy-inflation.md* [2]\n\n2. **Rania Tremblay** — Engagement Manager, pricing practice, Toronto office  \n   - Authored the thought-leadership document *pharma-value-based-contracting.md* [3]  \n   - Holds pharma-pricing skill at level 5 (evidenced) and value-based-pricing skill at level 2 (evidenced) [3]\n\n3. **Antoine Keller** — Engagement Manager, pricing practice, Sydney office  \n   - Led a pharma-pricing project in pharma as engagement manager (2024) [4]  \n   - Authored the methodology document *pricing-strategy-value-based-pricing.md* [4]  \n   - Holds pharma-pricing skill at level 4 (evidenced) [4]\n\n4. **Felix Khan** — Engagement Manager, pricing practice, Singapore office  \n   - Served as workstream lead on pharma-pricing projects in healthcare-providers (2021) and pharma (2019) [5]  \n   - Also workstream lead on a value-based-pricing project in pharma (2019) [5]  \n   - Holds pharma-pricing skill at level 3 (evidenced) [5]\n\n5. **Nora Bouchard** — Consultant, pricing practice, Frankfurt office  \n   - Worked as analyst on a pharma-pricing project in pharma (2025) [1]  \n   - Holds pharma-pricing skill at level 3 (evidenced) [1]\n\nAll five have project or authorship evidence behind their pharma-pricing skill. No self-reported-only matches appear in the records.",
+   "usage": {
+    "input_tokens": 989,
+    "latency_s": 8.684874830010813,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 545
+   }
+  },
+  "bbae434efa77aaa2999419144f3316fb53dd061681378188698adda2079e595f": {
+   "text": "The worked example you're looking for is in **Source [2] — \"Pricing Strategy: Elasticity Calculation Reference\"**. It contains a complete, runnable Python specification for estimating price elasticity from transaction data using a log-log regression with controls for seasonality, promotions, competitor pricing, and store fixed effects, plus the exact breakeven elasticity formula and a numeric substitution example (price = 10.00, variable cost = 8.00 → contribution margin = 20% → breakeven |e| = 5.0) [2].\n\nSource [1] provides the higher-level methodology (when to use elasticity, the four-step framework, and common pitfalls) but does not include the calculation code or the worked numeric example.",
+   "usage": {
+    "input_tokens": 2317,
+    "latency_s": 7.43396297498839,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 158
+   }
+  },
+  "bbf34208820e1cf7029b594e568c9364031567e508f965ac7efa5a1aaef2e945": {
+   "text": "Meridian's approach to refreshing a long-range strategic plan centers on **matching the planning method to the type of uncertainty the client faces**, then structuring the portfolio of initiatives to balance near-term performance with future resilience, and embedding execution discipline from the start.\n\n**1. Diagnose the uncertainty first — then choose the planning lens**  \nIf the client operates in a structurally uncertain environment — regulatory shifts, technology disruption, geopolitical or trade-policy changes, commodity volatility — **scenario planning** is the right starting point [1]. It builds a small set of internally consistent, materially different future states and stress-tests strategic choices across all of them, avoiding the fragility of single-point forecasts that understate risk [1]. This is especially critical for capital-intensive clients making long-lived, hard-to-reverse investments (e.g., new facilities, multi-year supply chain reconfigurations) [1].\n\n**2. Structure the initiative portfolio across three horizons**  \nRegardless of the planning lens, Meridian uses the **Three-Horizons Framework** to make the current allocation of investment and leadership attention explicit — and then deliberate [2].  \n- **Horizon 1**: Core business defense and extension (lower risk, near-term payback)  \n- **Horizon 2**: Adjacent markets, new business models (2–5 years to scale, higher uncertainty)  \n- **Horizon 3**: Exploratory bets (5+ years, high uncertainty, option value) [2]  \n\nMost organizations default to 90%+ in Horizon 1 [2]. The refresh should **set a deliberate target allocation** based on industry clock-speed and the client’s specific disruption threat — a stable industry can stay Horizon-1-heavy; a fast-moving one needs material investment in Horizons 2 and 3, even at near-term margin cost [2]. Critically, **governance must differ by horizon**: standard ROI discipline for H1, but learning velocity and option-value metrics for H3 so long-horizon bets aren’t killed prematurely [2].\n\n**3. Sequence the roadmap to sustain sponsorship and adaptability**  \nA multi-year plan fails if it’s either all foundational with no visible wins, or all customer-facing work on a shaky foundation [3]. The roadmap must **interleave foundational dependencies with tangible value delivery** to keep organizational sponsorship alive [3]. Equally important: **build in explicit reassessment points** so the plan doesn’t become stale and get followed past its usefulness just because changing it feels disruptive [3].\n\n**4. Embed change management from day one**  \nA refreshed strategy only lands if the communication plan **sequences by audience readiness, not convenience** — high-influence and directly affected stakeholders hear first, through trusted channels (often their direct manager) [4]. Messages must be tailored: strategic rationale for leaders, concrete personal impact for frontline staff [4]. The plan must include **two-way channels to surface concerns early** and a **deliberate cadence of updates — even “no new decision yet” — to prevent rumor-filled vacuums** [4].\n\n**5. Ensure execution discipline on cost and capability**  \nIf the refresh includes cost transformation, avoid the trap of **analysis without a delivery plan** (named owners, tracked milestones) [5]. Don’t cut below the **capability floor** needed to serve customers — aggressive cuts that damage service quality create bounce-back costs harder to fix than the original problem [5]. And always **benchmark against peers** so savings targets are defensible, not arbitrary [5].\n\n**In practice**: Start by clarifying the client’s uncertainty profile. If structural uncertainty dominates, lead with scenario planning to define the future states. Then apply the Three-Horizons lens to rebalance the portfolio deliberately. Sequence the resulting roadmap to deliver visible value while building foundations, with built-in review gates. Wrap it all in a stakeholder-tailored, two-way communication cadence. And if cost reset is part of the plan, anchor it in benchmarked targets, named accountability, and a protected capability floor.",
+   "usage": {
+    "input_tokens": 1592,
+    "latency_s": 12.463335449981969,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 857
+   }
+  },
+  "bc51c6cace508f4af075fc885d6ff0aac914140ace3ad0b9bb0ca1110b09b8fc": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with specific expertise in scenario planning for industrials clients, which is an expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 781,
+    "latency_s": 1.324751934997039,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 41
+   }
+  },
+  "bd5994e4fe35843654a950e3e01c95b29cef3392c90ddec59c7edf704e9c298b": {
+   "text": "Yes — Meridian has a dedicated **RACI and Governance Design** framework that serves as the firm's template for operating model work. It's captured in source **[1]**, which provides:\n\n- **When to use it** — during operating model diagnostics when ambiguous accountability is causing slow decisions or duplicated effort, or as a standalone tool for cross-functional process clarity\n- **A 4-step framework** — select decisions/activities to map, assign exactly one \"Accountable\" per row, keep Consulted/Informed lists disciplined, and design governance cadence around the RACI\n- **Common pitfalls** — multiple Accountable owners, treating RACI as a one-time document, and over-consulting\n- **Related frameworks** — it's explicitly linked to operating model design (parent), organization design principles, and stakeholder mapping\n\nSources **[2]**, **[3]**, and **[4]** reference this RACI framework as a related or child component of the broader operating model design methodology, but **[1]** is the actual template/framework document.",
+   "usage": {
+    "input_tokens": 1059,
+    "latency_s": 4.6092926540004555,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 221
+   }
+  },
+  "be02409dfd6cc9f0eec13d53bda1e72f8e8fd2f0af267bb24015dabaac9f2685": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact — a zero-based budgeting template with decision packages ranked by a finance committee — exists in the firm's knowledge base, with no client situation or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 5.696064638003008,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 56
+   }
+  },
+  "c39dfbad11f4a5f0913f4ef30df0b101f47642b471c4ee796acc0b2df34dbabc": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has an existing artifact — a point of view — on a specific topic, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 786,
+    "latency_s": 1.2032210579782259,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 50
+   }
+  },
+  "c6e78ecc4cbb0e24d2680c4b1663fd3cb69b5fbefc20e3c4992cc71a21ff858a": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific, named engagement artifact (Project Granite transport ministry operating model work) exists in the firm's repository, which is a direct prior-work/document lookup.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 3.0327578620053828,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 52
+   }
+  },
+  "c7a2132bbb39cd43c36417856d8a08aa9c22db304e07060aca0d7feb772dc4a6": {
+   "text": "Yes — **Project Lantern** is documented in the corpus as a cost transformation for a Midwestern US regional bank ($62 bn assets, 410 branches, 68 % cost‑income ratio). The engagement summary [1] covers:\n\n- **Scope:** Target $300 m run‑rate savings over three years without cutting frontline lending capacity, plus governance design.  \n- **Approach:** Zero‑based budgeting across 14 corporate cost pools, branch‑network rationalisation using branch‑level profitability, and an operations spans‑and‑layers review of ~9,800 FTE.  \n- **Key findings:**  \n  - Corporate functions had 1.9× peer median management layers; flattening from nine to six layers released **$85 m**.  \n  - 96 sub‑breakeven branches with an overlapping branch within two miles; consolidation released **$110 m** (modelled deposit attrition < 3 %).  \n  - Third‑party spend (IT contractors, market data) yielded **$70 m**.  \n- **Outcome:** Bank committed to **$310 m** of savings, with branch consolidation phased over 18 months to manage regulatory/community commitments.\n\nIf you need the full slide deck, detailed work‑papers, or the governance framework used, those would be stored in the engagement folder for Project Lantern — let me know if you’d like help locating that.",
+   "usage": {
+    "input_tokens": 1551,
+    "latency_s": 6.852772294019815,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 320
+   }
+  },
+  "c937b73bcd1b696bd599010f3c97f35b9f1cfc7c5eae53dd34abe46c093a17a5": {
+   "text": "Yes — we have a dedicated engagement summary for Project Tamarind.  \n\n**Source [1]** is the full integration summary: it covers the client context (a $3.4 bn acquirer merging with a $1.1 bn family‑owned salty‑snack maker, 11 plants and two DSD networks), the scope (standing up the IMO, Day 1 planning, validating the $180 m synergy case), the approach (nine workstreams, 240‑item Day 1 critical path, bottom‑up synergy validation), key findings (distribution synergies overstated, procurement synergies achievable, founder‑led sales culture as retention risk), and the outcome (clean Day 1 close, revised $165 m synergy case communicated to investors).  \n\nThe other sources are related frameworks (Day 1 runbook, IMO setup, synergy quantification) but do not contain the Project Tamarind summary itself.",
+   "usage": {
+    "input_tokens": 995,
+    "latency_s": 4.646309870004188,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 209
+   }
+  },
+  "c99c71ae75e4267af6d37fd290042339449938a8b4199783e014552479e66d9e": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has produced a specific artifact — a publication on GenAI adoption maturity — which is a direct document-lookup request with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 3.4530315049923956,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 58
+   }
+  },
+  "cdcf95903075b3841866d3e3783c2eb4f5be4f52f301118058f0fcf803194402": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is being staffed on a new engagement and needs a rapid briefing to get up to speed, which is a classic topic-synthesis scenario.\"}",
+   "usage": {
+    "input_tokens": 789,
+    "latency_s": 1.5307885209913366,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 46
+   }
+  },
+  "d31a4d6841b71d1b7ca9ba1987f4e42e861754d8bb3f1287e2e2c24e09384fdc": {
+   "text": "Based on the engagement summary for Project Cobalt [1], the recommendation for the Nordic bank's core banking replacement was:\n\n**A progressive, product-by-product migration over 30 months** — starting with savings accounts — rather than a big-bang cutover. This approach carried **one-third the outage risk** of a big-bang migration at **12% higher total cost**.\n\nThe board approved this approach and required a **scale proof-of-concept from the shortlisted cloud-native vendor** before contract signature, as that vendor had no reference client above 1 million customers. The total programme cost was estimated at **€410m**, with run-cost savings of **€55m/year from year four**.",
+   "usage": {
+    "input_tokens": 2146,
+    "latency_s": 1.97533431899501,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 149
+   }
+  },
+  "d5fe7c22d54ecf42651f1c152370723fc1fcc0d275c062b7a9d7169bacc4d21f": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking who to involve on a specific type of engagement, which is a request to identify people with relevant expertise rather than documents or topic synthesis.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.6329683819785714,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 46
+   }
+  },
+  "d644427108e824c8b34b0be5558a437de05af605c336d8ca4605c68242073083": {
+   "text": "Meridian's thinking on private label strategy in an inflationary environment centers on a critical shift: **the customers trading down into private label this cycle are fundamentally different from prior cycles, and strategies built on old behavioral assumptions leave value on the table** [1].\n\n**The core insight:** Inflation reliably drives private label penetration up every cycle, but the *nature* of the trade-down customer has changed. Today's inflation-driven triers are not traditional value-seekers — they're former national-brand buyers evaluating private label against the quality bar of the brands they left. If the quality perception doesn't hold up, the trial doesn't convert to retained loyalty once price pressure eases [1].\n\n**What winning retailers are doing differently:** They're treating this inflationary window as a **brand-building opportunity, not just a value-tier price play**. The retailers capturing *durable* share gains (rather than gains that evaporate post-inflation) share a pattern: they invest in genuine brand equity — quality perception, packaging, distinct category positioning — so that first-time private label buyers experience a product that meets their national-brand expectations [1].\n\n**Strategic implication for your client:** A private label strategy anchored purely in price gap maintenance will capture transitory volume but fail to convert triers into loyalists. The play is to use the current traffic surge to **build a private label brand that stands on quality and positioning merits**, creating a retention engine that outlasts the inflation cycle.\n\n*(Note: Meridian's corpus has a focused perspective on the strategic/brand dimension of private label in inflation [1]. It does not contain specific frameworks on private label assortment architecture, sourcing economics, tiering strategies, or retailer case studies beyond the pattern described above.)*",
+   "usage": {
+    "input_tokens": 1467,
+    "latency_s": 9.976995233999332,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 358
+   }
+  },
+  "d6dcdb1b6189100f5ba7eda53e51e3ce844da6fb33a7fa7b13ee7b25c283a2ee": {
+   "text": "Yes — Meridian has done GenAI work in financial services, specifically in **retail banking risk functions**.\n\n**Directly relevant source**  \n[2] *Generative AI in Retail Banking Risk Functions: Beyond the Chatbot* — This piece treats GenAI deployments inside credit, fraud, and compliance workflows as a governed capability, not a pilot. It outlines three non-negotiable disciplines (groundedness, human accountability, model-risk governance) and describes the adoption pattern Meridian has observed: start narrow, embed governance from day one, then expand. This is a concrete financial-services GenAI engagement framework.\n\n**Related / background reading**  \n[1] *The GenAI Adoption Maturity Model: Five Stages* — A cross-industry maturity model (governance, measurement, scope) that Meridian uses to assess where enterprises actually are versus where they say they are. Useful for positioning any FS client on the curve.  \n[3] *Payments in 2030: Four Scenarios for Open Banking* — Strategic scenarios for embedded/invisible payments; no GenAI content, but relevant if the user’s interest extends to broader FS transformation work.",
+   "usage": {
+    "input_tokens": 1886,
+    "latency_s": 8.025825807009824,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 248
+   }
+  },
+  "d9ff9dd131a1be8e893d111e29a4c14ad70953b7a98cf865792371777e1ae5cc": {
+   "text": "Meridian's market entry approach is a **four-stage, gate-driven framework** that moves from decision framing through sizing, competitive assessment, and entry-mode selection — with explicit go/no-go checkpoints at each transition. The methodology is designed to avoid the most common failure mode: jumping straight to a TAM spreadsheet before agreeing on what \"success\" looks like [1].\n\n---\n\n### **Stage 0: Frame the Decision (Before Any Analysis)**\n- **Agree a written \"success bar\"** — a revenue or share threshold the client will commit to. Without this, any market size number has no decision attached to it [1, 4-Gate 1].\n- **Map capability gaps up front** — distribution, regulatory relationships, brand recognition. A large, attractive market can still be a bad entry if the client lacks the capabilities to compete and cannot close the gaps in the available time [1, 4-Gate 4].\n\n---\n\n### **Stage 1: Market Sizing (TAM → SAM → SOM)**\n- **Define the funnel**: TAM (total category demand), SAM (portion the client could serve given geography/regulatory/product fit), SOM (portion the client can realistically capture given competition, GTM capability, and time horizon) [5].\n- **Build two independent estimates**:\n  - *Top-down*: start from published industry data and filter down with documented logic.\n  - *Bottom-up*: build from unit economics (potential customers × penetration × ARPU) — slower but more defensible because every input is inspectable [5].\n- **Triangulate**: if top-down and bottom-up diverge by >30%, the gap itself is a finding — it usually reveals a flawed assumption in one method [5].\n- **Sensitize, don't pinpoint**: present a range (conservative/base/aggressive) and identify which assumption drives the most variance — that's where client and team attention should focus [5].\n- **Gate 2**: sizing passes only when both methods are within ~30% [4-Gate 2].\n\n---\n\n### **Stage 2: Competitive Landscape Mapping**\n- **Assess likely incumbent response** — price cuts, marketing spend increases, product roadmap acceleration. A market that looks open can close quickly if incumbents are well-capitalized and motivated to defend share [2].\n- **Identify \"white space\"**: a defensible position the client can own. If every segment is contested by a stronger incumbent, the entry fails Gate 3 [2, 4-Gate 3].\n- This stage sits **after sizing, before entry-mode recommendation** — but can also stand alone when a client already knows the market is big enough and just needs a competitive read [2].\n\n---\n\n### **Stage 3: Entry Mode Selection (JV, Acquisition, Greenfield)**\n- **Final stage**, triggered only after a sized opportunity and a competitive read exist [3].\n- The **binding constraint from competitive mapping** (e.g., speed to market, regulatory access, brand credibility) shapes the mode choice [3].\n- Can also be used standalone when a client has already committed to entering and just needs help choosing the mode [3].\n- If acquisition is recommended, this links directly to **M&A integration — Day 1 readiness planning** and **commercial due diligence** for pre-acquisition validation [3, 6].\n\n---\n\n### **The Four Gates (Steering Committee Quick Reference)**\n| # | Gate | Passes When | Fails When |\n|---|------|-------------|------------|\n| 1 | Success bar agreed | Client has stated a revenue/share threshold in writing | \"We'll know it when we see it\" |\n| 2 | Size triangulated | Top-down and bottom-up within ~30% | Single-method estimate only |\n| 3 | White space real | An identified, defensible position exists | Every segment is contested by a stronger incumbent |\n| 4 | Capability credible | Distribution, regulatory, and brand gaps are closable in the time available | The gap needs a capability the client has never built |\n\n[4]\n\n---\n\n### **Key Principles That Differentiate Meridian's Approach**\n- **Go/no-go is rarely binary** — most engagements land on a *conditional* recommendation (enter via partnership, enter a sub-segment first, wait 18 months) rather than a clean yes/no. Don't force false precision [1].\n- **Sizing without framing is wasted work** — analysts default to building a TAM model in week one because it feels like progress, but without an agreed success bar, the number has no decision attached [1].\n- **Competitive response is a sizing input, not an afterthought** — incumbent reaction can shrink SOM materially, so landscape mapping feeds back into the sizing sensitivities [2, 5].\n- **Commercial due diligence reuses the same toolkit** — when the entry mode is acquisition, the market sizing and competitive landscape techniques are applied to *validate* the target's market and stress-test management's growth plan [6].\n\n---\n\n### **Where to Start on Your Engagement**\n1. **Read the Overview [1]** — it's the entry point to the toolkit and links to the three companion methodologies.\n2. **Lock Gate 1 immediately** — get the success bar in writing before any modeling begins.\n3. **Run sizing and competitive mapping in parallel** — they inform each other (competitive intensity shapes SOM; sizing reveals which segments are worth fighting for).\n4. **Bring entry-mode thinking into competitive mapping** — the binding constraint you identify (e.g., \"we need regulatory relationships in 6 months\") will dictate whether the answer is JV, acquisition, or greenfield [3].\n5. **Prepare the Four Gates slide [4]** for the first steering committee — it forces the team to be honest about what's proven and what's not.",
+   "usage": {
+    "input_tokens": 1469,
+    "latency_s": 20.428550576994894,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 1234
+   }
+  },
+  "da34abb3212541fd7e6e38db4450ffc67dc3ca96e0f5740617112f7241f68b1a": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether a specific artifact (a value premium uplift scorecard for pricing a differentiated drug over cost) exists in the firm's knowledge base, with no client situation, onboarding, or time-pressure framing.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 1.9941828750015702,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 60
+   }
+  },
+  "daabab26fd16e76fd7284fcb1575d982268eb6e0e76321822a6394dfd3b0852e": {
+   "text": "Yes — Meridian has a dedicated framework for exactly this situation.\n\n**Primary source:** **[1] Pricing Strategy: Competitive Pricing Response**  \nThis framework walks through a disciplined, four-step process for deciding *whether* and *how* to react when a competitor cuts price:\n\n1. **Classify the competitor move** — strategic repositioning, tactical/promotional, or distress signal.  \n2. **Assess exposure** — quantify which customer segments are actually at risk (not all are equally price-sensitive or exposed).  \n3. **Choose a response type** — options include selective/targeted matching, value-add responses (bundles, service, loyalty), or deliberate non-response in low-value segments.  \n4. **War-game the second-order response** — model at least one round of competitor reaction before committing, especially in concentrated markets.\n\nIt also flags common pitfalls: reflexive full price-matching, misclassifying a strategic move as tactical, and skipping second-order thinking.\n\n**Supporting sources** (useful if the response involves a price change of your own):  \n- **[2] Pricing Strategy: Price Elasticity Analysis** — quantifies demand response to price changes and translates elasticity into a price-volume-margin trade-off.  \n- **[3] Pricing Strategy: Elasticity Calculation Reference** — warns against quoting revenue rules as profit rules, reporting point estimates without intervals, and ignoring cross-price effects.  \n- **[4] Pricing Strategy: Overview** — broader pricing logic (cost-plus, competitive, value-based) and the importance of segmenting before setting price.",
+   "usage": {
+    "input_tokens": 1940,
+    "latency_s": 6.698277022980619,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 337
+   }
+  },
+  "dbe6cca166776d053d3acd75ade340859b0aa0a5557219509bfc66f101f139b2": {
+   "text": "Yes — Meridian has a **Cost Transformation playbook** structured as a parent framework with three companion technique pages. The core page is **Cost Transformation: Overview** [2], which lays out the end-to-end approach (baseline & benchmark → identify lever mix → size & sequence → build case for change & governance) and the common pitfalls that derail programs. It explicitly calls out three levers — structural, process, and zero-based reset — and points to the detailed pages for each.\n\nThe three technique pages that complete the playbook are:\n\n- **Cost Transformation: Zero-Based Budgeting** [1] — step-by-step ZBB framework (define pools, build from zero, benchmark externally, negotiate & lock), a worked retail example, and pitfalls (e.g., using ZBB as covert cost-cutting, skipping re-baselining discipline).  \n- **Cost Transformation: SG&A Benchmarking** [3] — when to use external SG&A benchmarks early in an engagement or standalone for board-level “are we too expensive” questions.  \n- **Cost Transformation: Procurement Cost Reduction** [4] — when to deploy procurement as a lever within a broader program or standalone when procurement spend is the primary target.\n\nA reference page, **Cost Transformation: SG&A Cost Ratio Benchmark Reference** [5], sits behind the SG&A benchmarking page for the actual ratio data.\n\n**Bottom line:** The playbook exists as a linked set — start with [2] for the overall program logic, then dive into [1], [3], or [4] depending on which lever(s) the engagement needs.",
+   "usage": {
+    "input_tokens": 1581,
+    "latency_s": 7.698896894988138,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 336
+   }
+  },
+  "dd3f41942cfe7a9decd36af75dbed0908c1217419aee715b7bc2b57134a35680": {
+   "text": "{\"archetype\": \"D\", \"reasoning\": \"The user is explicitly asking to compare the M&A integration approach used for two specific named clients, which requires pulling and contrasting details from distinct client engagements.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.5748892889823765,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 45
+   }
+  },
+  "de0dab10e8b0e571660d3f5b0ef80dc2ff86b53e6774d9f7076b17886bcda80d": {
+   "text": "Yes — Meridian has a **Financial Due Diligence Checklist** that you can reuse. It’s captured in source [1] and includes both the conceptual framework and a concrete checklist of standard review areas.\n\n**What the checklist covers (from [1]):**\n- **Quality of earnings (QoE) analysis** — normalizing EBITDA for one-offs, related-party transactions, and accounting policy choices\n- **Working capital normalization** — establishing a seasonally adjusted target for the purchase agreement\n- **Net debt and debt-like items** — identifying all obligations (including underfunded pensions, deferred consideration, onerous leases) that reduce enterprise value to equity value\n- **Standard review areas checklist:**\n  - Revenue recognition policy and recent changes\n  - Customer concentration and contract terms (especially change-of-control clauses)\n  - Related-party transactions\n  - Capex history vs. maintenance capex requirements\n  - Tax position and open tax exposures\n  - Off-balance-sheet commitments and contingent liabilities\n\n**Also available:**\n- A detailed **Information Request List for Debt and Debt-Like Items** ([3]) — e.g., full debt schedule, pension valuation, deferred consideration, lease schedule, onerous contracts, related-party balances, guarantees/indemnities\n- A **Red Flag Reporting** framework ([2]) for escalating material findings in real time during diligence\n\n**Related frameworks** (for context): Commercial Due Diligence Overview [4], Synergy Quantification [5].",
+   "usage": {
+    "input_tokens": 1638,
+    "latency_s": 3.365649006998865,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 315
+   }
+  },
+  "de147f470b4068b20b9f6c701d35c363b3b62f6ffbf0d8d06ca4816dfd1f0091": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is describing a live client need and asking for the firm's thinking to prepare for an engagement, which is a briefing request rather than a lookup for a specific artifact.\"}",
+   "usage": {
+    "input_tokens": 785,
+    "latency_s": 1.1788177120033652,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "dff2179f8f2b55fd1cff1a0143ea96b97cc8cfd64690036b8ac9e6310deaf35c": {
+   "text": "Yes — **Project Marigold** is exactly that engagement. The summary shows Meridian built a five-year hospital nursing workforce plan for a nine-hospital system in the US Southeast (3,600 beds, 14% nursing vacancy rate) [1].\n\n**What the project delivered**\n- Demand forecasting by service line and unit, a nursing supply model (pipeline, attrition, retirement), and a cost comparison of agency staffing vs. an internal float pool [1].\n- Key findings: agency nursing cost $212 M/yr (2.4× employed cost); a 450-nurse internal float pool could cut agency spend by $95 M/yr within three years; first-year nurse attrition of 27% was the largest controllable gap driver, and a structured residency program was projected to halve it [1].\n- Outcome: the system launched the float pool and a nurse residency program, reducing agency spend by a third in the first year [1].\n\nThis is the only source returned for “Project Marigold,” and it directly describes the hospital nursing workforce plan you’re looking for.",
+   "usage": {
+    "input_tokens": 531,
+    "latency_s": 6.490033604990458,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 234
+   }
+  },
+  "e037f3f85ad05340a6ad473425d89c6e8fb8fbf5aeed82d88bdc705060ecd45c": {
+   "text": "Yes — Meridian has a dedicated **M&A Day 1 Readiness Planning** framework and a companion **Day 1 Runbook (T-30 to T+7)** that operationalizes it.\n\n**Core framework** – [1] *M&A Integration: Day 1 Readiness Planning*  \n- Defines the four-pillar framework: build the Day 1 critical path, assign interim leadership/reporting lines, prepare Day 1 communications for every audience, and strictly separate Day 1 must-haves from later integration work.  \n- Lists common pitfalls (under-planning mechanical basics, leadership ambiguity, over-scoping Day 1) and links to related frameworks (IMO setup, stakeholder mapping/communication planning, due diligence).\n\n**Execution runbook** – [2] *M&A Integration: Day 1 Runbook (T-30 to T+7)*  \n- Translates the framework into a day-by-day, workstream-level playbook from 30 days before close through the first week post-close.  \n- Covers five workstreams (IT, HR, Finance, Communications, Legal/Regulatory) with explicit owners, dependencies, and go/no-go gates.  \n- Includes rehearsal steps, a T-1 decision forum, hour-by-hour Day 1 execution, and a T+7 stabilization/handoff.\n\n**Supporting assets** (referenced by the two above):  \n- [3] Change Management: Communication Planning  \n- [4] M&A Integration: Integration Management Office (IMO) Setup  \n- [5] Change Management: Stakeholder Mapping  \n\nThese are the firm’s primary Day 1 readiness artifacts; the runbook ([2]) is the most detailed, actionable deliverable for a live deal.",
+   "usage": {
+    "input_tokens": 2587,
+    "latency_s": 10.813485975988442,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 375
+   }
+  },
+  "e3c27870f9e39f08a631816dc13afa09be6727e1866ca4347026a91083c7e8b6": {
+   "text": "For a due-diligence engagement starting Monday, prioritize these three sources in this order:\n\n1. **Commercial Due Diligence Overview** [1] — This is the top-level framing for the workstream. It identifies the core analytical techniques you'll apply (market entry analysis, synergy quantification, red flag reporting) and shows how commercial DD findings feed directly into post-close integration planning (Day 1 readiness) [1].\n\n2. **Financial Due Diligence Checklist** [3] — The companion workstream. Its methodology underpins the information request list and the red flag process, so understanding its scope and structure lets you coordinate with the financial team from day one [3].\n\n3. **Red Flag Reporting** [4] and **Red Flag Severity Rubric** [5] — These define the escalation discipline that runs continuously across *both* commercial and financial workstreams. Key points to internalize before Monday:\n   - Red flags are raised **continuously from day one**, not as a final deliverable [4].\n   - The three-tier rubric dictates response speed and ownership: **Deal-Breaker** (escalate within 24 hours, work stops on dependent streams, deal principal decides), **Price-Adjusting** (quantify and carry into negotiation, workstream lead + deal principal), **Monitor** (log with named post-close owner, workstream lead) [5].\n\n**Practical first steps for Monday**\n- Request the **Financial DD Information Request List** [7] so you can see what the financial team is pulling and avoid duplicate asks. Note the pitfalls: don't issue the full list on day one, don't accept summaries in place of underlying data, and treat unanswered items as red flags, not scheduling issues [7].\n- Review the **Day 1 Readiness Planning** framework [2] — commercial DD findings often surface items that become Day 1 must-haves (e.g., customer/supplier communications, regulatory notifications, IT access). Knowing the Day 1 critical-path categories helps you flag integration-relevant findings early [2].\n- Familiarize yourself with **Stakeholder Mapping** [6] — due diligence requires rapid engagement with target-company stakeholders; the influence/support grid and resistance-diagnosis approach will help you secure access and candid input quickly [6].\n\n**Bottom line**: Start with [1] and [3] for workstream structure, then lock in the red flag process ([4], [5]) so you can escalate correctly from the first finding.",
+   "usage": {
+    "input_tokens": 1430,
+    "latency_s": 16.166305621998617,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 530
+   }
+  },
+  "e4d4ef9a0144aa7d3430fac83ef0b3d47fe7294f3fe4213d715966d6993429f6": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for the specific conclusions from a named prior engagement (Project Saffron), which is a request to retrieve an existing document or deliverable.\"}",
+   "usage": {
+    "input_tokens": 791,
+    "latency_s": 1.5427804859937169,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 47
+   }
+  },
+  "e684f8c90987d52bf5d205c2bcb29a022ea4e3a96af312a4e08fec64a9042b52": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for a specific existing artifact — a worked example for calculating price elasticity — which is a direct document lookup request with no client situation or briefing context.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.658418076025555,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 49
+   }
+  },
+  "e979a8ed80e62265a446cadf9505d324285d2e9dfcbbff2f862913e5a749e7aa": {
+   "text": "No — Meridian's corpus doesn't contain anything on a distribution-network redesign for an Australian home-improvement retailer called **Project Juniper**.\n\nThe retrieved sources cover general network-optimization frameworks, common pitfalls, and omnichannel inventory thinking [1][2][3][4], but none mention Project Juniper, an Australian home-improvement client, or a distribution-network redesign for that sector.",
+   "usage": {
+    "input_tokens": 1004,
+    "latency_s": 3.4680667759967037,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 84
+   }
+  },
+  "eae77c5c4bba25c93a316de4ad48b7f2c2105d73600d88f2f193526bb41270c0": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a specific person with expertise in actuarial modelling for insurance, which is a classic expertise-finding query.\"}",
+   "usage": {
+    "input_tokens": 783,
+    "latency_s": 1.1510297450004146,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 41
+   }
+  },
+  "ebdad7e0d0920cc7c2097ab5cab4e6dfa440adb8a7fb5b5f20bdfef9ce775314": {
+   "text": "No — Meridian's corpus doesn't have a \"Project Tamarind snack merger integration summary.\" The retrieved sources cover general M&A integration frameworks (Day 1 Runbook [1], IMO Setup [3], Synergy Quantification [4]) and commercial due diligence [5], but none reference Project Tamarind or a snack-sector merger.",
+   "usage": {
+    "input_tokens": 781,
+    "latency_s": 1.7983575630059931,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 74
+   }
+  },
+  "ee373dda6ce56eec30351d7b856546aca76addf69b87107ee288d4b4f96f608e": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is staffed on a new engagement and needs a briefing on the firm's standard approach to operating model redesign, which is a topic synthesis request for onboarding purposes.\"}",
+   "usage": {
+    "input_tokens": 784,
+    "latency_s": 1.096482206019573,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 51
+   }
+  },
+  "eecb3337c9d58980d6a091b17f7d145e3b2f6077ff90e5a0530decacf326272e": {
+   "text": "{\"archetype\": \"C\", \"reasoning\": \"The user is staffed on a new engagement next week and needs a quick briefing on market sizing approaches, indicating a time-pressured onboarding situation rather than a search for a specific existing document.\"}",
+   "usage": {
+    "input_tokens": 803,
+    "latency_s": 3.0248218269844074,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 57
+   }
+  },
+  "eff23245f48a5e735535a1f5611d2d3cab7d7bf49fddf046f8060da30f18d07e": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking whether the firm has previously created a specific type of deliverable (a hospital nursing workforce plan) and references a specific project name (Project Marigold), indicating a search for an existing document or engagement artifact.\"}",
+   "usage": {
+    "input_tokens": 787,
+    "latency_s": 1.876484590000473,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 61
+   }
+  },
+  "f4cdb96ff5bc92f5d3a9f17349b914c577012a105343d824e0c9496ca60bb4b0": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is requesting a specific, named deliverable (Project Halcyon) which constitutes a direct document lookup request.\"}",
+   "usage": {
+    "input_tokens": 794,
+    "latency_s": 0.9378732570039574,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 39
+   }
+  },
+  "f583c7809816ba126adf201c3a11317bf6df9f9d80fdaae961b84b347118b29d": {
+   "text": "Yes. Meridian has a full engagement summary for **Project Granite — Ministry Operating Model** [1]. It covers:\n\n- **Client context**: a national transport ministry (7,200 staff, 14 regional directorates) facing a 15% administrative-cost reduction mandate.  \n- **Scope**: target operating model design, regional structure rationalization, and centre–region decision-rights clarification.  \n- **Approach**: activity analysis across 210 teams, a decision-rights matrix for 64 recurring decisions, and option appraisal of three regional structures.  \n- **Key findings**: 31% of regional activity duplicated central policy work; consolidating 14 directorates into five regional hubs met the 15% target without cutting road inspection capacity; capital approval sign-offs reduced from seven to three.  \n- **Outcome**: the five-hub model was adopted and implemented over two budget years, with the new decision-rights framework published internally.\n\nThe remaining sources [2]–[5] are general operating-model frameworks and an M&A Day-1 runbook — useful background, but not specific to Project Granite.",
+   "usage": {
+    "input_tokens": 800,
+    "latency_s": 6.24519105500076,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 243
+   }
+  },
+  "f583deb6a16ba40cb285bc8d50bf11d97e58ecf59786cf6e0af04a251630f0aa": {
+   "text": "Yes. Meridian has a dedicated **Synergy Quantification** methodology within its Due Diligence toolkit [1].\n\n**What it covers**\n- **When to use it**: During due diligence (in parallel with commercial/financial diligence) whenever the deal thesis depends materially on synergies, and again post-signing to build the integration synergy tracking plan.\n- **Four-step framework**:\n  1. **Categorize by type** — cost vs. revenue synergies, weighting confidence and timing differently.\n  2. **Build bottom-up** — from specific, named initiatives (e.g., facility consolidation, procurement scale) rather than top-down %‑of‑revenue rules of thumb.\n  3. **Net out one-time costs to achieve** — report net synergy value (synergy minus cost‑to‑achieve) with multi‑year phasing.\n  4. **Assign confidence‑weighted cases** — present high‑confidence, medium‑confidence, and stretch tiers instead of a single blended number.\n- **Worked example**: Rebuilding a top‑down “5% of combined revenue” estimate bottom‑up for an industrials acquisition yielded a smaller but defensible cost‑synergy number (overlapping plants, procurement, back‑office) and kept revenue synergies in a separate stretch case.\n- **Common pitfalls**: top‑down estimates, ignoring cost‑to‑achieve, overweighting revenue synergies.\n- **Related frameworks**: Commercial due diligence overview, financial due diligence checklist, M&A integration — Day 1 readiness planning & IMO setup (where synergy tracking is operationalized post‑close).\n\n**Related item**\n- [2] **Red Flag Reporting** — notes synergy quantification as a related framework and emphasizes escalating material synergy‑related findings early in the deal timeline.",
+   "usage": {
+    "input_tokens": 1910,
+    "latency_s": 5.7516607560100965,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 386
+   }
+  },
+  "f640469a0809004d36ff3f21ba3571b4b9413145d23c17d6207c7d0cc439d171": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for specific findings from a named prior engagement (Project Halcyon), which is a request to retrieve an existing document or deliverable rather than a synthesis, person, or cross-engagement comparison.\"}",
+   "usage": {
+    "input_tokens": 788,
+    "latency_s": 2.6941189090139233,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 59
+   }
+  },
+  "f812e8343c39adcc516a99455917f13be157f5f402acc91acd509915a54473ff": {
+   "text": "{\"archetype\": \"A\", \"reasoning\": \"The user is asking for a specific, named deliverable (Project Osprey steel decarbonization roadmap), which is a direct document lookup request with no client situation or briefing context.\"}",
+   "usage": {
+    "input_tokens": 786,
+    "latency_s": 1.7261594170122407,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 55
+   }
+  },
+  "fe4da433b1f943e22070763d36528583afc5d63cabdff50b855907070af90661": {
+   "text": "{\"archetype\": \"B\", \"reasoning\": \"The user is asking for a person with expertise on open banking and payments, which is a clear expertise-finding request.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "latency_s": 2.19806243898347,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 39
+   }
+  },
+  "fe64ac17377af49f3ebea1996afd01cde06d3ba0a0099b967757726fa0a7df3b": {
+   "text": "Yes — Meridian has a **Client Workshop Template** designed specifically for a half-day session [1].\n\n**What it covers**\n- A standard agenda and facilitation guide for a 3–4 hour workshop used to align a steering group on problem definition, options, or a draft recommendation.  \n- **Framework (5 steps):**  \n  1. Pre-reads sent 48 hours ahead (decision sought, options, evidence).  \n  2. Opening (15 min) — sponsor states the decision and non-negotiable constraints.  \n  3. Structured discussion (90 min) — work through options with a visible scoring grid; facilitator parks off-topic items.  \n  4. Decision and owners (30 min) — record decision, open questions, named owners and dates.  \n  5. Write-up within 24 hours — circulate a decision log, not a transcript.  \n- **Facilitator notes** on common pitfalls (e.g., >12 attendees turns discussion into presentations; no framed decision turns the session into a status update).  \n- **Related frameworks** linked: stakeholder mapping and communication planning.\n\n**When to use it**  \nWhen a decision needs input from several senior stakeholders at once and a sequence of one-to-one meetings would take too long or let positions harden [1].\n\nSource [2] is an M&A Day-1 runbook and not relevant to a general client workshop template.",
+   "usage": {
+    "input_tokens": 773,
+    "latency_s": 3.9064981150149833,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 313
+   }
+  },
+  "ff6f21c34b7e57a449736caa86a14b77b165bbb6adee4d2b5bfd6e2598a20c03": {
+   "text": "Yes — Meridian has a structured body of work on pricing elasticity across several frameworks. Here’s the practical briefing you can walk into the meeting with:\n\n**When to use elasticity analysis**  \nDeploy it whenever the client is considering a price change larger than a routine inflation adjustment and needs to quantify the volume impact before committing — especially in retail or consumer categories with enough transaction-level data to model demand response directly [1].\n\n**How the calculation works (and where it breaks)**  \n- The standard “elasticity > 1 means don’t raise price” rule applies to **revenue**, not profit. For profit decisions you need the breakeven formula that incorporates contribution margin — state the margin you used [2].  \n- Always report a **confidence interval**, not just a point estimate; observational retail data is noisy and a point estimate won’t survive a competent client analytics team [2].  \n- Include **competitor price** in the model specification. Omitting it pushes competitive response into the own-price coefficient, biasing the estimate toward apparent elasticity [2].\n\n**Three common pitfalls to flag upfront**  \n1. **Correlation mistaken for elasticity** — failing to control for promotions and seasonality produces estimates that measure something else entirely [1].  \n2. **Applying portfolio-average elasticity to SKU-level decisions** — category and SKU elasticity can differ sharply from the average, especially between private label and branded goods [1].  \n3. **Ignoring competitive response** — historical elasticity implicitly assumes competitors don’t react. For a move large enough to trigger a response, pair elasticity analysis with **competitive pricing response modeling** [1, 5].\n\n**How it fits the broader pricing toolkit**  \nElasticity analysis sits alongside value-based pricing, competitive pricing response, and market-entry sizing. The most common failure mode across all of them is **cost-plus pricing by default** — anchoring to internal cost structure instead of customer-perceived value leaves margin on the table in differentiated segments [3]. Also watch for **uniform pricing across segmented customers** (under-pricing willing segments, over-pricing sensitive ones) and **skipping a pilot/test-and-learn phase** before full-scale changes [3].\n\n**If the client’s move could provoke a competitor**  \nUse the Competitive Pricing Response framework: avoid reflexive full price-matching (usually the most margin-destructive option), distinguish tactical promotions from structural repositioning, and model second-order competitor reactions to prevent an unplanned price war [5].\n\n**Bottom line for the meeting**  \n- Bring the breakeven formula (not the revenue rule) and your margin assumption.  \n- Show an interval, not a point estimate.  \n- Control for promotions, seasonality, and competitor price in the model.  \n- If the price move is big enough to invite a competitive response, run the competitive response model in parallel.  \n- Position elasticity as one input in a segmented, value-based pricing strategy — not a standalone “don’t raise price” signal.",
+   "usage": {
+    "input_tokens": 1153,
+    "latency_s": 16.68363785999827,
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "output_tokens": 632
+   }
+  }
+ }
+}
