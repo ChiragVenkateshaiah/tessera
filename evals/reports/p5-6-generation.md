@@ -1,7 +1,8 @@
 # P5-6 — Generation, routing, retries, expertise: the evidence
 
 Phase 5 plan §3.5–3.6. The tests are zero-call. The four per-switch
-sweeps (§3) and the native sweep ran live on NIM, 2026-10-08/09.
+sweeps (§3) and the native sweep ran live on NIM, 2026-10-08/09; the
+`model_client` re-run (`lc-model-client-2`, §3–4) ran on 2026-11-08.
 Reproduce with:
 
 ```sh
@@ -13,11 +14,17 @@ TESSERA_LC_PROMPT_CHAIN=lc  tessera eval --check --stack lc --json evals/baselin
 TESSERA_LC_MODEL_CLIENT=lc  tessera eval --check --stack lc --json evals/baselines/p5-6-lc-model-client.json
 TESSERA_LC_MODEL_CLIENT=lc TESSERA_LC_RETRY=lc \
                             tessera eval --check --stack lc --json evals/baselines/p5-6-lc-retry.json
+TESSERA_LC_MODEL_CLIENT=lc  tessera eval --check --stack lc --workers 1 --json evals/baselines/p5-6-lc-model-client-2.json
 tessera eval --check --stack native --json evals/baselines/p5-6-native.json
 python -m evals.compare_sweeps evals/baselines/p5-6-native.json \
-    evals/baselines/p5-6-lc-{router,prompt-chain,model-client,retry}.json \
+    evals/baselines/p5-6-lc-{router,prompt-chain,model-client,retry,model-client-2}.json \
     --floor-from evals/baselines/p5-{0-native-1,0-native-2,2-native,3-native,4-native,5-native,6-native}.json \
     --out evals/reports/p5-6-generation.json
+# the retry layer alone: `retry` against `model_client` re-run (§4)
+python -m evals.compare_sweeps evals/baselines/p5-6-lc-model-client-2.json \
+    evals/baselines/p5-6-lc-retry.json \
+    --floor-from evals/baselines/p5-{0-native-1,0-native-2,2-native,3-native,4-native,5-native,6-native}.json \
+    --out evals/reports/p5-6-retry-vs-model-client-2.json
 ```
 
 ## 1. The design in one paragraph
@@ -84,6 +91,7 @@ groundedness ±0.06, B relevance ±0.12, B groundedness ±0.00.
 | `prompt_chain` (`6c61734`) | PASS | 2 h 51 min | 176 | 0 |
 | `model_client` (`6c61734`) | PASS | 3 h 39 min | — | 5 (2 read timeouts, fixed in `ea1dbf9`; 3 × 503 past six attempts) |
 | `retry` (`e3b1c67`) | PASS | 56 min | judge: 19; LangChain models: not counted (§5) | 2 (`ql001` 503, `ql042` 429: `.with_retry()` gave up after six attempts) |
+| `model_client` re-run, `lc-model-client-2` (`35f71c7`, 2026-11-08) | PASS | 20 min | 0 (the shared pacer never left 3.0 s) | 0 |
 
 Against the native sweep, on the cases scored in both (`compare_sweeps`
 output; JSON in `evals/reports/p5-6-generation.json`):
@@ -94,6 +102,7 @@ output; JSON in `evals/reports/p5-6-generation.json`):
 | `prompt_chain` | 81 | 1 | 1 | 0 | 2 | 4.97→4.94 | 4.97→4.94 | 5.00→5.00 | 4.78→4.78 | 0 | 0 | 154,501/26,226→156,647/26,851 | none |
 | `model_client` | 76 | 1 | 1 | 0 | 0 | 4.97→4.97 | 4.97→5.00 | 5.00→5.00 | 4.75→4.75 | 0 | 0 | 146,360/24,638→148,714/24,195 | none |
 | `retry` | 79 | 0 | 0 | 0 | 0 | 4.97→4.97 | 4.97→4.94 | 5.00→5.00 | 4.75→4.75 | 0 | 0 | 150,354/25,527→150,354/24,465 | none |
+| `model_client` re-run | 81 | 1 | 1 | 0 | 0 | 4.97→4.97 | 4.97→4.94 | 5.00→5.00 | 4.78→4.78 | 0 | 0 | 154,501/26,226→156,855/26,568 | none |
 
 The ERROR rows stay in the exports. Re-run alone through the same path
 at the same commit, every one scored:
@@ -113,8 +122,11 @@ at the same commit, every one scored:
   (P5-0: `ac-l06` D, P5-2: `ac-a06` D, P5-6: both D), so a flip is not a
   switch effect. The recall/RR changes are those same two cases being
   answered.
-- **`prompt_chain`, `model_client` and `retry` are within noise** on
-  every judge mean (`retry`'s A/C relevance −0.03 is one case, `q005`
+- **`prompt_chain`, `model_client` (both runs) and `retry` are within
+  noise** on every judge mean. The `model_client` re-run repeats the
+  first run's case-level changes (`q002` G5→4, `ql004` 4→5, `ac-l06`
+  answered) and adds `q005` and `ql017` R5→4, the two cases that move
+  in other sweeps too (`retry`'s A/C relevance −0.03 is one case, `q005`
   5→4, at the floor).
 - **`router` shows A/C relevance −0.06 and groundedness −0.06**, outside
   the relevance floor. Two cases cause it: `ql017` (G5/R5 → G3/R4) and
@@ -156,11 +168,28 @@ retries weren't counted, but the direction matches the mechanism.
 | Retries visible | each one printed and counted | silent, uncounted |
 | Parallel cases (`--workers`) | allowed | refused |
 
-**Not yet run:** the 2026-10-08 plan's `lc-model-client-2` sweep
-(`model_client=lc` again, with the timeout fix and adaptive pacing). It
-differs from the `retry` sweep only in the retry layer, so it is the
-clean comparison for this table; until it runs, `retry` is read against
-the native sweep.
+**The clean comparison: `retry` against the `model_client` re-run.**
+The two sweeps differ only in the retry layer (`TESSERA_LC_RETRY`), so
+they isolate `.with_retry()`. On the 90 cases scored in both
+(`evals/reports/p5-6-retry-vs-model-client-2.json`):
+
+| | Routing Δ | Docs Δ | People Δ | Recall/RR Δ | A/C ground. | A/C relev. | B ground. | B relev. | Leaks | Injection fails | Outside floor |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `model_client` re-run → `retry` | 1 | 1 | 0 | 0 | 4.98→4.95 | 4.93→4.93 | 5.00→5.00 | 4.75→4.75 | 0 | 0 | none |
+
+- **Quality: no difference.** The one routing change is `ac-l06` (the
+  Cobalt case that flips A/D across native sweeps, §3); the judge moves
+  are single cases in both directions (`q002`, `ql004`, `ql034`,
+  `ql017`).
+- **Reliability: this pair can't rank the two layers.** The re-run met
+  no throttling at all (0 throttled calls, pacer at 3.0 s throughout,
+  20 min), so the native retry layer was never exercised in it. The
+  only throttling evidence stays the `retry` sweep's: `.with_retry()`
+  lost 2 cases while the native judge, in the same sweep, recovered from
+  all 19 throttles.
+- **Latency:** the two sweeps ran a month apart on very different NIM
+  load (11.3 s → 25.2 s mean case wall time), so the column isn't a
+  retry-layer effect.
 
 ## 5. Findings worth knowing
 
@@ -203,8 +232,9 @@ the native sweep.
 
 ## 6. Decision (`lc-defaults`)
 
-**Proposed, for the user's decision** (the profile P5-7's `lc-defaults`
-sweep runs):
+**Decided by the user, 2026-11-08** (the profile P5-7's `lc-defaults`
+sweep runs; the `config.py` / `.env.example` change ships with P5-7's
+first PR, whose `--stack lc` `tessera eval --check` is its bar check):
 - `TESSERA_LC_ROUTER=lc`, `TESSERA_LC_PROMPT_CHAIN=lc`,
   `TESSERA_LC_MODEL_CLIENT=lc`: each is within noise (the `router`
   relevance dip is answer sampling, §3), so the LangChain layer is
@@ -215,7 +245,7 @@ sweep runs):
   and prints its retries, shares the sweep's adaptive pacer with the
   judge, and allows `--workers`. LangGraph's `RetryPolicy` gets its own
   comparison in P5-7.
-- `TESSERA_LC_EXPERTISE` stays as configured until the user decides:
+- `TESSERA_LC_EXPERTISE=native`:
   `PeopleRetriever` wraps native's `find_experts` and returns the same
   people (`test_people_retriever_returns_native_find_experts`), and the
   plan budgets no separate expertise sweep. It gets measured in P5-7's
