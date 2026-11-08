@@ -1,6 +1,6 @@
 # Tessera — Checkpoint
 
-Last updated: 2026-10-09 (end of day)
+Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 
 ## Status
 
@@ -26,9 +26,10 @@ Last updated: 2026-10-09 (end of day)
   `=> PASS`, every switch within noise but one explained dip
   (`evals/reports/p5-6-generation.md`). Also `tessera eval --cases`,
   `--workers`, an adaptive shared `Pacer`, `evals/compare_sweeps.py`.
-- **Next:** two questions the user deferred to the next session
-  (`lc-defaults` for the generation switches; whether to run the planned
-  `lc-model-client-2` sweep), then P5-7.
+- **2026-11-08:** the user decided P5-6's `lc-defaults` (router,
+  prompt_chain, model_client `lc`; retry, expertise `native`; in code with
+  P5-7's first PR), and the `lc-model-client-2` sweep ran, `=> PASS`.
+- **Next:** P5-7.
 - **Decided 2026-10-08 (user):** LangGraph becomes the default stack
   after P5-10 if its sweeps pass; native stays as the eval/CI reference
   (plan §10.1).
@@ -2070,40 +2071,20 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 ## Next task to pick up
 
-**Open questions for the user** (deferred by the user on 2026-10-09 to
-the next session — ask these first, with the recommendations):
-
-1. **`lc-defaults` for the generation switches.** The P5-6 PR merged
-   with all five at `native` (the pre-P5-6 defaults); nothing changed.
-   `evals/reports/p5-6-generation.md` §6 has the evidence.
-   **Recommendation:** `TESSERA_LC_ROUTER=lc`,
-   `TESSERA_LC_PROMPT_CHAIN=lc`, `TESSERA_LC_MODEL_CLIENT=lc` (each within
-   noise; P5-5's rule picks the LangChain layer at native-equal quality);
-   `TESSERA_LC_RETRY=native` (honours `Retry-After`, counted, shares the
-   pacer, allows `--workers`; in the `retry` sweep `.with_retry()` lost 2
-   answer calls while the native judge recovered from all 19 throttles —
-   question 2's sweep firms this up); `TESSERA_LC_EXPERTISE=native` (`PeopleRetriever` only wraps
-   native `find_experts`, no sweep measured it alone, and P5-7's `all-lc`
-   sweep measures it anyway). Once decided: change `config.py` +
-   `.env.example`, turn §6 from "Proposed" into the decision, small PR —
-   this changes the `lc` stack's defaults, so it needs a `--stack lc`
-   `tessera eval --check` in the PR body (P5-7's `lc-defaults` sweep can
-   be that sweep if the change goes in with P5-7's first PR).
-2. **Run the planned `lc-model-client-2` sweep?** The 2026-10-08 plan had
-   six P5-6 sweeps: the `model_client` switch again (with the timeout
-   fix and adaptive pacing), then `retry` compared with it. On 2026-10-09
-   only `retry` ran (start-of-day read the feature branch's log and
-   missed #80's plan on `main`), and `retry` was compared with the native
-   sweep instead. The P5-6 acceptance is met without it, and #81 merged.
-   **Recommendation: yes, at the start of a calm morning** (free on NIM,
-   ~1 h on 10-09's load):
-   `TESSERA_LC_RETRIEVER=native TESSERA_LC_MODEL_CLIENT=lc tessera eval
-   --check --stack lc --workers 1 --json evals/baselines/p5-6-lc-model-client-2.json`.
-   It isolates `.with_retry()` (the only difference from the `retry`
-   sweep) and re-checks `model_client` with the timeout fix. Add it to
-   `evals/reports/p5-6-generation.md` §3–4 in a small PR.
-
-**Then P5-7.**
+**Both 2026-10-09 open questions decided by the user on 2026-11-08:**
+1. **`lc-defaults` for the generation switches:** the recommended split —
+   `TESSERA_LC_ROUTER=lc`, `TESSERA_LC_PROMPT_CHAIN=lc`,
+   `TESSERA_LC_MODEL_CLIENT=lc`, `TESSERA_LC_RETRY=native`,
+   `TESSERA_LC_EXPERTISE=native` (`evals/reports/p5-6-generation.md` §6,
+   now "Decided"). **Not yet in code:** the `config.py` + `.env.example`
+   change ships with **P5-7's first PR**, and that PR's `--stack lc`
+   `tessera eval --check` (P5-7's `lc-defaults` sweep) is its bar check.
+2. **`lc-model-client-2` sweep:** ran 2026-11-08 at `35f71c7`, 92/92,
+   zero ERROR rows, 0 throttled calls, 20 min, `=> PASS`. Within noise
+   against native and against `retry` (report §3–4). NIM was so calm that
+   the native retry layer was never exercised, so the pair can't rank
+   the two retry layers; `RETRY=native` rests on the `retry` sweep's 2
+   lost cases plus the mechanism.
 
 **Then P5-7 — LangGraph orchestration, the corrective subgraph, `Send`,
 the Functional API** (`docs/Tessera_Phase5_Plan.md` §3.7, §5). Read §3.7
@@ -2298,7 +2279,7 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-3 — LangSmith tracing with taint redaction (native first)~~ — done (#75; live LangSmith step pending a key)
 - ~~P5-4 — LangChain ingestion and indexing~~ — done (#77)
 - ~~P5-5 — LangChain retrieval~~ — done (#78)
-- ~~P5-6 — generation, routing, retries, expertise~~ — done (#81; `lc-defaults` for it pending the user)
+- ~~P5-6 — generation, routing, retries, expertise~~ — done (#81; `lc-defaults` decided 2026-11-08, lands with P5-7's first PR)
 - P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API **← next**
 - P5-8 — human-review workflow
 - P5-9 — LangSmith datasets, experiments, feedback, prompt hub
@@ -2312,6 +2293,15 @@ P5-1.
 
 ## Notes / open flags
 
+- **`pytest tests/ -q` now takes about 10 min, not 60–90 s** (measured
+  2026-11-08: 610 passed, 8 skipped, 1 xfailed in 621 s). The LangChain
+  tests from P5-3…P5-6 dominate: the slowest are
+  `test_langsmith_redaction.py::test_langchain_retriever_runs_are_redacted_too[multiquery]`
+  (81 s) and `[rerank]` (67 s), and
+  `test_lc_retrieval.py::test_every_retriever_keeps_the_walls[rerank]`
+  (48 s). Give any wrapping `timeout` at least 900 s — a 600 s one cut
+  the 2026-11-08 start-of-day run off at 58% with no summary line. A
+  `slow` marker for these is an open option, not done.
 - **Start-of-day miss (2026-10-09):** `/start-day` read `git log` on the
   checked-out feature branch, not `main`, and missed #80 (10-08's
   end-of-day checkpoint, merged to `main` after the branch's last
