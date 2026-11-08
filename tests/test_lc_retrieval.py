@@ -256,6 +256,65 @@ def test_every_sub_call_carries_the_permission_filter(
         assert any(op == "rows" for op, _ in recorder.wheres)
 
 
+class ForcedRetry(LLMClient):
+    """The corrective loop's routing model: routes A or C, always grades
+    the context insufficient, and "rewrites" the question into a query
+    naming restricted engagements and their facts outright."""
+
+    def __init__(self, archetype: str) -> None:
+        self.archetype = archetype
+
+    def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+        from tessera.generation.prompts import ROUTER_SYSTEM_PROMPT
+        from tessera.lc.corrective import GRADER_SYSTEM_PROMPT, REWRITE_SYSTEM_PROMPT
+
+        if system == ROUTER_SYSTEM_PROMPT:
+            return f'{{"archetype": "{self.archetype}", "reasoning": "test"}}'
+        if system == GRADER_SYSTEM_PROMPT:
+            return '{"sufficient": false, "reasoning": "test"}'
+        if system == REWRITE_SYSTEM_PROMPT:
+            return "Project Halcyon grocer price architecture £340m Project Kestrel AMNOG Lantern 96 branches"
+        return "An answer [1]."
+
+
+@pytest.mark.parametrize("kind", RETRIEVER_KINDS)
+@pytest.mark.parametrize(
+    "principal",
+    [None, Principal("c0014"), Principal("partner", frozenset({"halcyon"}))],
+    ids=["internal-only", "walled", "cleared"],
+)
+def test_the_corrective_loop_keeps_the_scope_on_its_retry(
+    kind: str, principal: Principal | None, stores: dict[str, Any], embedder: LocalEmbedder, shared: dict[str, Any]
+) -> None:
+    """P5-7: the corrective loop's retry goes through the same
+    principal-bound retrieval as the first attempt. Forced to retry with a
+    rewrite naming restricted engagements, every store call of both
+    attempts carries the permission filter, and no attempt holds a chunk
+    the principal may not see."""
+    from tessera.lc.graph import LangGraphPipeline
+    from tessera.lc.retrievers import lc_retrieve_fn
+
+    recorder = RecordingStore(stores["lc"])
+    retrieve_fn = lc_retrieve_fn(
+        recorder, "vector" if kind == "vector" else kind,
+        bm25=BM25Cache(), llm=shared["llm"], cross_encoder=shared["cross_encoder"], parents=shared["parents"],
+    )
+    for archetype, query in [
+        ("A", "What's our standard approach to a pricing diagnostic?"),
+        ("C", "Brief me on value-based pricing before a client workshop"),
+    ]:
+        llm = ForcedRetry(archetype)
+        run = LangGraphPipeline(llm, embedder, recorder, retrieve_fn=retrieve_fn, corrective="llm").run(
+            query, principal
+        )
+        assert len(run.retrievals) == 2, "the loop didn't retry"
+        assert run.retrievals[1].query.startswith("Project Halcyon")
+        for attempt in run.retrievals:
+            assert [r.chunk_id for r in attempt.results if not is_permitted(r, principal)] == []
+    permission = permission_filter(principal)
+    assert [(op, w) for op, w in recorder.wheres if not carries(w, permission)] == []
+
+
 # --- the BM25 cache ---
 
 

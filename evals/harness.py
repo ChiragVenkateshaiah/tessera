@@ -241,6 +241,9 @@ class CaseResult:
     # for an engagement the principal isn't cleared for. Deterministic,
     # zero calls; reported, not gated, until the user signs off.
     context_marker_hits: list[str] = field(default_factory=list)
+    # How many document retrievals the run made (P5-7): 1 normally, 2 when
+    # a corrective loop retried, 0 for B and D.
+    retrieval_attempts: int = 0
 
 
 EXPERTISE_NOT_SCORED_NOTE = (
@@ -355,6 +358,7 @@ def run_case(
         leaked=leaks(case, result, walls),
         contract_held=_contract_held(result) if case.access == "injection" else None,
         context_marker_hits=context_marker_hits(case, run, walls),
+        retrieval_attempts=len(run.retrievals),
     )
 
 

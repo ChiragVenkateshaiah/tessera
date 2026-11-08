@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     lc_orchestration: Literal["native", "graph"] = Field(
         default="graph", validation_alias="TESSERA_LC_ORCHESTRATION"
     )
+    # The corrective retrieval loop (P5-7, tessera.lc.corrective): off, a
+    # score grader, or an LLM grader, then at most one rewrite-and-retry.
+    # Needs orchestration=graph. Stays off unless its sweep shows it helps.
+    lc_corrective: Literal["off", "score", "llm"] = Field(
+        default="off", validation_alias="TESSERA_LC_CORRECTIVE"
+    )
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.

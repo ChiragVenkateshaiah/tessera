@@ -333,6 +333,7 @@ def _native_pipeline(
     steps: dict[str, Callable[..., object]] | None = None,
     *,
     orchestration: str = "native",
+    corrective: str = "off",
 ) -> Pipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
@@ -340,13 +341,16 @@ def _native_pipeline(
     (``retrieve``, ``route``, ``generate``, ``find_experts``,
     ``generate_expertise``); any step not given stays native.
     ``orchestration="graph"`` runs the same steps through the LangGraph
-    orchestrator (P5-7), imported only then."""
+    orchestrator (P5-7), imported only then; ``corrective`` (off, score,
+    llm) is its corrective loop."""
     steps = steps or {}
     kind: Callable[..., Pipeline] = NativePipeline
     if orchestration == "graph":
+        from functools import partial
+
         from tessera.lc.graph import LangGraphPipeline
 
-        kind = LangGraphPipeline
+        kind = partial(LangGraphPipeline, corrective=corrective)
     if tracer is None:
         return kind(
             llms.answer,
@@ -433,6 +437,7 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None)
         "retry": settings.lc_retry,
         "expertise": settings.lc_expertise,
         "orchestration": settings.lc_orchestration,
+        "corrective": settings.lc_corrective,
     }
     return LcRetrieval(
         store=store, embedder=embedder, retrieve=retrieve, switches=switches, steps=steps, llms=lc_llms
@@ -447,6 +452,9 @@ def _lc_generation(
     from tessera.lc.expertise import find_experts_step
     from tessera.lc.generation import LcModel, generate_expertise_step, generate_step, route_step
 
+    if settings.lc_corrective != "off" and settings.lc_orchestration != "graph":
+        typer.echo("TESSERA_LC_CORRECTIVE needs TESSERA_LC_ORCHESTRATION=graph.", err=True)
+        raise typer.Exit(code=2)
     if settings.lc_retry == "lc" and settings.lc_model_client != "lc":
         typer.echo("TESSERA_LC_RETRY=lc needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
         raise typer.Exit(code=2)
@@ -1130,6 +1138,7 @@ def eval_command(
         tracer,
         steps=lc.pipeline_steps() if lc is not None else None,
         orchestration=settings.lc_orchestration if lc is not None else "native",
+        corrective=settings.lc_corrective if lc is not None else "off",
     )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 

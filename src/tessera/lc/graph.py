@@ -3,12 +3,14 @@ switch's ``graph`` value.
 
 The same flow as ``NativePipeline``, as a ``StateGraph``::
 
-    START -> route -+-> terminal ----------------------+
-                    +-> experts -> generate_b ---------+-> assemble -> END
-                    +-> retrieve -> generate ----------+
+    START -> route -+-> terminal -----------------------+
+                    +-> experts -> generate_b ----------+-> assemble -> END
+                    +-> documents -> generate ----------+
 
-(the corrective subgraph replaces ``retrieve`` when the ``corrective``
-switch is on — added in the next P5-7 step).
+``documents`` is the corrective subgraph (``tessera.lc.corrective``):
+retrieve, grade, and at most one rewrite-and-retry. With the
+``corrective`` switch ``off`` it retrieves once and makes no call, so the
+graph equals native.
 
 **Rules it keeps** (plan §3.2.2, CLAUDE.md constraint #6):
 - **State is plain data**: the query, the principal, the routing decision,
@@ -51,6 +53,7 @@ from tessera.generation.answer import Citation, GeneratedAnswer, filter_relevant
 from tessera.generation.base import LLMClient
 from tessera.generation.expertise import generate_expertise_answer
 from tessera.generation.usage import UsageRecorder, UsageSummary
+from tessera.lc.corrective import build_corrective_subgraph
 from tessera.pipeline import (
     EXPERTISE_UNAVAILABLE_MESSAGE,
     AnswerResult,
@@ -61,7 +64,7 @@ from tessera.pipeline import (
 from tessera.principal import Principal
 from tessera.retrieval.expertise import TOP_K as EXPERTISE_TOP_K
 from tessera.retrieval.expertise import ExpertiseResult, find_experts
-from tessera.retrieval.retriever import RetrievalResult, retrieve
+from tessera.retrieval.retriever import RetrievalResult
 from tessera.retrieval.router import Archetype, RoutingDecision, route, terminal_response_for
 from tessera.store.base import ExpertiseStore, PersonMatch, SearchResult, VectorStore
 from tessera.trace import Trace
@@ -90,6 +93,8 @@ class GraphContext:
     generate_fn: Callable[..., GeneratedAnswer] | None = None
     find_experts_fn: Callable[..., ExpertiseResult] | None = None
     generate_expertise_fn: Callable[..., GeneratedAnswer] | None = None
+    # The corrective loop: off · score · llm (tessera.lc.corrective).
+    corrective: str = "off"
 
 
 # --- the state: plain data, two append reducers ---
@@ -116,6 +121,11 @@ class GraphState(TypedDict, total=False):
     trace: Trace
     routing_usage: Annotated[list[UsageSummary], operator.add]
     generation_usage: Annotated[list[UsageSummary], operator.add]
+    # The corrective subgraph's keys: its grader and rewriter calls, the
+    # verdict, and the rewritten query (None unless it retried).
+    corrective_usage: Annotated[list[UsageSummary], operator.add]
+    sufficient: bool
+    rewritten_query: str | None
     run: PipelineRun
 
 
@@ -129,7 +139,7 @@ def route_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[str, A
     return {"decision": decision, "routing_usage": [recorder.summary()]}
 
 
-def after_route(state: GraphState) -> Literal["terminal", "experts", "retrieve"]:
+def after_route(state: GraphState) -> Literal["terminal", "experts", "documents"]:
     """The conditional edge: D (and B without a people index) end in a
     fixed message; B goes to people; A and C go to documents."""
     archetype = state["decision"].archetype
@@ -137,7 +147,7 @@ def after_route(state: GraphState) -> Literal["terminal", "experts", "retrieve"]
         return "terminal"
     if archetype is Archetype.EXPERTISE:
         return "experts" if state.get("people_index") else "terminal"
-    return "retrieve"
+    return "documents"
 
 
 def terminal_node(state: GraphState) -> dict[str, Any]:
@@ -169,23 +179,11 @@ def generate_b_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[s
     }
 
 
-def retrieve_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[str, Any]:
-    ctx = runtime.context
-    retrieval = (ctx.retrieve_fn or retrieve)(
-        state["query"],
-        state["decision"].archetype,
-        ctx.embedder,
-        ctx.store,
-        principal=state.get("principal"),
-    )
-    return {"retrievals": [retrieval]}
-
-
 def generate_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[str, Any]:
     """Generate from the last retrieval attempt (the only one, unless the
-    corrective loop retried)."""
+    corrective loop retried), answering the original question."""
     ctx = runtime.context
-    retrieval = state["retrievals"][-1]
+    retrieval = replace(state["retrievals"][-1], query=state["query"])
     recorder = UsageRecorder(ctx.llm)
     generated = (ctx.generate_fn or generate_answer)(retrieval, recorder)
     shown = tuple(filter_relevant(retrieval.results))
@@ -211,6 +209,7 @@ def assemble_node(state: GraphState) -> dict[str, Any]:
     principal = state.get("principal")
     decision = state["decision"]
     routing = _merged(state.get("routing_usage", []))
+    corrective = _merged(state.get("corrective_usage", []))
     generation = _merged(state.get("generation_usage", []))
     run = PipelineRun(
         answer=AnswerResult(
@@ -219,7 +218,7 @@ def assemble_node(state: GraphState) -> dict[str, Any]:
             answer=state["answer"],
             citations=state.get("citations") or [],
             experts=state.get("experts") or [],
-            usage=_merged([routing, generation]),
+            usage=_merged([routing, corrective, generation]),
             trace=replace(state["trace"], principal=principal.person_id if principal else None),
         ),
         decision=decision,
@@ -240,13 +239,13 @@ def build_graph() -> Any:
     graph.add_node("terminal", terminal_node)
     graph.add_node("experts", experts_node)
     graph.add_node("generate_b", generate_b_node)
-    graph.add_node("retrieve", retrieve_node)
+    graph.add_node("documents", build_corrective_subgraph())
     graph.add_node("generate", generate_node)
     graph.add_node("assemble", assemble_node)
     graph.add_edge(START, "route")
-    graph.add_conditional_edges("route", after_route, ["terminal", "experts", "retrieve"])
+    graph.add_conditional_edges("route", after_route, ["terminal", "experts", "documents"])
     graph.add_edge("experts", "generate_b")
-    graph.add_edge("retrieve", "generate")
+    graph.add_edge("documents", "generate")
     for last in ("terminal", "generate_b", "generate"):
         graph.add_edge(last, "assemble")
     graph.add_edge("assemble", END)
@@ -275,6 +274,7 @@ class LangGraphPipeline:
         generate_fn: Callable[..., GeneratedAnswer] | None = None,
         find_experts_fn: Callable[..., ExpertiseResult] | None = None,
         generate_expertise_fn: Callable[..., GeneratedAnswer] | None = None,
+        corrective: str = "off",
     ) -> None:
         self.context = GraphContext(
             llm=llm,
@@ -288,6 +288,7 @@ class LangGraphPipeline:
             generate_fn=generate_fn,
             find_experts_fn=find_experts_fn,
             generate_expertise_fn=generate_expertise_fn,
+            corrective=corrective,
         )
 
     def initial_state(self, query: str, principal: Principal | None) -> GraphState:
