@@ -38,6 +38,7 @@ import json
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -99,6 +100,7 @@ class CorrectiveState(TypedDict, total=False):
     principal: Principal | None
     decision: RoutingDecision
     retrievals: Annotated[list[RetrievalResult], operator.add]
+    retrieval_usage: Annotated[list[UsageSummary], operator.add]
     corrective_usage: Annotated[list[UsageSummary], operator.add]
     sufficient: bool
     rewritten_query: str | None
@@ -108,29 +110,64 @@ def _grading_llm(ctx: Any) -> Any:
     return ctx.router_llm if ctx.router_llm is not None else ctx.llm
 
 
-def retrieve_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
-    ctx = runtime.context
-    retrieval = (ctx.retrieve_fn or retrieve)(
-        state["query"], state["decision"].archetype, ctx.embedder, ctx.store, principal=state.get("principal")
-    )
-    return {"retrievals": [retrieval]}
+# --- the loop's steps as plain functions (the graph nodes below and the
+# Functional API variant both call these, so the two can't drift) ---
 
 
-def grade_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
-    ctx = runtime.context
-    retrieval = state["retrievals"][-1]
+def grade(ctx: Any, query: str, retrieval: RetrievalResult) -> tuple[bool, UsageSummary | None]:
+    """Whether ``retrieval`` can answer ``query``, per ``ctx.corrective``,
+    and the grading call's usage (None when no call was made)."""
     if ctx.corrective == "off":
-        return {"sufficient": True}
+        return True, None
     if ctx.corrective == "score":
-        return {"sufficient": score_sufficient(retrieval)}
+        return score_sufficient(retrieval), None
     shown = filter_relevant(retrieval.results)
     if not shown:
         # Nothing over the floor: the fixed "nothing on that" answer
         # would follow, so a retry can only help. No call needed.
-        return {"sufficient": False}
+        return False, None
     recorder = UsageRecorder(_grading_llm(ctx))
-    verdict = recorder.complete(GRADER_SYSTEM_PROMPT, grader_user_prompt(state["query"], shown))
-    return {"sufficient": parse_verdict(verdict), "corrective_usage": [recorder.summary()]}
+    verdict = recorder.complete(GRADER_SYSTEM_PROMPT, grader_user_prompt(query, shown))
+    return parse_verdict(verdict), recorder.summary()
+
+
+def rewrite(ctx: Any, query: str) -> tuple[str | None, UsageSummary]:
+    """One search query for ``query`` (None if the model gave nothing)."""
+    recorder = UsageRecorder(_grading_llm(ctx))
+    text = recorder.complete(REWRITE_SYSTEM_PROMPT, f"Question: {query}")
+    lines = [line.strip().strip('"') for line in text.strip().splitlines() if line.strip()]
+    return (lines[0] if lines else None), recorder.summary()
+
+
+def retrieve_with(
+    ctx: Any, query: str, archetype: Archetype, principal: Principal | None
+) -> tuple[RetrievalResult, UsageSummary | None]:
+    """The pipeline's retrieval step, principal-bound, as without the loop
+    — or the Send multi-query subgraph when the context selects it, whose
+    rephrasing call is metered (its usage is returned)."""
+    if getattr(ctx, "multiquery_send", False):
+        from tessera.lc.multiquery import send_multiquery
+
+        return send_multiquery(ctx, query, archetype, principal)
+    return (ctx.retrieve_fn or retrieve)(query, archetype, ctx.embedder, ctx.store, principal=principal), None
+
+
+def _with_usage(retrieval: RetrievalResult, usage: UsageSummary | None) -> dict[str, Any]:
+    get_stream_writer()({"stage": "retrieved", "chunks": len(retrieval.results)})
+    return {"retrievals": [retrieval], **({"retrieval_usage": [usage]} if usage is not None else {})}
+
+
+def retrieve_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
+    return _with_usage(
+        *retrieve_with(runtime.context, state["query"], state["decision"].archetype, state.get("principal"))
+    )
+
+
+def grade_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
+    sufficient, usage = grade(runtime.context, state["query"], state["retrievals"][-1])
+    if runtime.context.corrective != "off":
+        get_stream_writer()({"stage": "graded", "sufficient": sufficient})
+    return {"sufficient": sufficient, **({"corrective_usage": [usage]} if usage is not None else {})}
 
 
 def after_grade(state: CorrectiveState) -> Literal["rewrite", "__end__"]:
@@ -140,10 +177,8 @@ def after_grade(state: CorrectiveState) -> Literal["rewrite", "__end__"]:
 
 
 def rewrite_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
-    recorder = UsageRecorder(_grading_llm(runtime.context))
-    text = recorder.complete(REWRITE_SYSTEM_PROMPT, f"Question: {state['query']}")
-    lines = [line.strip().strip('"') for line in text.strip().splitlines() if line.strip()]
-    return {"rewritten_query": lines[0] if lines else None, "corrective_usage": [recorder.summary()]}
+    rewritten, usage = rewrite(runtime.context, state["query"])
+    return {"rewritten_query": rewritten, "corrective_usage": [usage]}
 
 
 def after_rewrite(state: CorrectiveState) -> Literal["retry", "__end__"]:
@@ -151,13 +186,9 @@ def after_rewrite(state: CorrectiveState) -> Literal["retry", "__end__"]:
 
 
 def retry_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
-    ctx = runtime.context
     rewritten = state["rewritten_query"]
     assert rewritten
-    retrieval = (ctx.retrieve_fn or retrieve)(
-        rewritten, state["decision"].archetype, ctx.embedder, ctx.store, principal=state.get("principal")
-    )
-    return {"retrievals": [retrieval]}
+    return _with_usage(*retrieve_with(runtime.context, rewritten, state["decision"].archetype, state.get("principal")))
 
 
 def build_corrective_subgraph() -> Any:
@@ -176,6 +207,9 @@ def build_corrective_subgraph() -> Any:
 
 __all__ = [
     "CORRECTIVE_VALUES",
+    "grade",
+    "retrieve_with",
+    "rewrite",
     "GRADER_SYSTEM_PROMPT",
     "REWRITE_SYSTEM_PROMPT",
     "build_corrective_subgraph",

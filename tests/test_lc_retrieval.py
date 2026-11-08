@@ -158,10 +158,22 @@ def test_the_vector_retriever_reproduces_native_retrieve(
 
 # --- the leak test, every retriever ---
 
-ALL_RETRIEVERS = [*RETRIEVER_KINDS, "tessera"]
+ALL_RETRIEVERS = [*RETRIEVER_KINDS, "tessera", "multiquery_send"]
+
+
+def send_retrieve(query: str, archetype: Archetype, store: Any, principal: Principal | None, embedder: Any, llm: Any) -> Any:
+    """P5-7's Send multi-query subgraph, as the pipeline calls it."""
+    from tessera.lc.graph import GraphContext
+    from tessera.lc.multiquery import send_multiquery
+
+    ctx = GraphContext(llm=llm, embedder=embedder, store=store, multiquery_send=True)
+    return send_multiquery(ctx, query, archetype, principal)
 
 
 def _results(kind: str, case: EvalCase, principal: Principal | None, stores: dict[str, Any], embedder: Any, shared: dict[str, Any]) -> list[Any]:
+    if kind == "multiquery_send":
+        result, _ = send_retrieve(case.query, case.archetype, stores["lc"], principal, embedder, shared["llm"])
+        return result.results
     if kind == "tessera":
         retriever = TesseraRetriever(
             archetype=case.archetype, embedder=embedder, store=stores["lc"], principal=principal
@@ -312,6 +324,59 @@ def test_the_corrective_loop_keeps_the_scope_on_its_retry(
         for attempt in run.retrievals:
             assert [r.chunk_id for r in attempt.results if not is_permitted(r, principal)] == []
     permission = permission_filter(principal)
+    assert [(op, w) for op, w in recorder.wheres if not carries(w, permission)] == []
+
+
+def test_send_multiquery_equals_the_classic_multiquery_retriever(
+    stores: dict[str, Any], embedder: LocalEmbedder, cases: list[EvalCase], walls: Walls, shared: dict[str, Any]
+) -> None:
+    """P5-7: with the same rephrasings, the Send map-reduce returns exactly
+    what P5-5's MultiQueryRetriever returns — same chunks, order, scores,
+    superseded matches — for every A/C case, as its principal."""
+    checked = 0
+    for case in cases:
+        if case.archetype not in (Archetype.LOOKUP, Archetype.SYNTHESIS):
+            continue
+        principal = case_principal(case, walls) if case.access else None
+        classic = make("multiquery", case.archetype, stores["lc"], principal, embedder, shared).retrieve(case.query)
+        sent, _ = send_retrieve(case.query, case.archetype, stores["lc"], principal, embedder, shared["llm"])
+        assert sent == classic, case.id
+        checked += 1
+    assert checked > 60
+
+
+def test_send_multiquery_meters_its_rephrasing_call(stores: dict[str, Any], embedder: LocalEmbedder) -> None:
+    """The classic retriever's rephrasing call is invisible to the
+    pipeline's usage (P5-6's finding); the Send variant's is counted."""
+    from tessera.generation.base import Completion, Usage
+
+    class Metered(ScriptedRephraser):
+        def complete_with_usage(self, system: str, user: str, temperature: float = 0.0) -> Completion:
+            return Completion(self.complete(system, user), Usage("rephraser", 50, 20, 0.0))
+
+    _, usage = send_retrieve("pricing diagnostic", Archetype.LOOKUP, stores["lc"], None, embedder, Metered())
+    assert [u.model for u in usage.calls] == ["rephraser"]
+
+
+@pytest.mark.parametrize(
+    "principal",
+    [None, Principal("c0014"), Principal("partner", frozenset({"halcyon"}))],
+    ids=["internal-only", "walled", "cleared"],
+)
+def test_every_send_search_carries_the_permission_filter(
+    principal: Principal | None, stores: dict[str, Any], embedder: LocalEmbedder, shared: dict[str, Any]
+) -> None:
+    """Each parallel search, the re-score and the contract's probes all go
+    through the principal's ScopedStore."""
+    recorder = RecordingStore(stores["lc"])
+    for archetype, query in [
+        (Archetype.LOOKUP, "What did we find on Project Halcyon's grocer price architecture?"),
+        (Archetype.SYNTHESIS, "Brief me on value-based pricing before a client workshop"),
+    ]:
+        send_retrieve(query, archetype, recorder, principal, embedder, shared["llm"])
+    permission = permission_filter(principal)
+    # 3 rephrasings + the original = 4 parallel searches per question, at least.
+    assert sum(1 for op, _ in recorder.wheres if op == "query") >= 8
     assert [(op, w) for op, w in recorder.wheres if not carries(w, permission)] == []
 
 

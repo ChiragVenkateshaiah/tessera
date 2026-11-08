@@ -41,10 +41,12 @@ path and on replayed real responses (``tests/test_lc_graph.py``).
 from __future__ import annotations
 
 import operator
+import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Annotated, Any, Literal, TypedDict
 
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -95,6 +97,10 @@ class GraphContext:
     generate_expertise_fn: Callable[..., GeneratedAnswer] | None = None
     # The corrective loop: off · score · llm (tessera.lc.corrective).
     corrective: str = "off"
+    # Multi-query as a Send map-reduce (tessera.lc.multiquery) in place of
+    # retrieve_fn: the retriever switch's multiquery_send value. Needs
+    # the LangChain store (it searches through a ScopedStore).
+    multiquery_send: bool = False
 
 
 # --- the state: plain data, two append reducers ---
@@ -124,6 +130,8 @@ class GraphState(TypedDict, total=False):
     # The corrective subgraph's keys: its grader and rewriter calls, the
     # verdict, and the rewritten query (None unless it retried).
     corrective_usage: Annotated[list[UsageSummary], operator.add]
+    # Calls made inside retrieval (the Send multi-query's rephrasing).
+    retrieval_usage: Annotated[list[UsageSummary], operator.add]
     sufficient: bool
     rewritten_query: str | None
     run: PipelineRun
@@ -136,6 +144,7 @@ def route_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[str, A
     ctx = runtime.context
     recorder = UsageRecorder(ctx.router_llm if ctx.router_llm is not None else ctx.llm)
     decision = (ctx.route_fn or route)(state["query"], recorder)
+    get_stream_writer()({"stage": "routed", "archetype": decision.archetype.value})
     return {"decision": decision, "routing_usage": [recorder.summary()]}
 
 
@@ -187,6 +196,7 @@ def generate_node(state: GraphState, runtime: Runtime[GraphContext]) -> dict[str
     recorder = UsageRecorder(ctx.llm)
     generated = (ctx.generate_fn or generate_answer)(retrieval, recorder)
     shown = tuple(filter_relevant(retrieval.results))
+    get_stream_writer()({"stage": "answered", "citations": len(generated.citations)})
     return {
         "generated": generated,
         "answer": generated.answer,
@@ -205,11 +215,16 @@ def _merged(summaries: list[UsageSummary]) -> UsageSummary:
 
 
 def assemble_node(state: GraphState) -> dict[str, Any]:
-    """The ``PipelineRun``, shaped exactly as ``NativePipeline`` shapes it."""
+    return {"run": assemble_run(state)}
+
+
+def assemble_run(state: GraphState) -> PipelineRun:
+    """The ``PipelineRun``, shaped exactly as ``NativePipeline`` shapes it
+    (shared by the graph and the Functional API variant)."""
     principal = state.get("principal")
     decision = state["decision"]
     routing = _merged(state.get("routing_usage", []))
-    corrective = _merged(state.get("corrective_usage", []))
+    corrective = _merged([*state.get("retrieval_usage", []), *state.get("corrective_usage", [])])
     generation = _merged(state.get("generation_usage", []))
     run = PipelineRun(
         answer=AnswerResult(
@@ -229,7 +244,7 @@ def assemble_node(state: GraphState) -> dict[str, Any]:
         routing_usage=routing,
         generation_usage=generation,
     )
-    return {"run": run}
+    return run
 
 
 def build_graph() -> Any:
@@ -275,6 +290,7 @@ class LangGraphPipeline:
         find_experts_fn: Callable[..., ExpertiseResult] | None = None,
         generate_expertise_fn: Callable[..., GeneratedAnswer] | None = None,
         corrective: str = "off",
+        multiquery_send: bool = False,
     ) -> None:
         self.context = GraphContext(
             llm=llm,
@@ -289,6 +305,7 @@ class LangGraphPipeline:
             find_experts_fn=find_experts_fn,
             generate_expertise_fn=generate_expertise_fn,
             corrective=corrective,
+            multiquery_send=multiquery_send,
         )
 
     def initial_state(self, query: str, principal: Principal | None) -> GraphState:
@@ -307,4 +324,99 @@ class LangGraphPipeline:
         return state["run"]
 
 
-__all__ = ["GRAPH", "GraphContext", "GraphState", "LangGraphPipeline", "build_graph"]
+# --- streaming: the four stream modes, each for one purpose ---
+
+
+@dataclass(frozen=True)
+class StreamedRun:
+    """One question answered through ``GRAPH.stream`` with every mode on:
+    - ``values`` (the full state after each step) gives the final
+      ``PipelineRun`` — ``snapshots`` counts them;
+    - ``updates`` (each node's own output, as it finishes) gives
+      ``node_seconds``: wall time per node, in order;
+    - ``messages`` (LLM tokens as they're generated, from any LangChain
+      chat model a node calls) gives ``first_token_s`` and ``tokens`` —
+      the time-to-first-token measurement. Only a LangChain chat model
+      streams tokens (``model_client=lc`` with ``prompt_chain=lc``);
+      otherwise ``first_token_s`` is None;
+    - ``custom`` (what nodes write with ``get_stream_writer``) gives
+      ``progress``: stages and counts only, never retrieved text.
+    """
+
+    run: PipelineRun
+    node_seconds: tuple[tuple[str, float], ...]
+    first_token_s: float | None
+    tokens: int
+    progress: tuple[dict[str, Any], ...]
+    snapshots: int
+    total_s: float
+    token_text: str = field(default="", repr=False)
+
+
+STREAM_MODES = ("values", "updates", "messages", "custom")
+
+
+def stream_run(
+    pipeline: LangGraphPipeline,
+    query: str,
+    principal: Principal | None = None,
+    *,
+    clock: Callable[[], float] = time.perf_counter,
+) -> StreamedRun:
+    """Answer ``query`` through ``GRAPH.stream`` with all four modes."""
+    start = last = clock()
+    node_seconds: list[tuple[str, float]] = []
+    progress: list[dict[str, Any]] = []
+    first_token: float | None = None
+    tokens: list[str] = []
+    final: dict[str, Any] = {}
+    snapshots = 0
+    # subgraphs=True: the corrective subgraph's progress writes and tokens
+    # reach this stream too. Values and timings are the top level's
+    # (namespace ()), so a subgraph's inner steps aren't double-counted.
+    for namespace, mode, chunk in GRAPH.stream(
+        pipeline.initial_state(query, principal),
+        context=pipeline.context,
+        config={"run_name": GRAPH_RUN_NAME},
+        stream_mode=list(STREAM_MODES),
+        subgraphs=True,
+    ):
+        now = clock()
+        top = namespace == ()
+        if mode == "values" and top:
+            final, snapshots = chunk, snapshots + 1
+        elif mode == "updates" and top:
+            node_seconds.extend((node, now - last) for node in chunk)
+            last = now
+        elif mode == "messages":
+            message, _meta = chunk
+            text = message.content if isinstance(message.content, str) else ""
+            if text:
+                tokens.append(text)
+                if first_token is None:
+                    first_token = now - start
+        elif mode == "custom":
+            progress.append(chunk)
+    return StreamedRun(
+        run=final["run"],
+        node_seconds=tuple(node_seconds),
+        first_token_s=first_token,
+        tokens=len(tokens),
+        progress=tuple(progress),
+        snapshots=snapshots,
+        total_s=clock() - start,
+        token_text="".join(tokens),
+    )
+
+
+__all__ = [
+    "GRAPH",
+    "STREAM_MODES",
+    "GraphContext",
+    "GraphState",
+    "LangGraphPipeline",
+    "StreamedRun",
+    "assemble_run",
+    "build_graph",
+    "stream_run",
+]

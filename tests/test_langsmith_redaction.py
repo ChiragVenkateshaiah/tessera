@@ -537,11 +537,18 @@ def test_langchain_generation_runs_are_redacted_too(
 
 # --- P5-7: LangGraph's graph and node runs ---
 
-# The graph run and one run per node it passed through, for A/C, B and D.
-LC_GRAPH_RUNS = {"tessera_graph", "route", "retrieve", "generate", "assemble", "terminal"}
+# The graph run and one run per node it passed through, for A/C, B and D
+# (the corrective subgraph's nodes included); for the Functional API, the
+# entrypoint and its tasks.
+LC_GRAPH_RUNS = {
+    "graph": {"tessera_graph", "route", "documents", "retrieve", "grade", "generate", "assemble", "terminal"},
+    "functional": {"tessera_functional", "route_task", "retrieve_task", "grade_task", "generate_task"},
+}
 
 
+@pytest.mark.parametrize("flow", list(LC_GRAPH_RUNS))
 def test_langgraph_runs_are_redacted_too(
+    flow: str,
     sent: list[Any],
     documents: list[Document],
     store: ChromaVectorStore,
@@ -557,12 +564,14 @@ def test_langgraph_runs_are_redacted_too(
     retrieved chunk text included, for a cleared partner. All of it nests
     under Tessera's root run, goes through the redacting client, and
     sends nothing restricted."""
+    from tessera.lc.functional import FunctionalPipeline
     from tessera.lc.graph import LangGraphPipeline
 
     tracer = make_tracer(documents)
+    kind = LangGraphPipeline if flow == "graph" else FunctionalPipeline
 
     def graph(llm: LLMClient) -> LangGraphPipeline:
-        return LangGraphPipeline(
+        return kind(
             tracer.llm(llm, "answer"), embedder, store,
             router_llm=tracer.llm(llm, "router"), **tracer.native_steps(),
         )
@@ -578,7 +587,7 @@ def test_langgraph_runs_are_redacted_too(
 
     assert leaks(captured_text(sent), forbidden) == []
     names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
-    assert LC_GRAPH_RUNS <= names, f"missing graph runs: {LC_GRAPH_RUNS - names}"
+    assert LC_GRAPH_RUNS[flow] <= names, f"missing runs: {LC_GRAPH_RUNS[flow] - names}"
 
 
 class QuietLLM(LLMClient):
@@ -614,3 +623,74 @@ def test_graph_node_runs_carry_restricted_state_without_redaction(
         pipeline.run(cleared.query, case_principal(cleared, walls))
     client.flush()
     assert any(f.startswith("text:") for f in leaks(captured_text(sent), forbidden))
+
+
+def _echo_chat() -> Any:
+    """A LangChain chat model that streams the human message back word by
+    word — the rendered answer prompt, restricted sources included."""
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import AIMessage, AIMessageChunk
+    from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+
+    class EchoChat(BaseChatModel):
+        @property
+        def _llm_type(self) -> str:
+            return "echo-chat"
+
+        def _text(self, messages: list[Any]) -> str:
+            return f"ECHO {messages[-1].content}"
+
+        def _generate(self, messages: list[Any], stop: Any = None, run_manager: Any = None, **kw: Any) -> ChatResult:
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self._text(messages)))])
+
+        def _stream(self, messages: list[Any], stop: Any = None, run_manager: Any = None, **kw: Any) -> Any:
+            for word in self._text(messages).split(" "):
+                chunk = ChatGenerationChunk(message=AIMessageChunk(content=word + " "))
+                if run_manager is not None:
+                    run_manager.on_llm_new_token(chunk.text, chunk=chunk)
+                yield chunk
+
+    return EchoChat()
+
+
+def test_streamed_graph_runs_and_token_events_are_redacted_too(
+    sent: list[Any],
+    documents: list[Document],
+    store: ChromaVectorStore,
+    embedder: LocalEmbedder,
+    access_cases: list[EvalCase],
+    walls: Walls,
+    forbidden: dict[str, Any],
+) -> None:
+    """Every access case answered through ``stream_run`` (all four stream
+    modes), with the LCEL answer chain on a chat model that streams the
+    rendered prompt back token by token. LangSmith receives the graph's
+    runs and every token as a ``new_token`` event on the chat model's
+    run; none of it may carry anything restricted. The stream itself
+    reaches the caller (the asking principal), as it should."""
+    from tessera.lc.generation import LcModel, generate_step
+    from tessera.lc.graph import LangGraphPipeline, stream_run
+
+    tracer = make_tracer(documents)
+    graph = LangGraphPipeline(
+        tracer.llm(LeakyLLM(), "answer"), embedder, store, router_llm=tracer.llm(LeakyLLM(), "router"),
+        **tracer.native_steps(generate=generate_step(LcModel(chat_model=_echo_chat(), model_id="echo", retries=False))),
+    )
+    streamed_tokens: list[int] = []
+
+    class Streaming:
+        def run(self, query: str, principal: Principal | None = None) -> Any:
+            streamed = stream_run(graph, query, principal)
+            streamed_tokens.append(streamed.tokens)
+            return streamed.run
+
+    for case in access_cases:
+        tracer.run(Streaming(), case.query, case_principal(case, walls), tracer.new_trace_id())
+
+    assert leaks(captured_text(sent), forbidden) == []
+    assert any(streamed_tokens), "nothing was streamed to the caller"
+    events = [
+        e for runs in runs_by_trace(sent).values() for run in runs.values()
+        for e in (run.get("events") or []) if isinstance(e, dict) and e.get("name") == "new_token"
+    ]
+    assert events, "no token events reached LangSmith — the test would prove nothing"

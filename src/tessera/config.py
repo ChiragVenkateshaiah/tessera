@@ -71,7 +71,11 @@ class Settings(BaseSettings):
     # the shared contract — lc (vector), parent_doc, bm25, hybrid,
     # multiquery (calls the router model), rerank (local cross-encoder).
     # Evidence: evals/reports/p5-5-retrieval.md.
-    lc_retriever: Literal["native", "lc", "parent_doc", "bm25", "hybrid", "multiquery", "rerank"] = Field(
+    # multiquery_send (P5-7): multi-query as a LangGraph Send map-reduce,
+    # needs a LangGraph orchestration.
+    lc_retriever: Literal[
+        "native", "lc", "parent_doc", "bm25", "hybrid", "multiquery", "rerank", "multiquery_send"
+    ] = Field(
         default="lc", validation_alias="TESSERA_LC_RETRIEVER"
     )
     lc_hybrid_bm25_weight: float = Field(default=0.25, validation_alias="TESSERA_LC_HYBRID_BM25_WEIGHT")
@@ -88,15 +92,17 @@ class Settings(BaseSettings):
     lc_model_client: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_MODEL_CLIENT")
     lc_retry: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_RETRY")
     lc_expertise: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_EXPERTISE")
-    # Orchestration (P5-7): NativePipeline, or the LangGraph StateGraph
-    # (tessera.lc.graph), exactly equal to it on fakes and on replay.
-    # Evidence: evals/reports/p5-7-orchestration.md.
-    lc_orchestration: Literal["native", "graph"] = Field(
+    # Orchestration (P5-7): NativePipeline, the LangGraph StateGraph
+    # (tessera.lc.graph) or the same logic in LangGraph's Functional API
+    # (tessera.lc.functional); both exactly equal to native on fakes and
+    # on replay. Evidence: evals/reports/p5-7-orchestration.md.
+    lc_orchestration: Literal["native", "graph", "functional"] = Field(
         default="graph", validation_alias="TESSERA_LC_ORCHESTRATION"
     )
     # The corrective retrieval loop (P5-7, tessera.lc.corrective): off, a
     # score grader, or an LLM grader, then at most one rewrite-and-retry.
-    # Needs orchestration=graph. Stays off unless its sweep shows it helps.
+    # Needs a LangGraph orchestration. Stays off unless its sweep shows it
+    # helps.
     lc_corrective: Literal["off", "score", "llm"] = Field(
         default="off", validation_alias="TESSERA_LC_CORRECTIVE"
     )

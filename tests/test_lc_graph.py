@@ -38,6 +38,7 @@ from tessera.generation.prompts import (  # noqa: E402
     ROUTER_SYSTEM_PROMPT,
     SYNTHESIS_ANSWER_SYSTEM_PROMPT,
 )
+from tessera.lc.functional import FunctionalPipeline  # noqa: E402
 from tessera.lc.graph import GRAPH, LangGraphPipeline  # noqa: E402
 from tessera.pipeline import NativePipeline, PipelineRun  # noqa: E402
 from tessera.principal import Principal  # noqa: E402
@@ -63,9 +64,18 @@ ANSWERS = {
 }
 
 
-def both(make: Any, query: str, principal: Principal | None = None) -> tuple[PipelineRun, PipelineRun]:
-    """The same pipeline arguments, run natively and as the graph."""
-    return make(NativePipeline).run(query, principal), make(LangGraphPipeline).run(query, principal)
+FLOWS = [LangGraphPipeline, FunctionalPipeline]
+
+
+@pytest.fixture(params=FLOWS, ids=["graph", "functional"])
+def flow(request: pytest.FixtureRequest) -> Any:
+    """Each LangGraph programming model: the StateGraph and the Functional API."""
+    return request.param
+
+
+def both(make: Any, query: str, principal: Principal | None = None, flow: Any = LangGraphPipeline) -> tuple[PipelineRun, PipelineRun]:
+    """The same pipeline arguments, run natively and through ``flow``."""
+    return make(NativePipeline).run(query, principal), make(flow).run(query, principal)
 
 
 def scripted(archetype: str, model: str | None = None) -> LLMClient:
@@ -99,35 +109,36 @@ ROUTED = {"A": "A", "C": "C", "A-nothing-over-the-floor": "A", "B": "B", "B-nobo
 @pytest.mark.parametrize("path", list(PATHS))
 @pytest.mark.parametrize("principal", [None, Principal("c0014"), Principal("partner", frozenset({"halcyon"}))],
                          ids=["internal-only", "walled", "cleared"])
-def test_the_graph_equals_native_on_every_path(path: str, principal: Principal | None) -> None:
-    native, graph = both(lambda kind: PATHS[path](kind, scripted(ROUTED[path])), "pricing framework?", principal)
+def test_the_graph_equals_native_on_every_path(path: str, principal: Principal | None, flow: Any) -> None:
+    native, graph = both(lambda kind: PATHS[path](kind, scripted(ROUTED[path])), "pricing framework?", principal, flow)
     assert graph == native
     assert graph.answer.archetype.value == ROUTED[path]
 
 
 @pytest.mark.parametrize("path", list(PATHS))
-def test_metered_router_and_answer_clients_stay_apart(path: str) -> None:
+def test_metered_router_and_answer_clients_stay_apart(path: str, flow: Any) -> None:
     """A separate metered router (the Gemini shape: Flash routes, Pro answers)."""
     native, graph = both(
         lambda kind: PATHS[path](
             kind, scripted(ROUTED[path], "answer-model"), router_llm=scripted(ROUTED[path], "router-model")
         ),
         "pricing framework?",
+        flow=flow,
     )
     assert graph == native
     assert {u.model for u in graph.routing_usage.calls} == {"router-model"}
     assert {u.model for u in graph.generation_usage.calls} <= {"answer-model"}
 
 
-def test_a_routing_error_propagates_the_same_way() -> None:
+def test_a_routing_error_propagates_the_same_way(flow: Any) -> None:
     llm = ScriptedLLMClient({ROUTER_SYSTEM_PROMPT: "not json"})
     with pytest.raises(RoutingError):
         NativePipeline(llm, PricingEmbedder(), FakeVectorStore(DOCS)).run("pricing?")
     with pytest.raises(RoutingError):
-        LangGraphPipeline(llm, PricingEmbedder(), FakeVectorStore(DOCS)).run("pricing?")
+        flow(llm, PricingEmbedder(), FakeVectorStore(DOCS)).run("pricing?")
 
 
-def test_steps_are_injected_per_invocation_like_native() -> None:
+def test_steps_are_injected_per_invocation_like_native(flow: Any) -> None:
     """A composition root's step replacements reach the graph's nodes
     (through the runtime context, not the compiled graph)."""
     seen: list[str] = []
@@ -141,6 +152,7 @@ def test_steps_are_injected_per_invocation_like_native() -> None:
     native, graph = both(
         lambda kind: kind(scripted("A"), PricingEmbedder(), FakeVectorStore(DOCS), retrieve_fn=retrieve_fn),
         "pricing framework?",
+        flow=flow,
     )
     assert graph == native
     assert seen == ["pricing framework?", "pricing framework?"]
@@ -166,10 +178,10 @@ class BarrierLLM(LLMClient):
         return Completion(self._inner.complete(system, user, temperature), Usage(self._model, 1, 1, 0.0))
 
 
-def test_two_concurrent_invocations_keep_their_usage_apart() -> None:
+def test_two_concurrent_invocations_keep_their_usage_apart(flow: Any) -> None:
     barrier = threading.Barrier(2)
-    lookup = LangGraphPipeline(BarrierLLM(scripted("A"), "model-a", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
-    synthesis = LangGraphPipeline(BarrierLLM(scripted("C"), "model-c", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
+    lookup = flow(BarrierLLM(scripted("A"), "model-a", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
+    synthesis = flow(BarrierLLM(scripted("C"), "model-c", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
     with ThreadPoolExecutor(max_workers=2) as pool:
         a = pool.submit(lookup.run, "pricing framework?")
         c = pool.submit(synthesis.run, "brief me on pricing")
@@ -183,10 +195,10 @@ def test_two_concurrent_invocations_keep_their_usage_apart() -> None:
     assert runs["c"].answer.archetype.value == "C"
 
 
-def test_one_pipeline_answers_two_questions_at_once() -> None:
-    """The same LangGraphPipeline (one context) from two threads."""
+def test_one_pipeline_answers_two_questions_at_once(flow: Any) -> None:
+    """The same pipeline (one context) from two threads."""
     barrier = threading.Barrier(2)
-    pipeline = LangGraphPipeline(BarrierLLM(scripted("A"), "m", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
+    pipeline = flow(BarrierLLM(scripted("A"), "m", barrier), PricingEmbedder(), FakeVectorStore(DOCS))
     with ThreadPoolExecutor(max_workers=2) as pool:
         runs = list(pool.map(pipeline.run, ["pricing framework?", "pricing playbook?"]))
     assert [r.answer.query for r in runs] == ["pricing framework?", "pricing playbook?"]
@@ -196,8 +208,11 @@ def test_one_pipeline_answers_two_questions_at_once() -> None:
 # --- the rules ---
 
 
-def test_the_graph_has_no_checkpointer() -> None:
+def test_neither_flow_has_a_checkpointer() -> None:
+    from tessera.lc.functional import tessera_flow
+
     assert GRAPH.checkpointer is None
+    assert tessera_flow.checkpointer is None
 
 
 def test_state_holds_plain_data_only() -> None:
@@ -226,13 +241,15 @@ def exact(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     return {"embedder": embedder, "store": store, "experts": experts, "walls": load_walls_for_repo()}
 
 
-def test_replay_of_native_responses_is_exact_on_every_case(recording: dict[str, Any], exact: dict[str, Any]) -> None:
+def test_replay_of_native_responses_is_exact_on_every_case(
+    recording: dict[str, Any], exact: dict[str, Any], flow: Any
+) -> None:
     cases = load_cases(REPO / "evals" / "cases")
     recorded_ok = [c for c in cases if c.id not in set(recording["meta"]["failed"])]
     assert len(recorded_ok) >= 90, "too few cases recorded — re-record"
     native_llm, graph_llm = ReplayLLM(recording["responses"]), ReplayLLM(recording["responses"])
     native = NativePipeline(native_llm, exact["embedder"], exact["store"], exact["experts"])
-    graph = LangGraphPipeline(graph_llm, exact["embedder"], exact["store"], exact["experts"])
+    graph = flow(graph_llm, exact["embedder"], exact["store"], exact["experts"])
     mismatched = []
     for case in recorded_ok:
         principal = case_principal(case, exact["walls"])
@@ -240,3 +257,69 @@ def test_replay_of_native_responses_is_exact_on_every_case(recording: dict[str, 
             mismatched.append(case.id)
     assert mismatched == []
     assert graph_llm.served == native_llm.served > 0
+
+
+# --- streaming: the four modes ---
+
+
+def _token_pipeline(answer: str, corrective: str = "off") -> LangGraphPipeline:
+    """The graph with the LCEL answer chain on a LangChain chat model that
+    streams ``answer`` word by word (``model_client=lc`` + ``prompt_chain=lc``)."""
+    from itertools import cycle
+
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    from tessera.lc.generation import LcModel, generate_step
+
+    chat = GenericFakeChatModel(messages=cycle([AIMessage(content=answer)]))
+    return LangGraphPipeline(
+        scripted("A"), PricingEmbedder(), FakeVectorStore(DOCS),
+        generate_fn=generate_step(LcModel(chat_model=chat, model_id="fake", retries=False)),
+        corrective=corrective,
+    )
+
+
+def test_streaming_gives_the_same_run_as_invoking() -> None:
+    from tessera.lc.graph import stream_run
+
+    pipeline = _token_pipeline("The pricing framework is in [1].")
+    streamed = stream_run(pipeline, "pricing framework?")
+    assert streamed.run == pipeline.run("pricing framework?")
+    assert streamed.snapshots >= 4  # values: one full state per step
+
+
+def test_updates_time_every_node_in_order() -> None:
+    from tessera.lc.graph import stream_run
+
+    ticks = iter(range(100))
+    streamed = stream_run(_token_pipeline("Answer [1]."), "pricing framework?", clock=lambda: float(next(ticks)))
+    assert [node for node, _ in streamed.node_seconds] == ["route", "documents", "generate", "assemble"]
+    assert all(seconds > 0 for _, seconds in streamed.node_seconds)
+
+
+def test_messages_stream_tokens_and_time_the_first_one() -> None:
+    from tessera.lc.graph import stream_run
+
+    answer = "The pricing framework is in source one [1]."
+    streamed = stream_run(_token_pipeline(answer), "pricing framework?")
+    assert streamed.tokens > 5
+    assert streamed.token_text == answer
+    assert streamed.first_token_s is not None and streamed.first_token_s <= streamed.total_s
+
+
+def test_a_native_model_client_streams_no_tokens() -> None:
+    from tessera.lc.graph import stream_run
+
+    streamed = stream_run(LangGraphPipeline(scripted("A"), PricingEmbedder(), FakeVectorStore(DOCS)), "pricing?")
+    assert streamed.tokens == 0 and streamed.first_token_s is None
+
+
+def test_custom_progress_reports_stages_and_counts_only() -> None:
+    from tessera.lc.graph import stream_run
+
+    streamed = stream_run(_token_pipeline("Answer [1].", corrective="score"), "pricing framework?")
+    assert [p["stage"] for p in streamed.progress] == ["routed", "retrieved", "graded", "answered"]
+    allowed = {"stage", "archetype", "chunks", "sufficient", "citations"}
+    assert all(set(p) <= allowed for p in streamed.progress)
+    assert all(not isinstance(v, str) or k in ("stage", "archetype") for p in streamed.progress for k, v in p.items())

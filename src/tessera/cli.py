@@ -334,23 +334,28 @@ def _native_pipeline(
     *,
     orchestration: str = "native",
     corrective: str = "off",
+    multiquery_send: bool = False,
 ) -> Pipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
     core (plan §3.9.2). ``steps`` swaps in the LangChain stack's layers
     (``retrieve``, ``route``, ``generate``, ``find_experts``,
     ``generate_expertise``); any step not given stays native.
-    ``orchestration="graph"`` runs the same steps through the LangGraph
-    orchestrator (P5-7), imported only then; ``corrective`` (off, score,
-    llm) is its corrective loop."""
+    ``orchestration`` ``graph`` or ``functional`` runs the same steps
+    through the LangGraph orchestrator (P5-7), imported only then;
+    ``corrective`` (off, score, llm) is its corrective loop and
+    ``multiquery_send`` its Send multi-query retrieval."""
     steps = steps or {}
     kind: Callable[..., Pipeline] = NativePipeline
-    if orchestration == "graph":
+    if orchestration in ("graph", "functional"):
         from functools import partial
 
-        from tessera.lc.graph import LangGraphPipeline
+        if orchestration == "graph":
+            from tessera.lc.graph import LangGraphPipeline as flow
+        else:
+            from tessera.lc.functional import FunctionalPipeline as flow
 
-        kind = partial(LangGraphPipeline, corrective=corrective)
+        kind = partial(flow, corrective=corrective, multiquery_send=multiquery_send)
     if tracer is None:
         return kind(
             llms.answer,
@@ -414,7 +419,9 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None)
         raise typer.Exit(code=1)
     kind = settings.lc_retriever
     retrieve = None
-    if kind != "native":
+    # multiquery_send isn't a retrieve step: the LangGraph orchestrator
+    # runs it as a subgraph (passed to the pipeline where it's built).
+    if kind not in ("native", "multiquery_send"):
         retrieve = lc_retrieve_fn(
             store,
             "vector" if kind == "lc" else kind,
@@ -452,8 +459,12 @@ def _lc_generation(
     from tessera.lc.expertise import find_experts_step
     from tessera.lc.generation import LcModel, generate_expertise_step, generate_step, route_step
 
-    if settings.lc_corrective != "off" and settings.lc_orchestration != "graph":
-        typer.echo("TESSERA_LC_CORRECTIVE needs TESSERA_LC_ORCHESTRATION=graph.", err=True)
+    langgraph = settings.lc_orchestration in ("graph", "functional")
+    if settings.lc_corrective != "off" and not langgraph:
+        typer.echo("TESSERA_LC_CORRECTIVE needs TESSERA_LC_ORCHESTRATION=graph or functional.", err=True)
+        raise typer.Exit(code=2)
+    if settings.lc_retriever == "multiquery_send" and not langgraph:
+        typer.echo("TESSERA_LC_RETRIEVER=multiquery_send needs TESSERA_LC_ORCHESTRATION=graph or functional.", err=True)
         raise typer.Exit(code=2)
     if settings.lc_retry == "lc" and settings.lc_model_client != "lc":
         typer.echo("TESSERA_LC_RETRY=lc needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
@@ -1139,6 +1150,7 @@ def eval_command(
         steps=lc.pipeline_steps() if lc is not None else None,
         orchestration=settings.lc_orchestration if lc is not None else "native",
         corrective=settings.lc_corrective if lc is not None else "off",
+        multiquery_send=lc is not None and settings.lc_retriever == "multiquery_send",
     )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 

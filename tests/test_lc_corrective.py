@@ -25,6 +25,7 @@ from tessera.lc.corrective import (  # noqa: E402
     parse_verdict,
     score_sufficient,
 )
+from tessera.lc.functional import FunctionalPipeline  # noqa: E402
 from tessera.lc.graph import LangGraphPipeline  # noqa: E402
 from tessera.pipeline import NativePipeline  # noqa: E402
 from tessera.retrieval.retriever import RetrievalResult  # noqa: E402
@@ -70,8 +71,13 @@ class QueryStore(FakeVectorStore):
         return [_result("methodology/pricing.md", 0.9), _result("methodology/pricing-2.md", 0.8)][:k]
 
 
-def run(corrective: str, llm: Scripted, query: str = "pricing framework?") -> Any:
-    return LangGraphPipeline(llm, PricingEmbedder(), QueryStore(), corrective=corrective).run(query)
+@pytest.fixture(params=[LangGraphPipeline, FunctionalPipeline], ids=["graph", "functional"])
+def flow(request: pytest.FixtureRequest) -> Any:
+    return request.param
+
+
+def run(corrective: str, llm: Scripted, flow: Any, query: str = "pricing framework?") -> Any:
+    return flow(llm, PricingEmbedder(), QueryStore(), corrective=corrective).run(query)
 
 
 # --- graders ---
@@ -113,17 +119,17 @@ def test_the_llm_verdict_parser(text: str, sufficient: bool) -> None:
 # --- the loop ---
 
 
-def test_off_makes_no_corrective_call_and_equals_native() -> None:
+def test_off_makes_no_corrective_call_and_equals_native(flow: Any) -> None:
     llm = Scripted(replies(sufficient=False))
-    graph = run("off", llm)
+    graph = run("off", llm, flow)
     native = NativePipeline(llm, PricingEmbedder(), QueryStore()).run("pricing framework?")
     assert graph == native
     assert [s for s, _ in llm.calls].count(GRADER_SYSTEM_PROMPT) == 0
 
 
-def test_a_sufficient_verdict_retrieves_once() -> None:
+def test_a_sufficient_verdict_retrieves_once(flow: Any) -> None:
     llm = Scripted(replies(sufficient=True))
-    result = run("llm", llm)
+    result = run("llm", llm, flow)
     assert len(result.retrievals) == 1
     systems = [s for s, _ in llm.calls]
     assert systems == [ROUTER_SYSTEM_PROMPT, GRADER_SYSTEM_PROMPT, LOOKUP_ANSWER_SYSTEM_PROMPT]
@@ -132,9 +138,9 @@ def test_a_sufficient_verdict_retrieves_once() -> None:
     assert result.generation_calls == 1
 
 
-def test_an_insufficient_verdict_rewrites_and_retries_once() -> None:
+def test_an_insufficient_verdict_rewrites_and_retries_once(flow: Any) -> None:
     llm = Scripted(replies(sufficient=False, rewrite="pricing methodology playbook"))
-    result = run("llm", llm)
+    result = run("llm", llm, flow)
     assert [r.query for r in result.retrievals] == ["pricing framework?", "pricing methodology playbook"]
     systems = [s for s, _ in llm.calls]
     # One grade only: the retry isn't graded again (at most once).
@@ -147,13 +153,13 @@ def test_an_insufficient_verdict_rewrites_and_retries_once() -> None:
     assert len(result.routing_usage.calls) == 1
 
 
-def test_an_empty_rewrite_does_not_retry() -> None:
+def test_an_empty_rewrite_does_not_retry(flow: Any) -> None:
     llm = Scripted(replies(sufficient=False, rewrite="   "))
-    result = run("llm", llm)
+    result = run("llm", llm, flow)
     assert len(result.retrievals) == 1
 
 
-def test_the_score_grader_retries_without_a_grading_call() -> None:
+def test_the_score_grader_retries_without_a_grading_call(flow: Any) -> None:
     class Weak(QueryStore):
         """Over the generation floor, under WEAK_TOP_SCORE."""
 
@@ -161,17 +167,17 @@ def test_the_score_grader_retries_without_a_grading_call() -> None:
             return [_result("methodology/pricing.md", WEAK_TOP_SCORE - 0.05)][:k]
 
     llm = Scripted(replies(sufficient=True))
-    result = LangGraphPipeline(llm, PricingEmbedder(), Weak(), corrective="score").run("pricing framework?")
+    result = flow(llm, PricingEmbedder(), Weak(), corrective="score").run("pricing framework?")
     systems = [s for s, _ in llm.calls]
     assert GRADER_SYSTEM_PROMPT not in systems
     assert REWRITE_SYSTEM_PROMPT in systems
     assert len(result.retrievals) == 2
 
 
-def test_the_grader_and_rewriter_use_the_routing_model() -> None:
+def test_the_grader_and_rewriter_use_the_routing_model(flow: Any) -> None:
     answer = Scripted(replies(sufficient=False))
     router = Scripted(replies(sufficient=False))
-    LangGraphPipeline(answer, PricingEmbedder(), QueryStore(), router_llm=router, corrective="llm").run(
+    flow(answer, PricingEmbedder(), QueryStore(), router_llm=router, corrective="llm").run(
         "pricing framework?"
     )
     assert [s for s, _ in router.calls] == [ROUTER_SYSTEM_PROMPT, GRADER_SYSTEM_PROMPT, REWRITE_SYSTEM_PROMPT]
@@ -179,7 +185,7 @@ def test_the_grader_and_rewriter_use_the_routing_model() -> None:
 
 
 @pytest.mark.parametrize("archetype", ["B", "D"])
-def test_the_loop_never_runs_outside_documents(archetype: str) -> None:
+def test_the_loop_never_runs_outside_documents(archetype: str, flow: Any) -> None:
     llm = Scripted(replies(archetype, sufficient=False))
-    LangGraphPipeline(llm, PricingEmbedder(), QueryStore(), corrective="llm").run("who knows pricing?")
+    flow(llm, PricingEmbedder(), QueryStore(), corrective="llm").run("who knows pricing?")
     assert GRADER_SYSTEM_PROMPT not in [s for s, _ in llm.calls]

@@ -1123,3 +1123,27 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
     else:
         assert type(pipeline).__name__ == "NativePipeline"
         assert pipeline._retrieve is lc_retrieve  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    ("env", "message"),
+    [
+        ({"TESSERA_LC_CORRECTIVE": "llm", "TESSERA_LC_ORCHESTRATION": "native"}, "TESSERA_LC_CORRECTIVE needs"),
+        ({"TESSERA_LC_RETRIEVER": "multiquery_send", "TESSERA_LC_ORCHESTRATION": "native"},
+         "multiquery_send needs"),
+    ],
+)
+def test_langgraph_only_switches_need_a_langgraph_orchestration(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], message: str
+) -> None:
+    """P5-7: the corrective loop and the Send multi-query exist only in
+    the LangGraph orchestrators; with native orchestration the eval stops
+    with a clear message instead of silently ignoring the switch."""
+    pytest.importorskip("langgraph", reason="the lc extra isn't installed")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    settings = cli._load_settings()
+    with pytest.raises(cli.typer.Exit) as exit_info:
+        cli._lc_generation(settings, cli.LLMs(answer=None, router=None, name="x"), pacer=None)  # type: ignore[arg-type]
+    assert exit_info.value.exit_code == 2
