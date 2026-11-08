@@ -533,3 +533,84 @@ def test_langchain_generation_runs_are_redacted_too(
     assert leaks(captured_text(sent), forbidden) == []
     names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
     assert LC_GENERATION_RUNS <= names, f"missing LangChain runs: {LC_GENERATION_RUNS - names}"
+
+
+# --- P5-7: LangGraph's graph and node runs ---
+
+# The graph run and one run per node it passed through, for A/C, B and D.
+LC_GRAPH_RUNS = {"tessera_graph", "route", "retrieve", "generate", "assemble", "terminal"}
+
+
+def test_langgraph_runs_are_redacted_too(
+    sent: list[Any],
+    documents: list[Document],
+    store: ChromaVectorStore,
+    embedder: LocalEmbedder,
+    access_cases: list[EvalCase],
+    walls: Walls,
+    forbidden: dict[str, Any],
+) -> None:
+    """Every access case through the LangGraph orchestrator (the
+    ``orchestration`` switch), plus a D refusal naming codenames and a
+    failing model in a tainted trace. LangGraph traces the graph and
+    every node, and a node run's inputs and outputs are the graph state —
+    retrieved chunk text included, for a cleared partner. All of it nests
+    under Tessera's root run, goes through the redacting client, and
+    sends nothing restricted."""
+    from tessera.lc.graph import LangGraphPipeline
+
+    tracer = make_tracer(documents)
+
+    def graph(llm: LLMClient) -> LangGraphPipeline:
+        return LangGraphPipeline(
+            tracer.llm(llm, "answer"), embedder, store,
+            router_llm=tracer.llm(llm, "router"), **tracer.native_steps(),
+        )
+
+    pipeline = graph(LeakyLLM())
+    for case in access_cases:
+        tracer.run(pipeline, case.query, case_principal(case, walls), tracer.new_trace_id())
+    tracer.run(graph(LeakyLLM("D")), "Compare Project Halcyon with Project Kestrel and Lantern", None,
+               tracer.new_trace_id())
+    with pytest.raises(RuntimeError):
+        tracer.run(graph(LeakyLLM(fail=True)), "What did Project Halcyon find on grocer price tiers?",
+                   Principal("c0001", frozenset({"halcyon"})), tracer.new_trace_id())
+
+    assert leaks(captured_text(sent), forbidden) == []
+    names = {run.get("name") for runs in runs_by_trace(sent).values() for run in runs.values()}
+    assert LC_GRAPH_RUNS <= names, f"missing graph runs: {LC_GRAPH_RUNS - names}"
+
+
+class QuietLLM(LLMClient):
+    """Routes as A and answers with a fixed sentence: it echoes nothing."""
+
+    def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+        if system == ROUTER_SYSTEM_PROMPT:
+            return json.dumps({"archetype": "A", "reasoning": "lookup"})
+        return "A fixed answer [1]."
+
+
+def test_graph_node_runs_carry_restricted_state_without_redaction(
+    sent: list[Any],
+    documents: list[Document],
+    store: ChromaVectorStore,
+    embedder: LocalEmbedder,
+    access_cases: list[EvalCase],
+    walls: Walls,
+    forbidden: dict[str, Any],
+) -> None:
+    """The graph's control: with a model that echoes nothing, a plain
+    client still receives restricted chunk text — from the node runs,
+    whose inputs and outputs are the graph state. So the graph runs are a
+    leak surface of their own, and the gate above measures it."""
+    from langsmith import Client
+
+    from tessera.lc.graph import LangGraphPipeline
+
+    client = Client(api_key="test-key", api_url="https://langsmith.invalid", info=NO_INFO)
+    pipeline = LangGraphPipeline(QuietLLM(), embedder, store)
+    cleared = next(c for c in access_cases if c.access == "authorized")
+    with ls.tracing_context(enabled=True, client=client, project_name="control"):
+        pipeline.run(cleared.query, case_principal(cleared, walls))
+    client.flush()
+    assert any(f.startswith("text:") for f in leaks(captured_text(sent), forbidden))

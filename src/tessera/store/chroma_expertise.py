@@ -91,11 +91,17 @@ class ChromaExpertiseStore(ExpertiseStore):
         self,
         persist_dir: Path,
         collection_name: str = DEFAULT_EXPERTISE_COLLECTION_NAME,
+        *,
+        search_ef: int | None = None,
     ) -> None:
         self._client = chromadb.PersistentClient(path=str(persist_dir))
-        self._collection = self._client.get_or_create_collection(
-            collection_name, metadata={"hnsw:space": "cosine"}
-        )
+        # search_ef as ChromaVectorStore's: at or above the collection size
+        # the search is exact, so independently built indexes agree (the
+        # replay test uses it). Unset, Chroma's default applies.
+        metadata: dict[str, object] = {"hnsw:space": "cosine"}
+        if search_ef is not None:
+            metadata["hnsw:search_ef"] = search_ef
+        self._collection = self._client.get_or_create_collection(collection_name, metadata=metadata)
 
     def add(self, people: list[Person], embeddings: list[list[float]]) -> None:
         if len(people) != len(embeddings):

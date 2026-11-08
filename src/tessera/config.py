@@ -81,12 +81,19 @@ class Settings(BaseSettings):
     # ChatGoogleGenerativeAI (per TESSERA_LLM_PROVIDER); retry:
     # RetryingLLMClient or .with_retry() + InMemoryRateLimiter (needs
     # model_client=lc); expertise: native find_experts or PeopleRetriever.
-    # Evidence: evals/reports/p5-6-generation.md.
-    lc_router: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_ROUTER")
-    lc_prompt_chain: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_PROMPT_CHAIN")
-    lc_model_client: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_MODEL_CLIENT")
+    # Evidence: evals/reports/p5-6-generation.md; the user chose these
+    # lc-defaults on 2026-11-08 (§6 there).
+    lc_router: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_ROUTER")
+    lc_prompt_chain: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_PROMPT_CHAIN")
+    lc_model_client: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_MODEL_CLIENT")
     lc_retry: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_RETRY")
     lc_expertise: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_EXPERTISE")
+    # Orchestration (P5-7): NativePipeline, or the LangGraph StateGraph
+    # (tessera.lc.graph), exactly equal to it on fakes and on replay.
+    # Evidence: evals/reports/p5-7-orchestration.md.
+    lc_orchestration: Literal["native", "graph"] = Field(
+        default="graph", validation_alias="TESSERA_LC_ORCHESTRATION"
+    )
     # Gemini on Google Cloud's Agent Platform (formerly Vertex AI), the
     # production provider since ADR 0007. Auth is Application Default
     # Credentials; no key in config.

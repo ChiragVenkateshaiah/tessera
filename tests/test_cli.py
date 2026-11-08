@@ -1057,12 +1057,17 @@ def test_an_unknown_stack_is_rejected() -> None:
     assert result.exit_code == 2 and "Unknown stack" in result.output
 
 
+@pytest.mark.parametrize("orchestration", ["graph", "native"])
 def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, orchestration: str
 ) -> None:
-    """P5-5: `eval --stack lc` scores the native pipeline with the
-    LangChain retrieval layers swapped in — the LangChain index as the
-    store, its retriever as the pipeline's retrieve step."""
+    """P5-5: `eval --stack lc` scores the pipeline with the LangChain
+    retrieval layers swapped in — the LangChain index as the store, its
+    retriever as the pipeline's retrieve step. P5-7: through the LangGraph
+    orchestrator by default, or NativePipeline when
+    TESSERA_LC_ORCHESTRATION=native."""
+    pytest.importorskip("langgraph", reason="the lc extra isn't installed")
+    monkeypatch.setenv("TESSERA_LC_ORCHESTRATION", orchestration)
     seen: dict[str, object] = {}
 
     class NonEmptyStore:
@@ -1109,4 +1114,12 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
     assert result.exit_code == 0, result.output
     assert "Stack: lc" in result.output and "retriever lc" in result.output
     assert seen["store"] is lc_store and seen["embedder"] == "lc-embedder"
-    assert seen["pipeline"]._retrieve is lc_retrieve  # type: ignore[attr-defined]
+    pipeline = seen["pipeline"]
+    if orchestration == "graph":
+        from tessera.lc.graph import LangGraphPipeline
+
+        assert isinstance(pipeline, LangGraphPipeline)
+        assert pipeline.context.retrieve_fn is lc_retrieve
+    else:
+        assert type(pipeline).__name__ == "NativePipeline"
+        assert pipeline._retrieve is lc_retrieve  # type: ignore[attr-defined]
