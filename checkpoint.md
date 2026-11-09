@@ -4,7 +4,7 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 
 ## Status
 
-**Phase 5 in progress — P5-0 to P5-6 done (P5-6 on 2026-10-07…09, #81).**
+**Phase 5 in progress — P5-0 to P5-6 done (P5-6 on 2026-10-07…09, #81); P5-7 built and swept, its PR open (2026-11-08/09).**
 - **P5-0 to P5-2** (#71–#73, 2026-10-05/06): baseline sweeps + the judge's
   noise floor (A/C relevance ±0.03, B ±0.11); plan adoption + the `lc`
   extra + the spike; the `Pipeline` protocol and the marker split.
@@ -29,7 +29,15 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 - **2026-11-08:** the user decided P5-6's `lc-defaults` (router,
   prompt_chain, model_client `lc`; retry, expertise `native`; in code with
   P5-7's first PR), and the `lc-model-client-2` sweep ran, `=> PASS`.
-- **Next:** P5-7.
+- **P5-7** (PR open, 2026-11-08/09): the LangGraph orchestrator
+  (`lc/graph.py`), the corrective loop as a subgraph (`lc/corrective.py`),
+  `Send` multi-query (`lc/multiquery.py`), the Functional API
+  (`lc/functional.py`), four stream modes; `lc-defaults` in code with
+  `orchestration=graph`, `corrective=off`. Replay of native's NIM
+  responses is exact on all 92 cases, both flows. Six sweeps at
+  `4c7823f`, all `=> PASS`; the corrective loop doesn't help this corpus
+  (stays off). Report: `evals/reports/p5-7-orchestration.md`.
+- **Next:** merge the P5-7 PR after review, then P5-8.
 - **Decided 2026-10-08 (user):** LangGraph becomes the default stack
   after P5-10 if its sweeps pass; native stays as the eval/CI reference
   (plan §10.1).
@@ -2069,37 +2077,65 @@ same change and stays ungated (`QUALITY_BAR.md`).
         plan):** `RunnableBranch` vs conditional edges, `RetryPolicy`,
         time to first token.
 
+- [x] **P5-7 — LangGraph orchestration, the corrective subgraph, `Send`,
+      the Functional API** (2026-11-08/09, PR open; branches
+      `feat/p5-7-langgraph` → `feat/p5-7-corrective` →
+      `feat/p5-7-send-functional`, shipped as one PR).
+      - `lc/graph.py`: `StateGraph` over plain `GraphState`, `GraphContext`
+        through runtime context, append reducers for retrievals and usage,
+        no checkpointer; `LangGraphPipeline`; `stream_run` with `values`,
+        `updates`, `messages`, `custom` (`subgraphs=True`, top-level
+        filtering). `lc/corrective.py`: grade (off/score/llm) → rewrite →
+        retry once, as a subgraph. `lc/multiquery.py`: `Send` map-reduce,
+        metered rephrasing. `lc/functional.py`: `@entrypoint`/`@task`.
+      - Config: `lc-defaults` (router, prompt_chain, model_client `lc`),
+        `TESSERA_LC_ORCHESTRATION` (native/graph/functional, default
+        graph), `TESSERA_LC_CORRECTIVE` (off/score/llm, default off),
+        `retriever=multiquery_send`. `CaseResult.retrieval_attempts`.
+      - Evidence: equivalence on fakes and on replay (`evals/replay.py`,
+        155 recorded NIM responses, exact on 92/92, both flows); overhead
+        +3.5 ms (graph) / +4.5 ms (functional) per A question; redaction
+        of graph runs and streamed tokens, with a no-redaction control.
+      - Sweeps at `4c7823f`, all `=> PASS`: native, lc-defaults (inside
+        the floor), corrective score (fired 14/92, A/C relevance −0.04)
+        and llm (fired 30/92, +52% tokens, +49% latency), multiquery_send
+        (equals classic), all-lc (18 ERROR → all scored on two re-run
+        rounds). TTFT median 5.1 s vs 31.7 s total (needs `retry=lc`).
+      - Suite 741 passed, 8 skipped, 1 xfailed.
+
 ## Next task to pick up
 
-**Both 2026-10-09 open questions decided by the user on 2026-11-08:**
-1. **`lc-defaults` for the generation switches:** the recommended split —
-   `TESSERA_LC_ROUTER=lc`, `TESSERA_LC_PROMPT_CHAIN=lc`,
-   `TESSERA_LC_MODEL_CLIENT=lc`, `TESSERA_LC_RETRY=native`,
-   `TESSERA_LC_EXPERTISE=native` (`evals/reports/p5-6-generation.md` §6,
-   now "Decided"). **Not yet in code:** the `config.py` + `.env.example`
-   change ships with **P5-7's first PR**, and that PR's `--stack lc`
-   `tessera eval --check` (P5-7's `lc-defaults` sweep) is its bar check.
-2. **`lc-model-client-2` sweep:** ran 2026-11-08 at `35f71c7`, 92/92,
-   zero ERROR rows, 0 throttled calls, 20 min, `=> PASS`. Within noise
-   against native and against `retry` (report §3–4). NIM was so calm that
-   the native retry layer was never exercised, so the pair can't rank
-   the two retry layers; `RETRY=native` rests on the `retry` sweep's 2
-   lost cases plus the mechanism.
+**First: the P5-7 PR** (branch `feat/p5-7-send-functional`, which holds
+all three P5-7 commits plus the sweep exports and the report) — waiting
+for the user's review and merge. **PR #83 (README progress report)** is
+also open, waiting for the user.
 
-**Then P5-7 — LangGraph orchestration, the corrective subgraph, `Send`,
-the Functional API** (`docs/Tessera_Phase5_Plan.md` §3.7, §5). Read §3.7
-in full first. **Acceptance (plan §5, verbatim):**
-- equivalence on fakes and replay is exact, with concurrent usage isolated;
-- the scope-binding test is extended to the loop;
-- the corrective-variant sweeps are reported;
-- `lc-defaults` `=> PASS`, and `all-lc` is reported;
-- the redaction test is extended to graph runs and streamed events.
+**P5-7 acceptance (plan §5), against the evidence:**
+- equivalence on fakes and replay is exact, with concurrent usage
+  isolated — **met** (7 paths × 3 principals × both flows; replay exact on
+  92/92; barrier test);
+- the scope-binding test is extended to the loop — **met** (6 retriever
+  kinds × 3 principals with a forced retry; every `Send` search);
+- the corrective-variant sweeps are reported — **met** (`score`: A/C
+  relevance −0.04, just outside the floor; `llm`: +52% input tokens, +49%
+  latency, no gain → `corrective=off`);
+- `lc-defaults` `=> PASS`, and `all-lc` is reported — **met** (all-lc:
+  `=> PASS` on 74 scored, 18 ERROR rows, all 18 scored on re-runs);
+- the redaction test is extended to graph runs and streamed events —
+  **met** (plus a control showing graph node runs leak without it).
 
-P5-7 also picks up what P5-6 deferred: `RunnableBranch` vs
-conditional edges, LangGraph's `RetryPolicy` (against
-`RetryingLLMClient`), time to first token under streaming, the `Send`
-multi-query, and runtime-context usage recorders (multi-query's
-unmetered calls).
+**Open items carried from P5-7:**
+- **LangGraph `RetryPolicy` — not built.** Plan §3.6 deferred it to P5-7
+  as the third LangChain retry mechanism to compare with
+  `RetryingLLMClient`. Do it before P5-10's retry decision.
+- **`guided_json` on NIM** (see Notes) and **streaming needs `retry=lc`**
+  (report §4): both bear on P5-10's choice of `retry`.
+
+**Then P5-8 — Human-review workflow** (`docs/Tessera_Phase5_Plan.md`
+§3.8, §5). Read §3.8 in full first. **Acceptance (plan §5, verbatim):**
+- all six scenarios on both stacks behave as specified (tests and a
+  recorded run);
+- sweeps on both stacks with the context-marker row gated `=> PASS`.
 
 **Still open from P5-3:** the live LangSmith step (needs the user's
 LangSmith key). Doesn't block.
@@ -2293,8 +2329,22 @@ P5-1.
 
 ## Notes / open flags
 
-- **`pytest tests/ -q` now takes about 10 min, not 60–90 s** (measured
-  2026-11-08: 610 passed, 8 skipped, 1 xfailed in 621 s). The LangChain
+- **NIM intermittently rejects `guided_json` (found 2026-11-09).** With
+  `TESSERA_LC_RETRY=lc` the router calls
+  `ChatNVIDIA.with_structured_output(..., method="json_schema")` directly;
+  `ChatNVIDIA` ignores `method` and sends `guided_json`, and some NIM
+  backends answer `400 unknown field guided_json`. 14 of the all-lc
+  sweep's 18 ERROR rows and the first TTFT run; a 6-call probe right after
+  passed 6/6. Not retried (a 400). Only `retry=lc` configurations hit it;
+  `lc-defaults` (`retry=native`) routes on prompt-instructed JSON.
+- **Memory during sweeps (2026-11-09).** The machine has 7 GiB of RAM.
+  With Firefox (~3.3 GB) and several Claude Code sessions open, Claude
+  Code stopped a background sweep chain for low memory at case 84/92 (no
+  export is written until the end). Close Firefox / idle sessions before
+  a long sweep chain; check `free -h` for ≥ 3–4 GiB available.
+- **`pytest tests/ -q` now takes 10–19 min** (2026-11-08: 610 passed in
+  621 s; after P5-7, 741 passed, 8 skipped, 1 xfailed in 1131 s, with a
+  sweep running at the same time). Run it in the background. The LangChain
   tests from P5-3…P5-6 dominate: the slowest are
   `test_langsmith_redaction.py::test_langchain_retriever_runs_are_redacted_too[multiquery]`
   (81 s) and `[rerank]` (67 s), and

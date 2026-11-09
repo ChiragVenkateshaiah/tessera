@@ -1,0 +1,146 @@
+{
+ "switches": {
+  "embeddings": "lc",
+  "store": "lc",
+  "retriever": "lc",
+  "router": "lc",
+  "prompt_chain": "lc",
+  "model_client": "lc",
+  "retry": "lc",
+  "expertise": "native",
+  "orchestration": "graph",
+  "corrective": "off"
+ },
+ "rows": [
+  {
+   "case": "ql001",
+   "archetype": "A",
+   "first_token_s": 5.105439531995216,
+   "total_s": 17.28663320999476,
+   "tokens": 81,
+   "nodes_s": {
+    "route": 5.113411878992338,
+    "documents": 0.07206659502116963,
+    "generate": 12.095629464980448,
+    "assemble": 0.002842122019501403
+   }
+  },
+  {
+   "case": "ql003",
+   "archetype": "A",
+   "first_token_s": 5.079247599991504,
+   "total_s": 30.37686371098971,
+   "tokens": 139,
+   "nodes_s": {
+    "route": 5.144666067993967,
+    "documents": 0.645682497008238,
+    "generate": 24.58418287098175,
+    "assemble": 0.001247856009285897
+   }
+  },
+  {
+   "case": "ql005",
+   "archetype": "A",
+   "first_token_s": 20.98462511500111,
+   "total_s": 33.980544502992416,
+   "tokens": 63,
+   "nodes_s": {
+    "route": 20.990918063995196,
+    "documents": 0.06873182399431244,
+    "generate": 12.916421545000048,
+    "assemble": 0.0009884310129564255
+   }
+  },
+  {
+   "case": "ql008",
+   "archetype": "A",
+   "first_token_s": 8.284473136998713,
+   "total_s": 33.007368663005764,
+   "tokens": 87,
+   "nodes_s": {
+    "route": 8.286404829996172,
+    "documents": 0.5858730920008384,
+    "generate": 24.130747803021222,
+    "assemble": 0.002544835995649919
+   }
+  },
+  {
+   "case": "ql011",
+   "archetype": "C",
+   "first_token_s": 7.878835899988189,
+   "total_s": 43.88302218998433,
+   "tokens": 99,
+   "nodes_s": {
+    "route": 7.9846306089893915,
+    "documents": 0.08044708799570799,
+    "generate": 35.81633265901473,
+    "assemble": 0.0009175029990728945
+   }
+  },
+  {
+   "case": "ql013",
+   "archetype": "C",
+   "first_token_s": 2.887821187003283,
+   "total_s": 24.990469320007833,
+   "tokens": 142,
+   "nodes_s": {
+    "route": 2.8897369650076143,
+    "documents": 0.11089041698141955,
+    "generate": 21.988203837012406,
+    "assemble": 0.000966196006629616
+   }
+  },
+  {
+   "case": "ql016",
+   "archetype": "C",
+   "first_token_s": 2.729655755974818,
+   "total_s": 18.219583339989185,
+   "tokens": 111,
+   "nodes_s": {
+    "route": 2.7328761190001387,
+    "documents": 0.050724279979476705,
+    "generate": 15.432057839003392,
+    "assemble": 0.0022873480047564954
+   }
+  },
+  {
+   "case": "ql027",
+   "archetype": "A",
+   "first_token_s": 5.485148004983785,
+   "total_s": 62.097935330006294,
+   "tokens": 138,
+   "nodes_s": {
+    "route": 5.493890482001007,
+    "documents": 0.06061565998243168,
+    "generate": 56.54206443601288,
+    "assemble": 0.0007758740102872252
+   }
+  },
+  {
+   "case": "ql034",
+   "archetype": "C",
+   "first_token_s": 4.83320565597387,
+   "total_s": 55.712079506978625,
+   "tokens": 221,
+   "nodes_s": {
+    "route": 4.841411595989484,
+    "documents": 0.04668121298891492,
+    "generate": 50.81961824299651,
+    "assemble": 0.0025083100190386176
+   }
+  },
+  {
+   "case": "ql037",
+   "archetype": "C",
+   "first_token_s": 3.4110095929936506,
+   "total_s": 23.884173297992675,
+   "tokens": 124,
+   "nodes_s": {
+    "route": 3.420943350007292,
+    "documents": 0.07309899799292907,
+    "generate": 20.388706416008063,
+    "assemble": 0.0008683459891472012
+   }
+  }
+ ]
+}
