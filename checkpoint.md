@@ -29,6 +29,10 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 - **2026-11-08:** the user decided P5-6's `lc-defaults` (router,
   prompt_chain, model_client `lc`; retry, expertise `native`; in code with
   P5-7's first PR), and the `lc-model-client-2` sweep ran, `=> PASS`.
+- **2026-11-08 (ad hoc, user):** README.md became the public progress
+  report (recruiter/business view, PR history, dev-cycle diagram);
+  `/end-day` step 3b now updates it every session, with a weekly summary
+  on Sundays.
 - **Next:** P5-7.
 - **Decided 2026-10-08 (user):** LangGraph becomes the default stack
   after P5-10 if its sweeps pass; native stays as the eval/CI reference

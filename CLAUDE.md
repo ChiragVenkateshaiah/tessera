@@ -274,6 +274,14 @@ These are reasons, not preferences:
   anything on the do-not-build list.
 - See `checkpoint.md` at repo root for where the build currently stands and
   what the next task is.
+- **README.md is the public progress report** (user, 2026-11-08).
+  `/end-day` updates it every session (step 3b of
+  `.claude/commands/end-day.md`): the banner, progress in numbers,
+  business metrics, the latest-session entry, a weekly summary on
+  Sundays (the user works on Tessera at weekends), the development-cycle
+  diagram and the PR history. It is written for recruiters and business
+  readers in natural English; checkpoint.md stays the engineering log.
+  Every number in it comes from a real run or from `gh`/git.
 - **Quality-bar regression check (Phase 2+).** Any PR that touches
   `retrieval/` (`retriever.py`, `router.py`, `expertise.py`), `chunker.py`,
   `generation/` (including any prompt string), `pipeline.py`, the corpus
