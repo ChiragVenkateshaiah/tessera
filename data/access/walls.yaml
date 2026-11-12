@@ -8,6 +8,11 @@
 # personas: named people with known clearances, for the demo and the
 # access eval sets (evals/cases/access_*.yaml). These are DEMO
 # identities — Tessera has no authentication.
+#
+# reviewers: Legal staff who may approve pending documents for indexing
+# (`tessera corpus review --as`), each with the engagements they are
+# cleared to see for review. Only a reviewer cleared for every
+# engagement can approve. Demo identities too.
 walls:
   aurora:
   - c0352
@@ -115,3 +120,30 @@ personas:
   cross_cleared:
     person_id: c0065
     note: cleared for kestrel only, walled from halcyon
+reviewers:
+  general_counsel:
+    person_id: legal-01
+    cleared_for:
+    - aurora
+    - cobalt
+    - foxglove
+    - granite
+    - halcyon
+    - juniper
+    - kestrel
+    - lantern
+    - marigold
+    - osprey
+    - saffron
+    - tamarind
+    note: Legal; cleared for every engagement, so may approve
+  legal_associate:
+    person_id: legal-02
+    cleared_for:
+    - cobalt
+    - foxglove
+    - juniper
+    - lantern
+    - marigold
+    - saffron
+    note: Legal; cleared for some engagements only, so may only leave documents pending
