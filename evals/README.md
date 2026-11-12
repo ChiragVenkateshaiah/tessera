@@ -298,3 +298,10 @@ A/C relevance (+0.10, same narrow-A cause as P2-5) and B person recall
   the cases scored in both, with an empirical judge noise floor; no LLM
   calls.
 - `cases/` — the YAML case files described above.
+- `review_scenario.py` — the human-review workflow's six scenarios
+  (Phase 5 plan §3.8.6, P5-8): drives `tessera corpus review`'s graph
+  with scripted replies on a temporary copy of the corpus, then measures
+  the context-marker check and what each case retrieves on native, the
+  LangChain vector retriever and the hybrid retriever. Zero network
+  calls; scenario 6 resumes in a second process.
+  `python -m evals.review_scenario --out evals/reports/p5-8-review-scenarios.json`.

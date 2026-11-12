@@ -1,0 +1,76 @@
+{
+ "baseline": "p5-7-native-2.json",
+ "noise_floor": {
+  "ac_relevance": 0.032258064516129004,
+  "b_relevance": 0.125,
+  "ac_groundedness": 0.06060606060606055,
+  "b_groundedness": 0.0
+ },
+ "noise_floor_source": "max over 8 native sweeps, pairwise",
+ "comparisons": [
+  {
+   "name": "p5-8-native",
+   "switches": {
+    "stack": "native"
+   },
+   "commit": "124e9a99a1e384051f4755f8f5a05726ab51365d+dirty",
+   "scored_in_both": 91,
+   "errors": [
+    "ql010"
+   ],
+   "routing_changed": [
+    "ac-a06 A\u2192D"
+   ],
+   "documents_changed": [
+    "ac-a06"
+   ],
+   "people_changed": [],
+   "recall_changed": [
+    "ac-a06 recall 1.0\u2192None",
+    "ac-a06 reciprocal_rank_score 1.0\u2192None"
+   ],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.976190476190476,
+     4.9523809523809526
+    ],
+    "b_relevance": [
+     4.777777777777778,
+     4.888888888888889
+    ],
+    "ac_groundedness": [
+     4.976190476190476,
+     4.976190476190476
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_relevance": [
+     "q005 5\u21924"
+    ],
+    "b_relevance": [
+     "ql019 3\u21924"
+    ]
+   },
+   "latency": [
+    11.028671829001773,
+    13.815513842966878
+   ],
+   "tokens": [
+    [
+     176681,
+     30684
+    ],
+    [
+     174535,
+     29634
+    ]
+   ]
+  }
+ ]
+}
