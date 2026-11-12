@@ -1131,6 +1131,10 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
         ({"TESSERA_LC_CORRECTIVE": "llm", "TESSERA_LC_ORCHESTRATION": "native"}, "TESSERA_LC_CORRECTIVE needs"),
         ({"TESSERA_LC_RETRIEVER": "multiquery_send", "TESSERA_LC_ORCHESTRATION": "native"},
          "multiquery_send needs"),
+        ({"TESSERA_LC_RETRY": "graph", "TESSERA_LC_ORCHESTRATION": "functional"},
+         "TESSERA_LC_RETRY=graph needs TESSERA_LC_ORCHESTRATION=graph"),
+        ({"TESSERA_LC_RETRY": "graph", "TESSERA_LC_MODEL_CLIENT": "native"},
+         "TESSERA_LC_RETRY=graph needs TESSERA_LC_MODEL_CLIENT=lc"),
     ],
 )
 def test_langgraph_only_switches_need_a_langgraph_orchestration(
@@ -1147,3 +1151,41 @@ def test_langgraph_only_switches_need_a_langgraph_orchestration(
     with pytest.raises(cli.typer.Exit) as exit_info:
         cli._lc_generation(settings, cli.LLMs(answer=None, router=None, name="x"), pacer=None)  # type: ignore[arg-type]
     assert exit_info.value.exit_code == 2
+
+
+@pytest.mark.parametrize("graph_retries", [False, True])
+def test_retry_graph_runs_the_graph_compiled_with_a_retry_policy(graph_retries: bool) -> None:
+    """retry=graph: the pipeline runs GRAPH_WITH_RETRIES; otherwise the
+    default GRAPH, which has no policy (no second retry layer)."""
+    pytest.importorskip("langgraph", reason="the lc extra isn't installed")
+    from tessera.lc.graph import GRAPH, GRAPH_WITH_RETRIES
+
+    pipeline = cli._native_pipeline(
+        cli.LLMs(answer=None, router=None, name="x"),  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        None,
+        None,
+        orchestration="graph",
+        graph_retries=graph_retries,
+    )
+    assert pipeline.graph is (GRAPH_WITH_RETRIES if graph_retries else GRAPH)  # type: ignore[attr-defined]
+
+
+def test_retry_graph_builds_chat_models_whose_errors_are_translated_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """retry=graph: the port clients are bare LangChainLLMClients (no
+    .with_retry(), no RetryingLLMClient), paced like retry=lc."""
+    pytest.importorskip("langchain_nvidia_ai_endpoints", reason="the lc extra isn't installed")
+    from tessera.generation.resilient import Pacer, RetryingLLMClient
+    from tessera.lc.chat_models import LangChainLLMClient
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    monkeypatch.setenv("TESSERA_LC_RETRY", "graph")
+    settings = cli._load_settings()
+    llms, answer_model, router_model = cli._lc_chat_models(settings, pacer=Pacer(3.0))
+    assert isinstance(llms.answer, LangChainLLMClient) and not isinstance(llms.answer, RetryingLLMClient)
+    assert type(llms.answer.chat_model).__name__ == "ChatNVIDIA"  # not wrapped in .with_retry()
+    assert llms.answer.chat_model.rate_limiter is not None
+    assert answer_model.retries is False and router_model.retries is False  # type: ignore[attr-defined]

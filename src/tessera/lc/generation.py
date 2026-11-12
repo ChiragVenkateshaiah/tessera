@@ -35,7 +35,10 @@ native port inside ``RetryingLLMClient`` (``Retry-After`` honoured, 3 s
 pacing in sweeps). ``lc``: the chat model's errors translated to
 ``TransientLLMError`` for 429/5xx, ``.with_retry()`` on those
 (exponential jitter, no ``Retry-After``), and an ``InMemoryRateLimiter``
-for pacing. LangGraph's ``RetryPolicy`` comes with P5-7.
+for pacing. ``graph``: the errors translated the same way but not retried
+here — LangGraph's ``RetryPolicy`` on the graph's model-calling nodes
+re-runs the node (``tessera.lc.graph.GRAPH_RETRY_POLICY``), with the same
+pacing as ``lc``.
 """
 
 from __future__ import annotations
@@ -128,12 +131,10 @@ def _raise_translated(exc: BaseException) -> None:
     raise exc
 
 
-def with_lc_retries(
-    runnable: Runnable, *, attempts: int = RETRY_ATTEMPTS, jitter: bool = True
-) -> Runnable:
-    """``runnable`` whose provider errors are translated (status codes
-    readable), retried on 429/5xx with ``.with_retry()``'s exponential
-    jitter. Unlike ``RetryingLLMClient`` it never reads ``Retry-After``."""
+def translated(runnable: Runnable) -> Runnable:
+    """``runnable`` whose provider errors are translated: a 429/5xx raises
+    ``TransientLLMError``, any other status ``LLMCallError`` — both with a
+    readable ``status_code``. Not retried."""
 
     def call(value: Any, config: RunnableConfig) -> Any:
         try:
@@ -141,7 +142,16 @@ def with_lc_retries(
         except Exception as exc:  # translated, then retried or raised
             _raise_translated(exc)
 
-    return RunnableLambda(call, name=f"translated({runnable.get_name()})").with_retry(
+    return RunnableLambda(call, name=f"translated({runnable.get_name()})")
+
+
+def with_lc_retries(
+    runnable: Runnable, *, attempts: int = RETRY_ATTEMPTS, jitter: bool = True
+) -> Runnable:
+    """``runnable`` whose provider errors are translated (status codes
+    readable), retried on 429/5xx with ``.with_retry()``'s exponential
+    jitter. Unlike ``RetryingLLMClient`` it never reads ``Retry-After``."""
+    return translated(runnable).with_retry(
         retry_if_exception_type=(TransientLLMError,),
         wait_exponential_jitter=jitter,  # off only in fault-injection tests
         stop_after_attempt=attempts,
@@ -179,7 +189,10 @@ class RecorderCallback(UsageCallback):
 class LcModel:
     """What an LCEL chain calls. ``chat_model`` None: the native client,
     through the pipeline's own recorder. Otherwise a LangChain chat model
-    (``lc`` retry: wrapped per call), metered by callback."""
+    (``lc`` retry: wrapped per call), metered by callback.
+
+    ``retries`` False: the errors are still translated but not retried —
+    under ``retry=graph`` the graph's ``RetryPolicy`` retries the node."""
 
     chat_model: Any = None
     model_id: str = "tessera-native"
@@ -189,8 +202,7 @@ class LcModel:
         if self.chat_model is None:
             return TesseraChatModel(client=recorder), []
         model: Runnable = self.chat_model
-        if self.retries:
-            model = with_lc_retries(model)
+        model = with_lc_retries(model) if self.retries else translated(model)
         return model, [RecorderCallback(self.model_id, recorder)]
 
     def router(self, recorder: UsageRecorder) -> tuple[Runnable, list[Any], bool]:
@@ -199,8 +211,7 @@ class LcModel:
         if self.chat_model is None:
             return TesseraChatModel(client=recorder), [], False
         structured: Runnable = self.chat_model.with_structured_output(RouteDecision, method="json_schema")
-        if self.retries:
-            structured = with_lc_retries(structured)
+        structured = with_lc_retries(structured) if self.retries else translated(structured)
         return structured, [RecorderCallback(self.model_id, recorder)], True
 
 

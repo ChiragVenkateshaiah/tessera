@@ -8,7 +8,7 @@ finished, and each node's wall time.
 
 Tokens stream only when the answer chain calls a LangChain chat model
 directly: ``TESSERA_LC_MODEL_CLIENT=lc``, ``TESSERA_LC_PROMPT_CHAIN=lc``
-and ``TESSERA_LC_RETRY=lc``. With the native retry layer the chain goes
+and ``TESSERA_LC_RETRY=lc`` (or ``graph``). With the native retry layer the chain goes
 through the native port, which returns the whole answer at once — the
 script reports that instead of a number. Live calls (2 per case on NIM).
 """
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     lc = cli._lc_retrieval(settings, llms, pacer=pacer)
     pipeline = cli._native_pipeline(
         lc.llms or llms, lc.embedder, lc.store, ChromaExpertiseStore(persist_dir=settings.vectorstore_dir), None,
-        steps=lc.pipeline_steps(), orchestration="graph",
+        steps=lc.pipeline_steps(), orchestration="graph", graph_retries=settings.lc_retry == "graph",
     )
     assert isinstance(pipeline, LangGraphPipeline)
     walls = cli._load_walls(settings)

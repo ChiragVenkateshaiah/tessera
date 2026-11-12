@@ -49,12 +49,14 @@ from typing import Annotated, Any, Literal, TypedDict
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
+from langgraph.types import RetryPolicy
 
 from tessera.embedding.base import Embedder
 from tessera.generation.answer import Citation, GeneratedAnswer, filter_relevant, generate_answer
 from tessera.generation.base import LLMClient
 from tessera.generation.expertise import generate_expertise_answer
 from tessera.generation.usage import UsageRecorder, UsageSummary
+from tessera.lc.chat_models import status_of
 from tessera.lc.corrective import build_corrective_subgraph
 from tessera.pipeline import (
     EXPERTISE_UNAVAILABLE_MESSAGE,
@@ -247,15 +249,44 @@ def assemble_run(state: GraphState) -> PipelineRun:
     return run
 
 
-def build_graph() -> Any:
-    """The orchestrator, compiled once and without a checkpointer."""
+# --- retries as a graph concern: the ``retry`` switch's ``graph`` value ---
+
+
+def is_transient(exc: BaseException) -> bool:
+    """A 429 or 5xx, wherever the status hides (the native retry layer's
+    rule, read with the same ``status_of``)."""
+    code = status_of(exc)
+    return code is not None and (code == 429 or 500 <= code < 600)
+
+
+# The native layer's 5xx schedule (RetryingLLMClient: 15 s base, doubling,
+# 120 s cap, 6 attempts). What a node-level RetryPolicy can't do is the
+# difference: it never reads Retry-After, its schedule is the same for a
+# 429 as for a 503, and its waits aren't shared with other callers.
+GRAPH_RETRY_POLICY = RetryPolicy(
+    initial_interval=15.0,
+    backoff_factor=2.0,
+    max_interval=120.0,
+    max_attempts=6,
+    jitter=True,
+    retry_on=is_transient,
+)
+
+
+def build_graph(retry_policy: RetryPolicy | None = None) -> Any:
+    """The orchestrator, compiled once and without a checkpointer.
+
+    ``retry_policy`` goes on every node that calls a model (route,
+    generate, generate_b, and the corrective subgraph's nodes). A failed
+    node is re-run whole: its writes from the failed attempt are dropped,
+    so a retry can't double-count usage or retrievals."""
     graph = StateGraph(GraphState, context_schema=GraphContext)
-    graph.add_node("route", route_node)
+    graph.add_node("route", route_node, retry_policy=retry_policy)
     graph.add_node("terminal", terminal_node)
     graph.add_node("experts", experts_node)
-    graph.add_node("generate_b", generate_b_node)
-    graph.add_node("documents", build_corrective_subgraph())
-    graph.add_node("generate", generate_node)
+    graph.add_node("generate_b", generate_b_node, retry_policy=retry_policy)
+    graph.add_node("documents", build_corrective_subgraph(retry_policy))
+    graph.add_node("generate", generate_node, retry_policy=retry_policy)
     graph.add_node("assemble", assemble_node)
     graph.add_edge(START, "route")
     graph.add_conditional_edges("route", after_route, ["terminal", "experts", "documents"])
@@ -268,6 +299,11 @@ def build_graph() -> Any:
 
 
 GRAPH = build_graph()
+# The same graph with LangGraph's RetryPolicy on its model-calling nodes:
+# TESSERA_LC_RETRY=graph. A second compiled graph, not a flag, so the
+# default graph has no policy at all (under retry=lc, a policy would retry
+# again what .with_retry() already gave up on).
+GRAPH_WITH_RETRIES = build_graph(GRAPH_RETRY_POLICY)
 
 
 class LangGraphPipeline:
@@ -291,7 +327,11 @@ class LangGraphPipeline:
         generate_expertise_fn: Callable[..., GeneratedAnswer] | None = None,
         corrective: str = "off",
         multiquery_send: bool = False,
+        graph: Any = None,
     ) -> None:
+        # The compiled graph to run: GRAPH, or GRAPH_WITH_RETRIES under
+        # retry=graph (tests pass one built with a fast policy).
+        self.graph = graph if graph is not None else GRAPH
         self.context = GraphContext(
             llm=llm,
             embedder=embedder,
@@ -316,7 +356,7 @@ class LangGraphPipeline:
         }
 
     def run(self, query: str, principal: Principal | None = None) -> PipelineRun:
-        state = GRAPH.invoke(
+        state = self.graph.invoke(
             self.initial_state(query, principal),
             context=self.context,
             config={"run_name": GRAPH_RUN_NAME},
@@ -363,7 +403,7 @@ def stream_run(
     *,
     clock: Callable[[], float] = time.perf_counter,
 ) -> StreamedRun:
-    """Answer ``query`` through ``GRAPH.stream`` with all four modes."""
+    """Answer ``query`` through the pipeline's graph's ``stream`` with all four modes."""
     start = last = clock()
     node_seconds: list[tuple[str, float]] = []
     progress: list[dict[str, Any]] = []
@@ -374,7 +414,7 @@ def stream_run(
     # subgraphs=True: the corrective subgraph's progress writes and tokens
     # reach this stream too. Values and timings are the top level's
     # (namespace ()), so a subgraph's inner steps aren't double-counted.
-    for namespace, mode, chunk in GRAPH.stream(
+    for namespace, mode, chunk in pipeline.graph.stream(
         pipeline.initial_state(query, principal),
         context=pipeline.context,
         config={"run_name": GRAPH_RUN_NAME},
@@ -411,6 +451,8 @@ def stream_run(
 
 __all__ = [
     "GRAPH",
+    "GRAPH_RETRY_POLICY",
+    "GRAPH_WITH_RETRIES",
     "STREAM_MODES",
     "GraphContext",
     "GraphState",
@@ -418,5 +460,6 @@ __all__ = [
     "StreamedRun",
     "assemble_run",
     "build_graph",
+    "is_transient",
     "stream_run",
 ]

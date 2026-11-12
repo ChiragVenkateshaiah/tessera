@@ -335,6 +335,7 @@ def _native_pipeline(
     orchestration: str = "native",
     corrective: str = "off",
     multiquery_send: bool = False,
+    graph_retries: bool = False,
 ) -> Pipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
@@ -344,18 +345,25 @@ def _native_pipeline(
     ``orchestration`` ``graph`` or ``functional`` runs the same steps
     through the LangGraph orchestrator (P5-7), imported only then;
     ``corrective`` (off, score, llm) is its corrective loop and
-    ``multiquery_send`` its Send multi-query retrieval."""
+    ``multiquery_send`` its Send multi-query retrieval. ``graph_retries``
+    (``retry=graph``) runs the graph compiled with LangGraph's
+    ``RetryPolicy`` on its model-calling nodes."""
     steps = steps or {}
     kind: Callable[..., Pipeline] = NativePipeline
     if orchestration in ("graph", "functional"):
         from functools import partial
 
+        options: dict[str, object] = {"corrective": corrective, "multiquery_send": multiquery_send}
         if orchestration == "graph":
+            from tessera.lc.graph import GRAPH_WITH_RETRIES
             from tessera.lc.graph import LangGraphPipeline as flow
+
+            if graph_retries:
+                options["graph"] = GRAPH_WITH_RETRIES
         else:
             from tessera.lc.functional import FunctionalPipeline as flow
 
-        kind = partial(flow, corrective=corrective, multiquery_send=multiquery_send)
+        kind = partial(flow, **options)
     if tracer is None:
         return kind(
             llms.answer,
@@ -466,8 +474,11 @@ def _lc_generation(
     if settings.lc_retriever == "multiquery_send" and not langgraph:
         typer.echo("TESSERA_LC_RETRIEVER=multiquery_send needs TESSERA_LC_ORCHESTRATION=graph or functional.", err=True)
         raise typer.Exit(code=2)
-    if settings.lc_retry == "lc" and settings.lc_model_client != "lc":
-        typer.echo("TESSERA_LC_RETRY=lc needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
+    if settings.lc_retry in ("lc", "graph") and settings.lc_model_client != "lc":
+        typer.echo(f"TESSERA_LC_RETRY={settings.lc_retry} needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
+        raise typer.Exit(code=2)
+    if settings.lc_retry == "graph" and settings.lc_orchestration != "graph":
+        typer.echo("TESSERA_LC_RETRY=graph needs TESSERA_LC_ORCHESTRATION=graph (its RetryPolicy is on the graph's nodes).", err=True)
         raise typer.Exit(code=2)
     lc_llms: LLMs | None = None
     answer_model = router_model = LcModel()
@@ -488,12 +499,14 @@ def _lc_chat_models(settings: Settings, *, pacer: Pacer | None) -> tuple[LLMs, o
     """ChatNVIDIA / ChatGoogleGenerativeAI as the model clients. retry
     native: behind the native port in RetryingLLMClient (chains reach them
     through it). retry lc: .with_retry() + InMemoryRateLimiter pacing, and
-    chains call the chat models directly, metered by callback."""
+    chains call the chat models directly, metered by callback. retry
+    graph: as lc, but no retry here — errors are translated and the
+    graph's RetryPolicy re-runs the node."""
     from tessera.integrations.langchain import chat_gemini, chat_nvidia
     from tessera.lc.chat_models import LangChainLLMClient
     from tessera.lc.generation import LcModel, eval_rate_limiter, with_lc_retries
 
-    lc_retry = settings.lc_retry == "lc"
+    lc_retry = settings.lc_retry in ("lc", "graph")
     limiter = eval_rate_limiter() if lc_retry and pacer is not None else None
     if settings.llm_provider == "nvidia":
         chat = chat_nvidia(settings.nvidia_api_key, settings.nvidia_model, rate_limiter=limiter)
@@ -521,9 +534,14 @@ def _lc_chat_models(settings: Settings, *, pacer: Pacer | None) -> tuple[LLMs, o
     clients: dict[str, LLMClient] = {}
     lc_models: dict[str, object] = {}
     for role, (chat, model_id) in models.items():
-        if lc_retry:
+        if settings.lc_retry == "lc":
             clients[role] = LangChainLLMClient(with_lc_retries(chat), model_id)
             lc_models[role] = LcModel(chat_model=chat, model_id=model_id)
+        elif settings.lc_retry == "graph":
+            # Errors carry a status (LangChainLLMClient translates them);
+            # the graph's RetryPolicy decides what to retry.
+            clients[role] = LangChainLLMClient(chat, model_id)
+            lc_models[role] = LcModel(chat_model=chat, model_id=model_id, retries=False)
         else:
             clients[role] = RetryingLLMClient(
                 LangChainLLMClient(chat, model_id), pacer=pacer, on_retry=_announce_retry
@@ -1086,7 +1104,7 @@ def eval_command(
         )
         raise typer.Exit(code=1)
 
-    if workers > 1 and chosen_stack == "lc" and settings.lc_retry == "lc":
+    if workers > 1 and chosen_stack == "lc" and settings.lc_retry in ("lc", "graph"):
         typer.echo(
             "--workers > 1 needs one shared pacer, and TESSERA_LC_RETRY=lc paces the "
             "LangChain models with their own InMemoryRateLimiter (the switch measures it). "
@@ -1151,6 +1169,7 @@ def eval_command(
         orchestration=settings.lc_orchestration if lc is not None else "native",
         corrective=settings.lc_corrective if lc is not None else "off",
         multiquery_send=lc is not None and settings.lc_retriever == "multiquery_send",
+        graph_retries=lc is not None and settings.lc_retry == "graph",
     )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 
