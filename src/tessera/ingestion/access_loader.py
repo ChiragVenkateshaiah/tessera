@@ -22,11 +22,15 @@ class AccessError(ValueError):
 @dataclass(frozen=True)
 class Walls:
     """Engagement codename -> person_ids cleared for it, plus the named
-    demo personas (persona name -> person_id).
+    demo personas (persona name -> person_id) and the reviewers (Phase 5,
+    plan §3.8.1): reviewer id -> the engagements they are cleared to see
+    for review, with their role names (name -> reviewer id).
     """
 
     cleared: dict[str, frozenset[str]]
     personas: dict[str, str] = field(default_factory=dict)
+    reviewers: dict[str, frozenset[str]] = field(default_factory=dict)
+    reviewer_names: dict[str, str] = field(default_factory=dict)
 
     def is_cleared(self, person_id: str | None, engagement: str | None) -> bool:
         """True only if person_id is on engagement's list. No person, no
@@ -39,6 +43,22 @@ class Walls:
     def engagements_for(self, person_id: str | None) -> frozenset[str]:
         """Every engagement person_id is cleared for."""
         return frozenset(e for e, people in self.cleared.items() if person_id in people)
+
+    def is_reviewer(self, reviewer_id: str | None) -> bool:
+        return reviewer_id is not None and reviewer_id in self.reviewers
+
+    def review_clearance(self, reviewer_id: str | None) -> frozenset[str]:
+        """The engagements a reviewer may see for review; empty for anyone
+        who isn't a reviewer."""
+        if reviewer_id is None:
+            return frozenset()
+        return self.reviewers.get(reviewer_id, frozenset())
+
+    def may_approve(self, reviewer_id: str | None) -> bool:
+        """A permission rule, not a similarity rule (plan §3.8.4): only a
+        reviewer cleared for every engagement may approve or reject, so a
+        decision never rests on evidence the reviewer couldn't see."""
+        return self.is_reviewer(reviewer_id) and self.review_clearance(reviewer_id) >= frozenset(self.cleared)
 
 
 def load_walls(
@@ -73,7 +93,26 @@ def load_walls(
             raise AccessError(f"{path}: persona {name!r} needs a person_id")
         personas[name] = entry["person_id"]
 
+    reviewers: dict[str, frozenset[str]] = {}
+    reviewer_names: dict[str, str] = {}
+    for name, entry in (raw.get("reviewers") or {}).items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("person_id"), str):
+            raise AccessError(f"{path}: reviewer {name!r} needs a person_id")
+        scope = entry.get("cleared_for") or []
+        if not isinstance(scope, list) or not all(isinstance(e, str) for e in scope):
+            raise AccessError(f"{path}: reviewer {name!r}: cleared_for must be a list of engagements")
+        unknown_scope = sorted(set(scope) - set(cleared))
+        if unknown_scope:
+            raise AccessError(f"{path}: reviewer {name!r} cleared for unknown engagements {unknown_scope}")
+        if entry["person_id"] in reviewers:
+            raise AccessError(f"{path}: reviewer id {entry['person_id']!r} listed twice")
+        reviewers[entry["person_id"]] = frozenset(scope)
+        reviewer_names[name] = entry["person_id"]
+
     if person_ids is not None:
+        clash = sorted(set(reviewers) & set(person_ids))
+        if clash:
+            raise AccessError(f"{path}: reviewer ids {clash} collide with person_ids (reviewers are Legal staff)")
         named = {p for people in cleared.values() for p in people} | set(personas.values())
         unknown = sorted(named - set(person_ids))
         if unknown:
@@ -87,4 +126,4 @@ def load_walls(
         if stale:
             raise AccessError(f"{path}: walls for engagements with no document {stale}")
 
-    return Walls(cleared=cleared, personas=personas)
+    return Walls(cleared=cleared, personas=personas, reviewers=reviewers, reviewer_names=reviewer_names)

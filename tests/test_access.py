@@ -59,6 +59,41 @@ def test_personas_have_the_clearances_they_claim() -> None:
     assert walls.engagements_for(p["cross_cleared"]) == frozenset({"kestrel"})
 
 
+def test_reviewers_one_fully_cleared_one_partial() -> None:
+    """Plan §3.8.1: a fully cleared reviewer may approve; a partially
+    cleared one may not, wherever the document is from."""
+    walls = _real_walls()
+    full, partial = walls.reviewer_names["general_counsel"], walls.reviewer_names["legal_associate"]
+
+    assert walls.review_clearance(full) == frozenset(walls.cleared)
+    assert 0 < len(walls.review_clearance(partial)) < len(walls.cleared)
+    assert walls.may_approve(full)
+    assert not walls.may_approve(partial)
+    # Reviewing is not staffing: reviewers sit on no ethical wall.
+    assert walls.engagements_for(full) == walls.engagements_for(partial) == frozenset()
+
+
+def test_non_reviewers_have_no_review_clearance() -> None:
+    walls = _real_walls()
+
+    assert not walls.may_approve(walls.personas["cleared_partner"])
+    assert walls.review_clearance(walls.personas["cleared_partner"]) == frozenset()
+    assert not walls.may_approve(None)
+
+
+def test_load_walls_rejects_malformed_reviewers(tmp_path: Path) -> None:
+    path = tmp_path / "walls.yaml"
+    path.write_text("walls:\n  halcyon: [c0001]\nreviewers:\n  gc: {person_id: legal-01, cleared_for: [kestrel]}\n",
+                    encoding="utf-8")
+    with pytest.raises(AccessError, match="unknown engagements"):
+        load_walls(path)
+
+    path.write_text("walls:\n  halcyon: [c0001]\nreviewers:\n  gc: {person_id: c0001, cleared_for: [halcyon]}\n",
+                    encoding="utf-8")
+    with pytest.raises(AccessError, match="collide with person_ids"):
+        load_walls(path, person_ids=["c0001"])
+
+
 def test_no_principal_and_unknown_engagements_are_never_cleared() -> None:
     walls = Walls(cleared={"halcyon": frozenset({"c0001"})})
 

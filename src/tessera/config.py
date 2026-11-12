@@ -164,3 +164,6 @@ class Settings(BaseSettings):
         default=Path("data/feedback/candidates.yaml"),
         validation_alias="TESSERA_FEEDBACK_CANDIDATES",
     )
+    # Phase 5 review workflow (plan §3.8): the audit log and the
+    # checkpoint database. Local runtime data, gitignored (plan §10.3).
+    review_dir: Path = Field(default=Path("data/review"), validation_alias="TESSERA_REVIEW_DIR")

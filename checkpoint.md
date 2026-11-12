@@ -4,7 +4,7 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 
 ## Status
 
-**Phase 5 in progress — P5-0 to P5-6 done (P5-6 on 2026-10-07…09, #81); P5-7 built and swept, its PR open (2026-11-08/09).**
+**Phase 5 in progress — P5-0 to P5-7 done (P5-7 #84 and its `RetryPolicy` follow-up #85, merged 2026-11-12); P5-8 built and swept, its PR open (2026-11-12).**
 - **P5-0 to P5-2** (#71–#73, 2026-10-05/06): baseline sweeps + the judge's
   noise floor (A/C relevance ±0.03, B ±0.11); plan adoption + the `lc`
   extra + the spike; the `Pipeline` protocol and the marker split.
@@ -33,15 +33,24 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
   report (recruiter/business view, PR history, dev-cycle diagram);
   `/end-day` step 3b now updates it every session, with a weekly summary
   on Sundays. Merged as #83 (2026-11-12).
-- **P5-7** (PR open, 2026-11-08/09): the LangGraph orchestrator
+- **P5-7** (#84, merged 2026-11-12; built 2026-11-08/09): the LangGraph orchestrator
   (`lc/graph.py`), the corrective loop as a subgraph (`lc/corrective.py`),
   `Send` multi-query (`lc/multiquery.py`), the Functional API
   (`lc/functional.py`), four stream modes; `lc-defaults` in code with
   `orchestration=graph`, `corrective=off`. Replay of native's NIM
   responses is exact on all 92 cases, both flows. Six sweeps at
   `4c7823f`, all `=> PASS`; the corrective loop doesn't help this corpus
-  (stays off). Report: `evals/reports/p5-7-orchestration.md`.
-- **Next:** merge the P5-7 PR after review, then P5-8.
+  (stays off). Report: `evals/reports/p5-7-orchestration.md`. The
+  LangGraph `RetryPolicy` (`TESSERA_LC_RETRY=graph`) followed as #85.
+- **P5-8** (PR open, 2026-11-12): `tessera corpus review`, the
+  human-review workflow (`src/tessera/review/`): two Legal reviewers in
+  `walls.yaml`, `interrupt()` + a SQLite checkpointer with a strict
+  serializer, a breakpoint before `apply`, reviewer-scoped evidence with
+  scores and no verdict, an idempotent audit log. All six plan scenarios
+  pass on native, LangChain vector and LangChain hybrid; the
+  context-marker row is now **gated at 0** (user sign-off 2026-11-12);
+  both sweeps at `124e9a9` `=> PASS`. Report: `evals/reports/p5-8-review.md`.
+- **Next:** merge the P5-8 PR after review, then P5-9.
 - **Decided 2026-10-08 (user):** LangGraph becomes the default stack
   after P5-10 if its sweeps pass; native stays as the eval/CI reference
   (plan §10.1).
@@ -2106,46 +2115,73 @@ same change and stays ungated (`QUALITY_BAR.md`).
         (equals classic), all-lc (18 ERROR → all scored on two re-run
         rounds). TTFT median 5.1 s vs 31.7 s total (needs `retry=lc`).
       - Suite 741 passed, 8 skipped, 1 xfailed.
+- [x] **P5-7 merged** (#84) and **the LangGraph `RetryPolicy`** (#85,
+      `TESSERA_LC_RETRY=graph`; three sweeps at `000b761`, all `=> PASS`,
+      report §8), both 2026-11-12.
+- [x] **P5-8 — Human-review workflow** (2026-11-12, branch
+      `feat/p5-8-review-workflow`, PR open).
+      - Reviewers (§3.8.1): `walls.yaml` gains a seeded `reviewers` block
+        (`legal-01` general counsel, all 12 engagements; `legal-02` legal
+        associate, 6). Walls and personas unchanged. `Walls.may_approve()`
+        = cleared for every engagement.
+      - `review/decisions.py` (pure: approve / reclassify / reject / leave,
+        deterministic decision id, in-place front-matter edit),
+        `review/evidence.py` (checks + top-5 similar with scores, through
+        `permission_filter`; one uniform notice for a partial reviewer),
+        `review/audit.py` (JSONL, idempotent on decision id, holds
+        rejections by content hash), `review/graph.py` (load_pending →
+        next_document → prepare_evidence → review `interrupt()` →
+        breakpoint → apply → index → audit → loop; `SqliteSaver` with
+        `allowed_msgpack_modules=None`; `update_state(as_node="review")`
+        correction). CLI: `tessera corpus review --as … [--resume|--reset]`.
+        `TESSERA_REVIEW_DIR` (default `data/review/`, gitignored).
+      - Found and avoided: LangChain `index(cleanup="full")` on one
+        document would delete every other source; the review uses
+        `incremental` (scenario 1 checks the index grows by exactly 3).
+      - `evals/review_scenario.py`: the six scenarios on a temp corpus copy,
+        three retrievers, scenario 6 across two processes. Recorded run
+        `evals/reports/p5-8-review-scenarios.json`, `=> PASS (6 scenarios)`.
+      - Gate: `QualityBar.gate_context_markers = True` (0 cases), sign-off
+        in `QUALITY_BAR.md`.
+      - Sweeps at `124e9a9`: native `=> PASS` (1 ERROR, `ql010` timeout,
+        re-run alone: recall 1.00, g5/r5), lc-defaults `=> PASS` (0 ERROR);
+        both inside the floor vs the P5-7 sweeps (the only routing change
+        is the Cobalt flip `ac-a06`). Context-marker hits 0 of 17.
+      - Suite 800 passed, 8 skipped, 1 xfailed.
 
 ## Next task to pick up
 
-**First: the P5-7 PR** (branch `feat/p5-7-send-functional`, which holds
-all three P5-7 commits plus the sweep exports and the report) — waiting
-for the user's review and merge (#84). PR #83 (README progress report)
-merged 2026-11-12. The `RetryPolicy` follow-up is on
-`feat/p5-7-retry-policy` (its own PR): `TESSERA_LC_RETRY=graph`, three
-sweeps at `000b761`, all `=> PASS` (report §8).
+**First: the P5-8 PR** (branch `feat/p5-8-review-workflow`) — waiting for
+the user's review and merge.
 
-**P5-7 acceptance (plan §5), against the evidence:**
-- equivalence on fakes and replay is exact, with concurrent usage
-  isolated — **met** (7 paths × 3 principals × both flows; replay exact on
-  92/92; barrier test);
-- the scope-binding test is extended to the loop — **met** (6 retriever
-  kinds × 3 principals with a forced retry; every `Send` search);
-- the corrective-variant sweeps are reported — **met** (`score`: A/C
-  relevance −0.04, just outside the floor; `llm`: +52% input tokens, +49%
-  latency, no gain → `corrective=off`);
-- `lc-defaults` `=> PASS`, and `all-lc` is reported — **met** (all-lc:
-  `=> PASS` on 74 scored, 18 ERROR rows, all 18 scored on re-runs);
-- the redaction test is extended to graph runs and streamed events —
-  **met** (plus a control showing graph node runs leak without it).
-
-**Open items carried from P5-7:**
-- **LangGraph `RetryPolicy` — built 2026-11-12** (`retry=graph`, report
-  §8). Its sweep ran on a calm NIM day (0 throttles), so it is not ranked
-  against the other two layers under load; the export doesn't count the
-  pipeline's own retries.
-- **`guided_json` on NIM** (see Notes) and **streaming needs `retry=lc`**
-  (report §4): both bear on P5-10's choice of `retry`.
-
-**Then P5-8 — Human-review workflow** (`docs/Tessera_Phase5_Plan.md`
-§3.8, §5). Read §3.8 in full first. **Acceptance (plan §5, verbatim):**
+**P5-8 acceptance (plan §5), against the evidence:**
 - all six scenarios on both stacks behave as specified (tests and a
-  recorded run);
-- sweeps on both stacks with the context-marker row gated `=> PASS`.
+  recorded run) — **met** (`tests/test_review_scenarios.py`, 7 tests;
+  `evals/reports/p5-8-review-scenarios.json`, `=> PASS (6 scenarios)`, on
+  native, LangChain vector and LangChain hybrid);
+- sweeps on both stacks with the context-marker row gated `=> PASS` —
+  **met** (native and lc-defaults at `124e9a9`, "Context-marker hits: 0 of
+  17", both `=> PASS (gated thresholds)`).
+
+**Then P5-9 — LangSmith datasets, experiments, feedback, prompt hub**
+(`docs/Tessera_Phase5_Plan.md` §3.9.5, §5). Read §3.9 in full first.
+**Acceptance (plan §5, verbatim):**
+- the dataset sync is idempotent and uploads no restricted field;
+- the evaluators reproduce the harness's per-case metrics on the same run
+  (a test, on replay);
+- the redaction test covers every upload path;
+- with a key, both stacks' experiments, a pairwise comparison, mirrored
+  feedback and an annotation queue exist, and the write-up states where
+  LangSmith agrees and disagrees with the harness.
 
 **Still open from P5-3:** the live LangSmith step (needs the user's
-LangSmith key). Doesn't block.
+LangSmith key). It doesn't block building P5-9; P5-9's last acceptance
+item needs it (build and test everything first, pause only at the live
+step).
+
+**Carried from P5-7:** `guided_json` on NIM and "streaming needs
+`retry=lc`" (report §4) both bear on P5-10's choice of `retry`; the
+`retry=graph` sweep ran on a calm NIM day and is not ranked under load.
 
 ---
 
@@ -2323,9 +2359,9 @@ stack (`docs/Tessera_Phase5_Plan.md`, adopted 2026-10-05, PR #67):
 - ~~P5-4 — LangChain ingestion and indexing~~ — done (#77)
 - ~~P5-5 — LangChain retrieval~~ — done (#78)
 - ~~P5-6 — generation, routing, retries, expertise~~ — done (#81; `lc-defaults` decided 2026-11-08, lands with P5-7's first PR)
-- P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API **← next**
-- P5-8 — human-review workflow
-- P5-9 — LangSmith datasets, experiments, feedback, prompt hub
+- ~~P5-7 — LangGraph orchestration, corrective subgraph, `Send`, Functional API~~ — done (#84; `RetryPolicy` #85)
+- ~~P5-8 — human-review workflow~~ — done (PR open)
+- P5-9 — LangSmith datasets, experiments, feedback, prompt hub **← next**
 - P5-10 — comparison and exit, incl. 3 Gemini sweeps; tag `v0.5.0`
 
 **Phase 6** — ephemeral Google Cloud deployment: Cloud Run + chat UI,
@@ -2335,6 +2371,23 @@ destroy for the LinkedIn video. CLAUDE.md carries this numbering since
 P5-1.
 
 ## Notes / open flags
+
+- **The review workflow's data is local only (user, 2026-11-12).**
+  `data/review/` (checkpoint DB + `audit.jsonl`) is gitignored; the two
+  committed case studies stay `pending`, so committed sweeps measure the
+  quarantined corpus. To stage the risk, run `python -m
+  evals.review_scenario` (temp copy), never `tessera corpus review` on the
+  committed corpus unless a merge of its result is intended.
+- **LangChain `index()` cleanup modes (found 2026-11-12):** `full` deletes
+  every source not in the batch, so it is only for whole-corpus ingest;
+  single-document re-index (the review) must use `incremental`.
+- **The context-marker row is gated at 0 since P5-8** (user sign-off
+  2026-11-12). A sweep on a corpus where someone approved the grocer case
+  study as `internal` would now FAIL (scenario 1); the bank paraphrase
+  would not (scenario 4).
+- **`compare_sweeps --floor-from` in zsh:** put the files in an array,
+  `F=(evals/baselines/p5-{0-native-1,…}.json)`, then `--floor-from $F`; a
+  plain string variable is passed as one path.
 
 - **NIM intermittently rejects `guided_json` (found 2026-11-09).** With
   `TESSERA_LC_RETRY=lc` the router calls

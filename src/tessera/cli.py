@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import typer
 from pydantic import ValidationError
@@ -38,7 +38,7 @@ from tessera.ingestion.data_quality import (
     build_report,
     format_data_report,
 )
-from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
+from tessera.ingestion.loader import Document, indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.observability.guard import TracingEnvError, check_tracing_env
 from tessera.pipeline import AnswerResult, NativePipeline, Pipeline, answer_query
@@ -648,6 +648,36 @@ def _report_indexing(result: IndexingResult, where: Path, total: int) -> None:
 def _ingest_lc(settings: Settings) -> None:
     """Build the LangChain stack's index, one layer per TESSERA_LC_* switch
     (plan §3.2.1, §3.3). LangChain is imported only here."""
+    store, run = _lc_index_target(settings)
+    from tessera.lc.loader import TesseraCorpusLoader, native_document
+
+    typer.echo(
+        f"Stack: lc · loader {settings.lc_loader} · splitter {settings.lc_splitter}"
+        f"{f' ({settings.lc_chunk_size} chars)' if settings.lc_splitter == 'lc' else ''}"
+        f" · embed prefix {'on' if settings.lc_embed_prefix else 'off'}"
+        f" · embeddings {settings.lc_embeddings} · store {settings.lc_store}"
+        f" · indexing {settings.lc_indexing}",
+        err=True,
+    )
+    # Quarantined documents are loaded too, so indexing can remove them.
+    if settings.lc_loader == "lc":
+        loader = TesseraCorpusLoader(settings.corpus_dir, include_quarantined=True)
+        documents = [native_document(d) for d in loader.lazy_load()]
+    else:
+        documents = load_corpus(settings.corpus_dir)
+    result = run(documents, "full")
+    _report_indexing(result, settings.vectorstore_dir, store.count())
+
+
+def _lc_index_target(
+    settings: Settings,
+) -> tuple[VectorStore, Callable[[list[Document], str], IndexingResult]]:
+    """The LangChain stack's index as the TESSERA_LC_* switches build it:
+    its store, and a function that indexes some documents into it.
+    ``tessera ingest --stack lc`` passes the whole corpus with ``full``
+    cleanup; the review workflow passes one document with ``incremental``,
+    because ``full`` deletes every source missing from the batch (plan
+    §3.8.5)."""
     if settings.lc_indexing == "lc" and settings.lc_store != "lc":
         typer.echo(
             "TESSERA_LC_INDEXING=lc needs TESSERA_LC_STORE=lc: LangChain's index() "
@@ -665,24 +695,9 @@ def _ingest_lc(settings: Settings) -> None:
     from tessera.ingestion.chunker import chunk_document, chunk_embedding_text
     from tessera.lc.embeddings import LangChainEmbedder, as_langchain
     from tessera.lc.indexing import index_with_record_manager
-    from tessera.lc.loader import TesseraCorpusLoader, native_document
     from tessera.lc.splitter import split_document
     from tessera.lc.store import LC_COLLECTION_NAME, LangChainChromaStore
 
-    typer.echo(
-        f"Stack: lc · loader {settings.lc_loader} · splitter {settings.lc_splitter}"
-        f"{f' ({settings.lc_chunk_size} chars)' if settings.lc_splitter == 'lc' else ''}"
-        f" · embed prefix {'on' if settings.lc_embed_prefix else 'off'}"
-        f" · embeddings {settings.lc_embeddings} · store {settings.lc_store}"
-        f" · indexing {settings.lc_indexing}",
-        err=True,
-    )
-    # Quarantined documents are loaded too, so indexing can remove them.
-    if settings.lc_loader == "lc":
-        loader = TesseraCorpusLoader(settings.corpus_dir, include_quarantined=True)
-        documents = [native_document(d) for d in loader.lazy_load()]
-    else:
-        documents = load_corpus(settings.corpus_dir)
     split = (
         partial(split_document, chunk_size=settings.lc_chunk_size)
         if settings.lc_splitter == "lc"
@@ -698,18 +713,19 @@ def _ingest_lc(settings: Settings) -> None:
     else:
         store = ChromaVectorStore(persist_dir=persist, collection_name=LC_COLLECTION_NAME)
 
-    if settings.lc_indexing == "lc":
-        records = sql_record_manager(persist / "lc_record_manager.sqlite")
-        result = index_with_record_manager(documents, chroma, records, split=split)
-    else:
-        result = index_corpus(
+    def run(documents: list[Document], cleanup: str) -> IndexingResult:
+        if settings.lc_indexing == "lc":
+            records = sql_record_manager(persist / "lc_record_manager.sqlite")
+            return index_with_record_manager(documents, chroma, records, split=split, cleanup=cleanup)
+        return index_corpus(
             documents,
             LangChainEmbedder(lc_embeddings),
             store,
             split=split,
             embedding_text=chunk_embedding_text if settings.lc_embed_prefix else (lambda c: c.text),
         )
-    _report_indexing(result, persist, store.count())
+
+    return store, run
 
 
 @app.command(name="index-people")
@@ -1343,3 +1359,129 @@ def feedback_to_cases(
     typer.echo(f"Wrote {len(cases)} candidate case(s) to {target}.")
     if missing:
         typer.echo(f"Skipped {len(missing)} with no trace record: {', '.join(missing)}", err=True)
+
+
+corpus_app = typer.Typer(help="Corpus maintenance: the human-review workflow (Phase 5).")
+app.add_typer(corpus_app, name="corpus")
+
+REVIEW_AS_HELP = (
+    "The reviewer, by id or role name (data/access/walls.yaml `reviewers:`). "
+    "A DEMO identity: Tessera has no authentication and takes you at your word."
+)
+
+
+def _review_context(settings: Settings, walls: Walls) -> Any:
+    """The review graph's runtime context: evidence from the native index,
+    indexers for both stacks (plan §3.8.5)."""
+    from tessera.review.audit import AuditLog
+    from tessera.review.graph import ReviewContext
+
+    embedder = LocalEmbedder()
+    native = ChromaVectorStore(persist_dir=settings.vectorstore_dir)
+    _require_index(native)
+    _, lc_run = _lc_index_target(settings)
+
+    def counts(result: IndexingResult) -> dict[str, int]:
+        return {"added": result.chunks_added, "deleted": result.chunks_deleted, "unchanged": result.chunks_unchanged}
+
+    return ReviewContext(
+        corpus_dir=settings.corpus_dir,
+        walls=walls,
+        embedder=embedder,
+        evidence_store=native,
+        indexers={
+            "native": lambda docs: counts(index_corpus(docs, embedder, native)),
+            "lc": lambda docs: counts(lc_run(docs, "incremental")),
+        },
+        audit=AuditLog(settings.review_dir / "audit.jsonl"),
+        as_of=datetime.now(timezone.utc).date(),
+        clock=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+
+
+@corpus_app.command("review")
+def corpus_review(
+    as_: str = typer.Option(..., "--as", help=REVIEW_AS_HELP),
+    resume: bool = typer.Option(False, "--resume", help="Continue your latest open review."),
+    reset: bool = typer.Option(False, "--reset", help="Close your open review first, then start a new one."),
+) -> None:
+    """Review the documents held back for review (review_status: pending):
+    see the evidence, then approve, reclassify, reject or leave each one.
+    Approving writes the front matter and re-indexes both stacks."""
+    settings = _load_settings()
+    try:
+        from tessera.review import graph as rg
+        from tessera.review.evidence import format_evidence
+    except ImportError as exc:
+        typer.echo("The review workflow needs the lc extra: `uv sync --extra dev --extra lc`.", err=True)
+        raise typer.Exit(code=1) from exc
+    if resume and reset:
+        typer.echo("Use --resume or --reset, not both.", err=True)
+        raise typer.Exit(code=2)
+    walls = _load_walls(settings)
+    reviewer = walls.reviewer_names.get(as_, as_)
+    if not walls.is_reviewer(reviewer):
+        typer.echo(f"{as_!r} is not a reviewer (data/access/walls.yaml `reviewers:`).", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(f"Reviewing as {reviewer} (demo identity).", err=True)
+    context = _review_context(settings, walls)
+
+    with rg.open_checkpointer(settings.review_dir / "checkpoints.sqlite") as checkpointer:
+        graph = rg.compile_review_graph(checkpointer)
+        open_tid = rg.open_thread(graph, checkpointer, reviewer)
+        if reset and open_tid:
+            rg.answer(graph, open_tid, {"action": rg.STOP}, context)
+            typer.echo(f"Closed {open_tid}.", err=True)
+            open_tid = None
+        if resume:
+            if not open_tid:
+                typer.echo("No open review to resume.", err=True)
+                raise typer.Exit(code=1)
+            thread_id = open_tid
+        elif open_tid:
+            typer.echo(f"{open_tid} is still open: pass --resume to continue it or --reset to close it.", err=True)
+            raise typer.Exit(code=2)
+        else:
+            thread_id = rg.new_thread_id(checkpointer, reviewer, context.as_of)
+            rg.start(graph, thread_id, reviewer, context)
+        typer.echo(f"Thread {thread_id}.", err=True)
+        _review_loop(graph, rg, thread_id, context, format_evidence)
+
+
+def _review_loop(graph: Any, rg: Any, thread_id: str, context: Any, format_evidence: Any) -> None:
+    config = rg.config_for(thread_id)
+    while True:
+        paused = rg.pause(graph.get_state(config))
+        if paused is None:
+            typer.echo("Nothing left to review.")
+            return
+        if "breakpoint" in paused:
+            d = paused["decision"]
+            target = f" to {d['engagement']}" if d.get("engagement") else ""
+            choice = typer.prompt(f"Apply '{d['action']}{target}' to {d['document']}? [y]es / [c]orrect / [q]uit", default="y")
+            if choice.startswith("q"):
+                typer.echo(f"Paused. Resume with `tessera corpus review --as {d['reviewer']} --resume`.")
+                return
+            if choice.startswith("c"):
+                rg.correct(graph, thread_id, _ask_decision(["approve", "reclassify", "reject", "leave"]), context.corpus_dir)
+                continue
+            rg.confirm(graph, thread_id, context)
+            continue
+        typer.echo(format_evidence(paused["evidence"]))
+        if paused.get("error"):
+            typer.echo(f"\n{paused['error']}", err=True)
+        reply = _ask_decision([*paused["allowed"], "quit"])
+        if reply["action"] == "quit":
+            typer.echo("Paused. Resume with --resume.")
+            return
+        rg.answer(graph, thread_id, reply, context)
+
+
+def _ask_decision(allowed: list[str]) -> dict[str, Any]:
+    action = typer.prompt(f"\nDecision ({' / '.join(allowed)})").strip().lower()
+    reply: dict[str, Any] = {"action": action}
+    if action == "reclassify":
+        reply["engagement"] = typer.prompt("Engagement codename").strip()
+    if action in ("approve", "reclassify", "reject", "leave"):
+        reply["note"] = typer.prompt("Note (optional)", default="", show_default=False)
+    return reply

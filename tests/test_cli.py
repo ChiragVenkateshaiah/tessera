@@ -1189,3 +1189,44 @@ def test_retry_graph_builds_chat_models_whose_errors_are_translated_not_retried(
     assert type(llms.answer.chat_model).__name__ == "ChatNVIDIA"  # not wrapped in .with_retry()
     assert llms.answer.chat_model.rate_limiter is not None
     assert answer_model.retries is False and router_model.retries is False  # type: ignore[attr-defined]
+
+
+# --- tessera corpus review (Phase 5, P5-8) ---
+
+REVIEWER_WALLS = Walls(
+    cleared={"halcyon": frozenset({"c0048"})},
+    reviewers={"legal-01": frozenset({"halcyon"})},
+    reviewer_names={"general_counsel": "legal-01"},
+)
+
+
+def test_corpus_review_refuses_someone_who_is_not_a_reviewer() -> None:
+    pytest.importorskip("langgraph")
+    result = runner.invoke(cli.app, ["corpus", "review", "--as", "c0048"])
+
+    assert result.exit_code == 2
+    assert "is not a reviewer" in result.output
+
+
+def test_corpus_review_refuses_resume_with_reset() -> None:
+    pytest.importorskip("langgraph")
+    result = runner.invoke(cli.app, ["corpus", "review", "--as", "legal-01", "--resume", "--reset"])
+
+    assert result.exit_code == 2
+    assert "not both" in result.output
+
+
+def test_corpus_review_resume_needs_an_open_review(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--resume with no open thread fails before anything is reviewed; the
+    reviewer may be named by role. Checkpoints go under TESSERA_REVIEW_DIR."""
+    pytest.importorskip("langgraph")
+    monkeypatch.setattr(cli, "_load_walls", lambda settings: REVIEWER_WALLS)
+    monkeypatch.setattr(cli, "_review_context", lambda settings, walls: object())
+    monkeypatch.setenv("TESSERA_REVIEW_DIR", "rev")
+
+    result = runner.invoke(cli.app, ["corpus", "review", "--as", "general_counsel", "--resume"])
+
+    assert result.exit_code == 1
+    assert "Reviewing as legal-01 (demo identity)" in result.output
+    assert "No open review to resume" in result.output
+    assert Path("rev/checkpoints.sqlite").exists()

@@ -19,6 +19,9 @@ data/vectorstore/
 data/traces/
 data/feedback/
 
+# Review workflow runtime data: audit log, checkpoints (plan §10.3)
+data/review/
+
 # OS / editor
 .DS_Store
 .vscode/

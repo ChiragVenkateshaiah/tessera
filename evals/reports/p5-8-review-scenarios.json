@@ -1,0 +1,555 @@
+{
+ "baseline": {
+  "lc": {
+   "hit_cases": [],
+   "hits": {},
+   "retrieved": {
+    "case_studies/grocer-price-tier-reset.md": [],
+    "case_studies/regional-bank-branch-consolidation.md": []
+   }
+  },
+  "lc-hybrid": {
+   "hit_cases": [],
+   "hits": {},
+   "retrieved": {
+    "case_studies/grocer-price-tier-reset.md": [],
+    "case_studies/regional-bank-branch-consolidation.md": []
+   }
+  },
+  "native": {
+   "hit_cases": [],
+   "hits": {},
+   "retrieved": {
+    "case_studies/grocer-price-tier-reset.md": [],
+    "case_studies/regional-bank-branch-consolidation.md": []
+   }
+  }
+ },
+ "pass": true,
+ "scenarios": {
+  "1": {
+   "evidence_top": [
+    {
+     "document": "engagements/halcyon-grocer-price-architecture.md",
+     "engagement": "halcyon",
+     "score": 0.6752,
+     "sensitivity": "restricted"
+    },
+    {
+     "document": "thought_leadership/private-label-strategy-inflation.md",
+     "engagement": null,
+     "score": 0.6275,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "methodology/pricing-strategy-price-elasticity.md",
+     "engagement": null,
+     "score": 0.6088,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "methodology/pricing-strategy-overview.md",
+     "engagement": null,
+     "score": 0.5912,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "methodology/pricing-strategy-value-based-pricing.md",
+     "engagement": null,
+     "score": 0.5302,
+     "sensitivity": "internal"
+    }
+   ],
+   "expected": {
+    "hit_cases": [
+     "ac-l01",
+     "ac-l13"
+    ],
+    "index_growth": "exactly the case study's chunks"
+   },
+   "front_matter": {
+    "engagement": null,
+    "review_status": "reviewed",
+    "sensitivity": "internal"
+   },
+   "index_counts": {
+    "after": {
+     "lc": 430,
+     "native": 430
+    },
+    "before": {
+     "lc": 427,
+     "native": 427
+    }
+   },
+   "indexed": {
+    "lc": {
+     "chunks": 3,
+     "labels": [
+      [
+       "internal",
+       ""
+      ]
+     ]
+    },
+    "native": {
+     "chunks": 3,
+     "labels": [
+      [
+       "internal",
+       ""
+      ]
+     ]
+    }
+   },
+   "measured": {
+    "lc": {
+     "hit_cases": [
+      "ac-l01",
+      "ac-l13"
+     ],
+     "hits": {
+      "ac-l01": [
+       "halcyon:2,800 stores"
+      ],
+      "ac-l13": [
+       "halcyon:2,800 stores"
+      ]
+     },
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01",
+       "ac-l01",
+       "ac-l13"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "lc-hybrid": {
+     "hit_cases": [
+      "ac-l01",
+      "ac-l13"
+     ],
+     "hits": {
+      "ac-l01": [
+       "halcyon:2,800 stores"
+      ],
+      "ac-l13": [
+       "halcyon:2,800 stores"
+      ]
+     },
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01",
+       "ac-l01",
+       "ac-l13"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "native": {
+     "hit_cases": [
+      "ac-l01",
+      "ac-l13"
+     ],
+     "hits": {
+      "ac-l01": [
+       "halcyon:2,800 stores"
+      ],
+      "ac-l13": [
+       "halcyon:2,800 stores"
+      ]
+     },
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01",
+       "ac-l01",
+       "ac-l13"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    }
+   },
+   "pass": true,
+   "title": "Grocer case study approved as internal"
+  },
+  "2": {
+   "expected": {
+    "ac-a01 retrieves": "case_studies/grocer-price-tier-reset.md",
+    "hit_cases": []
+   },
+   "front_matter": {
+    "engagement": "halcyon",
+    "review_status": "reviewed",
+    "sensitivity": "restricted"
+   },
+   "indexed": {
+    "lc": {
+     "chunks": 3,
+     "labels": [
+      [
+       "restricted",
+       "halcyon"
+      ]
+     ]
+    },
+    "native": {
+     "chunks": 3,
+     "labels": [
+      [
+       "restricted",
+       "halcyon"
+      ]
+     ]
+    }
+   },
+   "measured": {
+    "lc": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "lc-hybrid": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "native": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    }
+   },
+   "pass": true,
+   "title": "Grocer case study reclassified to Halcyon"
+  },
+  "3": {
+   "audit": [
+    {
+     "action": "reject",
+     "note": "identifiable to an insider",
+     "outcome": "rejected"
+    }
+   ],
+   "expected": {
+    "in_bm25": false,
+    "indexed": 0,
+    "offered_again": false
+   },
+   "front_matter": {
+    "engagement": null,
+    "review_status": "pending",
+    "sensitivity": "internal"
+   },
+   "in_bm25_after": false,
+   "in_bm25_before": false,
+   "indexed": {
+    "lc": {
+     "chunks": 0,
+     "labels": []
+    },
+    "native": {
+     "chunks": 0,
+     "labels": []
+    }
+   },
+   "measured": {
+    "lc": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "lc-hybrid": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "native": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    }
+   },
+   "offered_next_time": [
+    "case_studies/regional-bank-branch-consolidation.md"
+   ],
+   "pass": true,
+   "title": "Grocer case study rejected"
+  },
+  "4": {
+   "evidence_top": [
+    {
+     "document": "engagements/lantern-regional-bank-cost-programme.md",
+     "engagement": "lantern",
+     "score": 0.7856,
+     "sensitivity": "restricted"
+    },
+    {
+     "document": "methodology/cost-transformation-zero-based-budgeting.md",
+     "engagement": null,
+     "score": 0.6061,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "thought_leadership/open-banking-2030-scenarios.md",
+     "engagement": null,
+     "score": 0.5191,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "methodology/cost-transformation-zbb-decision-packages-2019.md",
+     "engagement": null,
+     "score": 0.495,
+     "sensitivity": "internal"
+    },
+    {
+     "document": "methodology/operating-model-shared-services.md",
+     "engagement": null,
+     "score": 0.4791,
+     "sensitivity": "internal"
+    }
+   ],
+   "expected": {
+    "hit_cases": []
+   },
+   "front_matter": {
+    "engagement": null,
+    "review_status": "reviewed",
+    "sensitivity": "internal"
+   },
+   "indexed": {
+    "lc": {
+     "chunks": 3,
+     "labels": [
+      [
+       "internal",
+       ""
+      ]
+     ]
+    },
+    "native": {
+     "chunks": 3,
+     "labels": [
+      [
+       "internal",
+       ""
+      ]
+     ]
+    }
+   },
+   "measured": {
+    "lc": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": [
+       "ac-l03"
+      ]
+     }
+    },
+    "lc-hybrid": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": [
+       "ac-l03",
+       "ac-l06"
+      ]
+     }
+    },
+    "native": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [],
+      "case_studies/regional-bank-branch-consolidation.md": [
+       "ac-l03"
+      ]
+     }
+    }
+   },
+   "pass": true,
+   "title": "Bank case study approved as internal (honest limits)"
+  },
+  "5": {
+   "allowed": [
+    "leave",
+    "stop"
+   ],
+   "audit_outcomes": [
+    "left pending"
+   ],
+   "clearance": [
+    "cobalt",
+    "foxglove",
+    "juniper",
+    "lantern",
+    "marigold",
+    "saffron"
+   ],
+   "evidence_engagements": [
+    "lantern"
+   ],
+   "expected": {
+    "approve": "refused",
+    "notice": "This document needs a fully cleared reviewer. Only a reviewer cleared for every engagement can approve, reclassify or reject it; you can leave it pending.",
+    "outcome": "left pending"
+   },
+   "indexed": {
+    "case_studies/grocer-price-tier-reset.md": {
+     "lc": {
+      "chunks": 0,
+      "labels": []
+     },
+     "native": {
+      "chunks": 0,
+      "labels": []
+     }
+    },
+    "case_studies/regional-bank-branch-consolidation.md": {
+     "lc": {
+      "chunks": 0,
+      "labels": []
+     },
+     "native": {
+      "chunks": 0,
+      "labels": []
+     }
+    }
+   },
+   "notices": [
+    "This document needs a fully cleared reviewer. Only a reviewer cleared for every engagement can approve, reclassify or reject it; you can leave it pending."
+   ],
+   "pass": true,
+   "refused": [
+    "This document needs a fully cleared reviewer. Only a reviewer cleared for every engagement can approve, reclassify or reject it; you can leave it pending.",
+    "This document needs a fully cleared reviewer. Only a reviewer cleared for every engagement can approve, reclassify or reject it; you can leave it pending."
+   ],
+   "review_status": [
+    "pending",
+    "pending"
+   ],
+   "title": "A partially cleared reviewer"
+  },
+  "6": {
+   "audit_lines_for_grocer": [
+    {
+     "action": "reclassify",
+     "engagement": "halcyon",
+     "outcome": "applied"
+    }
+   ],
+   "expected": {
+    "applied": "reclassify to halcyon (corrected from approve), once",
+    "resumed_at": "case_studies/grocer-price-tier-reset.md"
+   },
+   "front_matter": {
+    "engagement": "halcyon",
+    "review_status": "reviewed",
+    "sensitivity": "restricted"
+   },
+   "indexed": {
+    "lc": {
+     "chunks": 3,
+     "labels": [
+      [
+       "restricted",
+       "halcyon"
+      ]
+     ]
+    },
+    "native": {
+     "chunks": 3,
+     "labels": [
+      [
+       "restricted",
+       "halcyon"
+      ]
+     ]
+    }
+   },
+   "measured": {
+    "lc": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "lc-hybrid": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    },
+    "native": {
+     "hit_cases": [],
+     "hits": {},
+     "retrieved": {
+      "case_studies/grocer-price-tier-reset.md": [
+       "ac-a01"
+      ],
+      "case_studies/regional-bank-branch-consolidation.md": []
+     }
+    }
+   },
+   "pass": true,
+   "process_1": {
+    "paused_at": "case_studies/grocer-price-tier-reset.md",
+    "thread": "review-legal-01-2026-11-12"
+   },
+   "process_2": {
+    "corrected_decision": [
+     "reclassify",
+     "halcyon"
+    ],
+    "history_steps": 22,
+    "replayed_apply": {
+     "outcome": "already applied"
+    },
+    "replayed_steps": [
+     "apply",
+     "audit",
+     "index"
+    ],
+    "resumed_at": "case_studies/grocer-price-tier-reset.md",
+    "thread": "review-legal-01-2026-11-12",
+    "waiting_decision": "approve"
+   },
+   "title": "Interrupted and resumed in a new process; update_state() before apply"
+  }
+ }
+}
