@@ -29,6 +29,10 @@ Last updated: 2026-11-08 (lc-model-client-2 sweep; lc-defaults decided)
 - **2026-11-08:** the user decided P5-6's `lc-defaults` (router,
   prompt_chain, model_client `lc`; retry, expertise `native`; in code with
   P5-7's first PR), and the `lc-model-client-2` sweep ran, `=> PASS`.
+- **2026-11-08 (ad hoc, user):** README.md became the public progress
+  report (recruiter/business view, PR history, dev-cycle diagram);
+  `/end-day` step 3b now updates it every session, with a weekly summary
+  on Sundays. Merged as #83 (2026-11-12).
 - **P5-7** (PR open, 2026-11-08/09): the LangGraph orchestrator
   (`lc/graph.py`), the corrective loop as a subgraph (`lc/corrective.py`),
   `Send` multi-query (`lc/multiquery.py`), the Functional API
@@ -2107,8 +2111,9 @@ same change and stays ungated (`QUALITY_BAR.md`).
 
 **First: the P5-7 PR** (branch `feat/p5-7-send-functional`, which holds
 all three P5-7 commits plus the sweep exports and the report) — waiting
-for the user's review and merge. **PR #83 (README progress report)** is
-also open, waiting for the user.
+for the user's review and merge (#84). PR #83 (README progress report)
+merged 2026-11-12. The `RetryPolicy` follow-up is on
+`feat/p5-7-retry-policy` (its own PR).
 
 **P5-7 acceptance (plan §5), against the evidence:**
 - equivalence on fakes and replay is exact, with concurrent usage
