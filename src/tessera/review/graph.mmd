@@ -1,0 +1,30 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	load_pending(load_pending)
+	next_document(next_document)
+	prepare_evidence(prepare_evidence)
+	review(review)
+	apply(apply)
+	index(index)
+	audit(audit)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> load_pending;
+	apply -.-> audit;
+	apply -.-> index;
+	audit --> load_pending;
+	index --> audit;
+	load_pending --> next_document;
+	next_document -.-> __end__;
+	next_document -.-> prepare_evidence;
+	prepare_evidence --> review;
+	review -.-> __end__;
+	review -.-> apply;
+	review -.-> audit;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

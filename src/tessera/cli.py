@@ -1370,7 +1370,7 @@ REVIEW_AS_HELP = (
 )
 
 
-def _review_context(settings: Settings) -> Any:
+def _review_context(settings: Settings, walls: Walls) -> Any:
     """The review graph's runtime context: evidence from the native index,
     indexers for both stacks (plan §3.8.5)."""
     from tessera.review.audit import AuditLog
@@ -1386,7 +1386,7 @@ def _review_context(settings: Settings) -> Any:
 
     return ReviewContext(
         corpus_dir=settings.corpus_dir,
-        walls=_load_walls(settings),
+        walls=walls,
         embedder=embedder,
         evidence_store=native,
         indexers={
@@ -1418,12 +1418,13 @@ def corpus_review(
     if resume and reset:
         typer.echo("Use --resume or --reset, not both.", err=True)
         raise typer.Exit(code=2)
-    context = _review_context(settings)
-    reviewer = context.walls.reviewer_names.get(as_, as_)
-    if not context.walls.is_reviewer(reviewer):
+    walls = _load_walls(settings)
+    reviewer = walls.reviewer_names.get(as_, as_)
+    if not walls.is_reviewer(reviewer):
         typer.echo(f"{as_!r} is not a reviewer (data/access/walls.yaml `reviewers:`).", err=True)
         raise typer.Exit(code=2)
     typer.echo(f"Reviewing as {reviewer} (demo identity).", err=True)
+    context = _review_context(settings, walls)
 
     with rg.open_checkpointer(settings.review_dir / "checkpoints.sqlite") as checkpointer:
         graph = rg.compile_review_graph(checkpointer)

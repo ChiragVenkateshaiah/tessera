@@ -21,6 +21,7 @@ forced and the LLM is scripted, so the whole run makes zero network calls.
    changes the outcome.
 
     python -m evals.review_scenario --out evals/reports/p5-8-review-scenarios.json
+    python -m evals.review_scenario --mermaid src/tessera/review/graph.mmd
 
 The committed corpus is never touched: the case studies stay pending
 (plan §10.3).
@@ -189,7 +190,7 @@ class World:
         path = str(self.corpus / document)
         native = self.native._collection.get(where={"document_path": path}, include=["metadatas"])["metadatas"]
         lc = self.lc.chroma.get(where={"document_path": path}, include=["metadatas"])["metadatas"]
-        labels = lambda metas: sorted({(m["sensitivity"], m.get("engagement") or "") for m in metas})  # noqa: E731
+        labels = lambda metas: [list(t) for t in sorted({(m["sensitivity"], m.get("engagement") or "") for m in metas})]  # noqa: E731
         return {
             "native": {"chunks": len(native), "labels": labels(native)},
             "lc": {"chunks": len(lc), "labels": labels(lc)},
@@ -304,17 +305,24 @@ def _similar(shown: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def scenario_1(world: World, cases: list[EvalCase]) -> dict[str, Any]:
+    before = {"native": world.native.count(), "lc": world.lc.count()}
     run = world.review(GENERAL_COUNSEL, {GROCER: {"action": "approve"}})
+    after = {"native": world.native.count(), "lc": world.lc.count()}
+    indexed = world.indexed(GROCER)
     measured = world.measure(cases)
     expected = ["ac-l01", "ac-l13"]
+    # One document re-indexed: each index grows by exactly its chunks, so
+    # the LangChain index() run (incremental cleanup) deleted nothing else.
+    grew_by_it = all(after[s] - before[s] == indexed[s]["chunks"] > 0 for s in before)
     return {
         "title": "Grocer case study approved as internal",
-        "expected": {"hit_cases": expected},
+        "expected": {"hit_cases": expected, "index_growth": "exactly the case study's chunks"},
         "front_matter": world.front_matter(GROCER),
-        "indexed": world.indexed(GROCER),
+        "indexed": indexed,
+        "index_counts": {"before": before, "after": after},
         "evidence_top": _similar(run["shown"][0]),
         "measured": measured,
-        "pass": all(m["hit_cases"] == expected for m in measured.values()),
+        "pass": grew_by_it and all(m["hit_cases"] == expected for m in measured.values()),
     }
 
 
@@ -543,6 +551,8 @@ def main() -> None:
         from tessera.review.graph import build_review_graph
 
         args.mermaid.write_text(build_review_graph().compile().get_graph().draw_mermaid(), encoding="utf-8")
+        print(f"Wrote {args.mermaid}")
+        return
     which = [int(n) for n in args.only.split(",")] if args.only else None
     with tempfile.TemporaryDirectory() as work:
         results = run_scenarios(Path(work), which)
