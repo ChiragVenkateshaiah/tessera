@@ -902,10 +902,12 @@ class QualityBar:
     min_authorized_recall: float = 0.80
     min_injection_pass_rate: float = 1.0
     gate_access: bool = True
-    # Context-marker check (Phase 5 plan §3.1.3): REPORTED from P5-2; gated
-    # only after the user signs off (plan §10.5).
+    # Context-marker check (Phase 5 plan §3.1.3): REPORTED from P5-2;
+    # GATED from P5-8, with the user's sign-off (plan §10.5, 2026-11-12),
+    # once the review scenarios showed it catching the approved grocer
+    # case study. Set False to fall back to report-only.
     max_context_marker_cases: int = 0
-    gate_context_markers: bool = False
+    gate_context_markers: bool = True
 
 
 DEFAULT_QUALITY_BAR = QualityBar()

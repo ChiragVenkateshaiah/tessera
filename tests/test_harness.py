@@ -524,7 +524,7 @@ def _passing_report(**overrides: object) -> EvalReport:
         mean_relevance=4.9,
         mean_latency_by_archetype={},
         superseded_cited_cases=[],
-        access_cases=29, leakage_set_size=13, authorized_recall=1.0, injection_pass_rate=1.0,
+        access_cases=29, leakage_set_size=13, context_marker_checked=16, authorized_recall=1.0, injection_pass_rate=1.0,
     )
     defaults.update(overrides)
     return EvalReport(**defaults)  # type: ignore[arg-type]
@@ -1113,15 +1113,29 @@ def test_forbidden_markers_must_be_keyed_by_engagement(tmp_path: Path) -> None:
         load_cases(tmp_path)
 
 
-def test_the_context_marker_row_is_reported_not_gated() -> None:
+def test_the_context_marker_row_is_gated_at_zero_cases() -> None:
+    """Gated from P5-8 with the user's sign-off (Phase 5 plan §10.5)."""
     from evals.harness import evaluate_bar
 
-    report = _passing_report(context_marker_checked=17, context_marker_cases=["ac-l01"])
-    (row,) = [t for t in evaluate_bar(report).thresholds if t.name == "Context-marker hits"]
+    clean = _passing_report(context_marker_checked=17, context_marker_cases=[])
+    leaking = _passing_report(context_marker_checked=17, context_marker_cases=["ac-l01"])
+    (row,) = [t for t in evaluate_bar(leaking).thresholds if t.name == "Context-marker hits"]
+
+    assert row.gated is True and row.requirement == "<= 0 cases"
+    assert row.actual == "1 of 17 cases with markers: ac-l01"
+    assert evaluate_bar(clean).passed
+    assert not evaluate_bar(leaking).passed
+
+
+def test_the_context_marker_row_can_fall_back_to_report_only() -> None:
+    from evals.harness import QualityBar, evaluate_bar
+
+    leaking = _passing_report(context_marker_checked=17, context_marker_cases=["ac-l01"])
+    bar = QualityBar(gate_context_markers=False)
+    (row,) = [t for t in evaluate_bar(leaking, bar).thresholds if t.name == "Context-marker hits"]
 
     assert row.gated is False
-    assert row.actual == "1 of 17 cases with markers: ac-l01"
-    assert evaluate_bar(report).passed  # reported rows never fail the bar
+    assert evaluate_bar(leaking, bar).passed  # reported rows never fail the bar
 
 
 def test_any_pipeline_is_scored_through_the_protocol() -> None:
