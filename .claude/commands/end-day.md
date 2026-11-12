@@ -85,10 +85,52 @@ docs/config-only session, which this step already skips.
   checkpoint.md. Ask the user whether `CLAUDE.md` needs a matching update
   before moving on.
 
+## 3b. Update README.md — the public progress report
+
+The user decided (2026-11-08) that `README.md` is the project's living
+progress report: anyone — a recruiter, a hiring manager, a business
+reader — should understand the project and where it stands by reading it
+on GitHub. Update it at **every** `/end-day`, from the facts already
+gathered for checkpoint.md. Write it in natural, professional English
+(it is published under the user's name), not in the chat's STE style.
+Never invent a number: every figure must come from a sweep, a test run,
+`gh`, git or checkpoint.md, and stay labelled as synthetic-data /
+eval-set evidence where it is.
+
+Update these sections near the top of README.md:
+- **The banner** — "Last updated", current phase, next task.
+- **At a glance → Progress in numbers** — phases released, current-phase
+  tasks done, PRs merged (`gh pr list --state merged --limit 500 --json
+  number --jq length`), tests passing (from step 1's run), eval cases,
+  lines of code (`find src -name '*.py' | xargs cat | wc -l`, same for
+  `tests`), ADR count.
+- **At a glance → Business metrics** — refresh any row a sweep this
+  session re-measured (quality, cost per answer, latency, leaks,
+  injection). Leave the others as they are, with their date.
+- **At a glance → Skills** — add a row or line only when this session
+  built a genuinely new capability.
+- **Progress report → Latest session** — replace it with today's
+  session: 3–5 plain-English bullets (what shipped, with PR numbers;
+  decisions made; what's next). Keep it readable without the codebase.
+- **Progress report → Weekly summary** — on a **Sunday** session (the
+  user works on Tessera at weekends), add a new "Week ending <date>"
+  entry above the old ones: the week's PRs, phase progress, and any
+  metric that moved. Keep the four most recent weeks; delete older ones
+  (git history keeps them).
+- **Where we are in the development cycle** — the mermaid diagram's
+  status labels and the phase table's status column.
+- **Pull request history** — add this session's merged PRs to their
+  phase's row (highlights, not every checkpoint PR).
+- **The quality bar** "Latest" column and its sentence, if a full
+  `--check` sweep ran this session.
+
+The README change ships in the same PR as the checkpoint.md update
+(step 5).
+
 ## 4. Confirm and commit
 
-- Show the user the diff to checkpoint.md (and CLAUDE.md, if touched) and
-  confirm before committing.
+- Show the user the diff to checkpoint.md, README.md (and CLAUDE.md, if
+  touched) and confirm before committing.
 - Check the current branch. Branch protection blocks *pushing* to `main`,
   not committing locally — so a local commit sitting on `main` is
   possible and is exactly what this check catches. If that's happened, or
@@ -145,7 +187,8 @@ will not close a phase — skip this step unless they clearly do.
 
 ## 6. Report
 
-Report the PR(s) merged (and tag if cut), test-suite status, and a
-one-line summary of session progress against the Phase 1 task sequence —
+Report the PR(s) merged (and tag if cut), test-suite status, confirm the
+README progress report was updated, and a one-line summary of session
+progress against the Phase 1 task sequence —
 the same shape of summary `/start-day` will read back at the start of the
 next session.
