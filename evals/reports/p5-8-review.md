@@ -41,11 +41,11 @@ flowchart TD
     ND --> PE[prepare_evidence]
     PE --> RV["review<br/>interrupt()"]
     RV -->|stop| E
-    RV -->|leave| AU[audit]
-    RV -->|approve / reclassify / reject| BP{{"breakpoint<br/>interrupt_before"}}
+    RV -->|reject / leave| AU[audit]
+    RV -->|approve / reclassify| BP{{"breakpoint<br/>interrupt_before"}}
     BP --> AP[apply]
-    AP -->|rewritten| IX[index]
-    AP -->|rejected / stale| AU
+    AP -->|applied / already applied| IX[index]
+    AP -->|stale| AU
     IX --> AU
     AU --> LP
 ```
@@ -83,7 +83,9 @@ compares it with `draw_mermaid()`, so the picture can't drift from the code.
   decision; `interrupt_before=["apply"]` then pauses once more before any
   file is written. That pause is where `update_state(..., as_node="review")`
   can correct a decision (scenario 6), and where a crash leaves nothing
-  half-done.
+  half-done. `reject` and `leave` write no file, so they skip the
+  breakpoint and go straight to `audit`; a rejection is undone by editing
+  the document (a new content hash brings it back for review).
 - **Idempotence without a lock.** The decision id is a hash of document,
   content hash, reviewer, action and engagement. `apply` records the hash
   it expects to write, so a replay recognises its own write; `audit`
