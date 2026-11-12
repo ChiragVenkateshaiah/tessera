@@ -191,12 +191,16 @@ def retry_node(state: CorrectiveState, runtime: Runtime[Any]) -> dict[str, Any]:
     return _with_usage(*retrieve_with(runtime.context, rewritten, state["decision"].archetype, state.get("principal")))
 
 
-def build_corrective_subgraph() -> Any:
+def build_corrective_subgraph(retry_policy: Any = None) -> Any:
+    """The loop, compiled. ``retry_policy`` (a LangGraph ``RetryPolicy``, the
+    ``retry`` switch's ``graph`` value) goes on every node that can call a
+    model: retrieve and retry (the Send multi-query's rephrasing), grade
+    and rewrite."""
     graph = StateGraph(CorrectiveState)
-    graph.add_node("retrieve", retrieve_node)
-    graph.add_node("grade", grade_node)
-    graph.add_node("rewrite", rewrite_node)
-    graph.add_node("retry", retry_node)
+    graph.add_node("retrieve", retrieve_node, retry_policy=retry_policy)
+    graph.add_node("grade", grade_node, retry_policy=retry_policy)
+    graph.add_node("rewrite", rewrite_node, retry_policy=retry_policy)
+    graph.add_node("retry", retry_node, retry_policy=retry_policy)
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "grade")
     graph.add_conditional_edges("grade", after_grade, ["rewrite", END])

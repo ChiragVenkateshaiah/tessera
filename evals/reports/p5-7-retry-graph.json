@@ -1,0 +1,153 @@
+{
+ "baseline": "p5-7-lc-defaults-2.json",
+ "noise_floor": {
+  "ac_relevance": 0.04651162790697683,
+  "b_relevance": 0.125,
+  "ac_groundedness": 0.06060606060606055,
+  "b_groundedness": 0.0
+ },
+ "noise_floor_source": "max over 9 native sweeps, pairwise",
+ "comparisons": [
+  {
+   "name": "p5-7-lc-retry-graph",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "lc",
+    "router": "lc",
+    "prompt_chain": "lc",
+    "model_client": "lc",
+    "retry": "graph",
+    "expertise": "native",
+    "orchestration": "graph",
+    "corrective": "off"
+   },
+   "commit": "000b761aaa1e2661348ee6dec94650370fe0da06",
+   "scored_in_both": 92,
+   "errors": [],
+   "routing_changed": [
+    "ac-l06 D\u2192A"
+   ],
+   "documents_changed": [
+    "ac-l06"
+   ],
+   "people_changed": [],
+   "recall_changed": [],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.976744186046512,
+     4.906976744186046
+    ],
+    "b_relevance": [
+     4.777777777777778,
+     4.777777777777778
+    ],
+    "ac_groundedness": [
+     4.976744186046512,
+     4.953488372093023
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_groundedness": [
+     "q002 4\u21925",
+     "ql004 5\u21924",
+     "ql017 5\u21924"
+    ],
+    "ac_relevance": [
+     "ql004 5\u21924",
+     "ql011 4\u21923",
+     "ql017 5\u21924"
+    ]
+   },
+   "latency": [
+    9.563009568378101,
+    9.48545725369616
+   ],
+   "tokens": [
+    [
+     178146,
+     31118
+    ],
+    [
+     180500,
+     30506
+    ]
+   ]
+  },
+  {
+   "name": "p5-6-lc-retry",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "native",
+    "router": "native",
+    "prompt_chain": "native",
+    "model_client": "lc",
+    "retry": "lc",
+    "expertise": "native",
+    "orchestration": "native"
+   },
+   "commit": "e3b1c67260dce14e86f5fdde9848aa192be0fb3f",
+   "scored_in_both": 90,
+   "errors": [
+    "ql001",
+    "ql042"
+   ],
+   "routing_changed": [],
+   "documents_changed": [],
+   "people_changed": [],
+   "recall_changed": [],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.976190476190476,
+     4.928571428571429
+    ],
+    "b_relevance": [
+     4.75,
+     4.75
+    ],
+    "ac_groundedness": [
+     4.976190476190476,
+     4.9523809523809526
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_groundedness": [
+     "q002 4\u21925",
+     "ql004 5\u21924",
+     "ql034 5\u21924"
+    ],
+    "ac_relevance": [
+     "q005 5\u21924",
+     "ql004 5\u21924"
+    ]
+   },
+   "latency": [
+    9.52078444837502,
+    25.229303415533163
+   ],
+   "tokens": [
+    [
+     173999,
+     30413
+    ],
+    [
+     173999,
+     29097
+    ]
+   ]
+  }
+ ]
+}

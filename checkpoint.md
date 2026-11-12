@@ -2113,7 +2113,8 @@ same change and stays ungated (`QUALITY_BAR.md`).
 all three P5-7 commits plus the sweep exports and the report) — waiting
 for the user's review and merge (#84). PR #83 (README progress report)
 merged 2026-11-12. The `RetryPolicy` follow-up is on
-`feat/p5-7-retry-policy` (its own PR).
+`feat/p5-7-retry-policy` (its own PR): `TESSERA_LC_RETRY=graph`, three
+sweeps at `000b761`, all `=> PASS` (report §8).
 
 **P5-7 acceptance (plan §5), against the evidence:**
 - equivalence on fakes and replay is exact, with concurrent usage
@@ -2130,9 +2131,10 @@ merged 2026-11-12. The `RetryPolicy` follow-up is on
   **met** (plus a control showing graph node runs leak without it).
 
 **Open items carried from P5-7:**
-- **LangGraph `RetryPolicy` — not built.** Plan §3.6 deferred it to P5-7
-  as the third LangChain retry mechanism to compare with
-  `RetryingLLMClient`. Do it before P5-10's retry decision.
+- **LangGraph `RetryPolicy` — built 2026-11-12** (`retry=graph`, report
+  §8). Its sweep ran on a calm NIM day (0 throttles), so it is not ranked
+  against the other two layers under load; the export doesn't count the
+  pipeline's own retries.
 - **`guided_json` on NIM** (see Notes) and **streaming needs `retry=lc`**
   (report §4): both bear on P5-10's choice of `retry`.
 

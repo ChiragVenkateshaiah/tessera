@@ -90,7 +90,10 @@ class Settings(BaseSettings):
     lc_router: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_ROUTER")
     lc_prompt_chain: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_PROMPT_CHAIN")
     lc_model_client: Literal["native", "lc"] = Field(default="lc", validation_alias="TESSERA_LC_MODEL_CLIENT")
-    lc_retry: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_RETRY")
+    # retry also takes "graph" (P5-7): LangGraph's RetryPolicy on the
+    # graph's model-calling nodes (needs model_client=lc and
+    # orchestration=graph).
+    lc_retry: Literal["native", "lc", "graph"] = Field(default="native", validation_alias="TESSERA_LC_RETRY")
     lc_expertise: Literal["native", "lc"] = Field(default="native", validation_alias="TESSERA_LC_EXPERTISE")
     # Orchestration (P5-7): NativePipeline, the LangGraph StateGraph
     # (tessera.lc.graph) or the same logic in LangGraph's Functional API

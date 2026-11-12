@@ -389,8 +389,113 @@ which steps run at all, so it is an edge.
   retriever, which equals it in quality with one model call less.
 - **Carried to P5-10:** the `guided_json` incompatibility (§5.4) and the
   streaming question (§4) both bear on choosing `retry=lc`.
-- **Not done in P5-7: LangGraph's `RetryPolicy`.** Plan §3.6 lists it as
-  the third LangChain retry mechanism to set against
-  `RetryingLLMClient`, and P5-6 deferred it here. The graph's nodes run
-  without a `RetryPolicy` today; retries stay inside the model clients
-  (`retry` switch). It is carried as an open item (checkpoint.md).
+- **LangGraph's `RetryPolicy`** was added after the first P5-7 PR, as the
+  `retry` switch's `graph` value (§8). It stays an option, not the
+  default.
+
+## 8. LangGraph's `RetryPolicy` (`retry=graph`)
+
+Added in a follow-up commit (`000b761`). Plan §3.6 lists it as the third
+LangChain-family retry mechanism to set against the native
+`RetryingLLMClient`; P5-6 deferred it to P5-7.
+
+```sh
+pytest tests/test_lc_graph_retry.py tests/test_cli.py -q
+TESSERA_LC_RETRY=graph tessera eval --check --stack lc --workers 1 --json evals/baselines/p5-7-lc-retry-graph.json
+tessera eval --check --stack lc     --workers 1 --json evals/baselines/p5-7-lc-defaults-2.json
+tessera eval --check --stack native --workers 1 --json evals/baselines/p5-7-native-2.json
+python -m evals.compare_sweeps evals/baselines/p5-7-lc-defaults-2.json \
+    evals/baselines/p5-7-lc-retry-graph.json evals/baselines/p5-6-lc-retry.json \
+    --floor-from evals/baselines/p5-{0-native-1,0-native-2,2-native,3-native,4-native,5-native,6-native,7-native,7-native-2}.json \
+    --out evals/reports/p5-7-retry-graph.json
+```
+
+### 8.1 Design
+
+- **Where the retry lives.** `retry=native` retries inside the client
+  (`RetryingLLMClient`); `retry=lc` wraps the chat model in
+  `.with_retry()`; `retry=graph` retries **the node**. A
+  `RetryPolicy` sits on every node that calls a model — `route`,
+  `generate`, `generate_b`, and the corrective subgraph's `retrieve`
+  (the `Send` multi-query rephrases), `grade`, `rewrite` and `retry` —
+  and on nothing else.
+- **A second compiled graph.** `GRAPH_WITH_RETRIES = build_graph(GRAPH_RETRY_POLICY)`.
+  The default `GRAPH` has no policy, so under `retry=lc` a call that
+  `.with_retry()` already gave up on is not retried a second time.
+  `LangGraphPipeline(graph=...)` picks one; the composition root passes
+  `GRAPH_WITH_RETRIES` only for `retry=graph`.
+- **Errors stay readable.** The chat models are called directly (as with
+  `retry=lc`) and their errors translated (`translated()`, factored out of
+  `with_lc_retries`), so `is_transient` reads a status the way the native
+  layer does: 429 or 5xx.
+- **Schedule.** The native layer's 5xx schedule: 15 s, doubling, 120 s
+  cap, 6 attempts, with jitter. Pacing is `retry=lc`'s
+  `InMemoryRateLimiter`.
+
+| | `RetryingLLMClient` (native) | `.with_retry()` (lc) | `RetryPolicy` (graph) |
+|---|---|---|---|
+| Unit retried | one model call | one model call | the whole node |
+| `Retry-After` honoured | yes | no | no |
+| 429 vs 5xx schedule | 45 s vs 15 s base | one schedule | one schedule |
+| Waits shared across callers | yes (`Pacer` cool-down) | no | no |
+| Failed attempt's side effects | none to undo | none to undo | the node's writes dropped by LangGraph |
+| Configured | per client | per runnable | per node, at compile time |
+
+### 8.2 Zero-call evidence
+
+`tests/test_lc_graph_retry.py` (15 tests) plus 4 in `tests/test_cli.py`,
+with scripted clients raising `LLMCallError` with a status and a policy
+with no waits:
+
+| Check | Result |
+|---|---|
+| A 503 and a 429 on routing, a 502 on the answer, on the A, C and B paths: the run **equals a clean native run** (`==`: answer, citations, trace, usage) | pass — a failed attempt leaves nothing behind |
+| The corrective grader and rewriter each fail once (`corrective=llm`) | pass — still exactly two retrieval attempts |
+| A 400 | raised at once, one call |
+| Six 503s | gives up after six calls |
+| The default `GRAPH` | raises on the first 503 (no policy) |
+| Which nodes carry the policy | exactly the seven model-calling nodes |
+| `LcModel(retries=False)` | errors translated (`TransientLLMError`, status 503), not retried |
+| CLI | `retry=graph` needs `model_client=lc` and `orchestration=graph` (exit 2); it builds bare `LangChainLLMClient`s with the rate limiter, and runs `GRAPH_WITH_RETRIES` |
+
+Full suite at `000b761`: **761 passed, 8 skipped, 1 xfailed**.
+
+### 8.3 The live sweeps
+
+At `000b761`, NIM, `--workers 1`, 2026-11-12. All three `=> PASS (gated thresholds)`.
+
+| Sweep | Scored / ERROR | Throttled (judge) | Recall | MRR | Ground. | Relev. | Median latency |
+|---|---|---|---|---|---|---|---|
+| `native-2` | 92 / 0 | 0 | 0.96 | 0.97 | 4.98 | 4.98 | 9.9 s |
+| `lc-defaults-2` | 92 / 0 | 0 | 0.96 | 0.97 | 4.98 | 4.98 | 8.5 s |
+| `lc-retry-graph` | 92 / 0 | 0 | 0.96 | 0.97 | 4.95 | 4.91 | 8.2 s |
+
+Against `lc-defaults-2` (floor now from 9 native sweeps: A/C relevance
+±0.05), `retry=graph` is inside the floor everywhere except **A/C
+relevance, −0.07**. Three cases, each with **the same retrieved
+documents** in both sweeps: `ql004` 5→4, `ql011` 4→3, `ql017` 5→4 — the
+answers are worded differently and the judge marks one detail missing.
+These are the cases that move between any two sweeps (`ql017` was the
+P5-6 router dip, `ql011` the corrective-score one). P5-6's `retry=lc`
+sweep shows the same kind of dip (4.98→4.93), and both are the configs in
+which the answer chain calls `ChatNVIDIA` directly. The retry layer itself
+cannot be the cause: NIM was calm all day (0 throttled calls in all three
+sweeps, 17–19 min each), so the policy almost certainly never fired.
+
+**What this does not show.** The export counts the judge's throttled
+calls, not the answer pipeline's retries, so no sweep can show how often
+the `RetryPolicy` fired, and a calm day can't rank it against the other
+two layers. The fault-injection tests are the evidence for its behaviour;
+the sweep is the evidence that it changes nothing when nothing fails.
+
+### 8.4 Decision
+
+`retry` stays `native` in `lc-defaults`. `RetryPolicy` is the cleanest
+retry of the three on a failure inside a node — the failed attempt's
+writes are dropped by the framework — but, like `.with_retry()`, it can't
+honour `Retry-After` or share a cool-down, which is what kept the native
+layer whole under P5-6's throttled sweep. It also inherits `retry=lc`'s
+direct-chat-model path, with NIM's intermittent `guided_json` rejection
+(§3.4), a 400 that no retry layer should retry. P5-10 makes the final
+`retry` call with all three measured.
+
