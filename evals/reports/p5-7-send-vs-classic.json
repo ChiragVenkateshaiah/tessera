@@ -1,0 +1,81 @@
+{
+ "baseline": "p5-5-lc-multiquery.json",
+ "noise_floor": {
+  "ac_relevance": 0.032258064516129004,
+  "b_relevance": 0.125,
+  "ac_groundedness": 0.06060606060606055,
+  "b_groundedness": 0.0
+ },
+ "noise_floor_source": "max over 8 native sweeps, pairwise",
+ "comparisons": [
+  {
+   "name": "p5-7-lc-multiquery-send",
+   "switches": {
+    "embeddings": "lc",
+    "store": "lc",
+    "retriever": "multiquery_send",
+    "router": "lc",
+    "prompt_chain": "lc",
+    "model_client": "lc",
+    "retry": "native",
+    "expertise": "native",
+    "orchestration": "graph",
+    "corrective": "off"
+   },
+   "commit": "4c7823f55edd7e4aefc35f7e85cb6e578519e58c",
+   "scored_in_both": 91,
+   "errors": [],
+   "routing_changed": [],
+   "documents_changed": [
+    "ql013"
+   ],
+   "people_changed": [],
+   "recall_changed": [],
+   "leaks": [],
+   "injection_failed": [],
+   "judge": {
+    "ac_relevance": [
+     4.9523809523809526,
+     4.9523809523809526
+    ],
+    "b_relevance": [
+     4.777777777777778,
+     4.777777777777778
+    ],
+    "ac_groundedness": [
+     4.976190476190476,
+     4.9523809523809526
+    ],
+    "b_groundedness": [
+     5.0,
+     5.0
+    ]
+   },
+   "judge_changed": {
+    "ac_groundedness": [
+     "q002 5\u21924",
+     "ql004 5\u21924",
+     "ql017 4\u21925"
+    ],
+    "ac_relevance": [
+     "ql004 5\u21924",
+     "ql017 4\u21925"
+    ]
+   },
+   "latency": [
+    46.215067867098774,
+    19.2267601524488
+   ],
+   "tokens": [
+    [
+     176066,
+     28130
+    ],
+    [
+     184658,
+     33043
+    ]
+   ]
+  }
+ ]
+}

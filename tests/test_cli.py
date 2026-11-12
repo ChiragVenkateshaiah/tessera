@@ -1057,12 +1057,17 @@ def test_an_unknown_stack_is_rejected() -> None:
     assert result.exit_code == 2 and "Unknown stack" in result.output
 
 
+@pytest.mark.parametrize("orchestration", ["graph", "native"])
 def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, orchestration: str
 ) -> None:
-    """P5-5: `eval --stack lc` scores the native pipeline with the
-    LangChain retrieval layers swapped in — the LangChain index as the
-    store, its retriever as the pipeline's retrieve step."""
+    """P5-5: `eval --stack lc` scores the pipeline with the LangChain
+    retrieval layers swapped in — the LangChain index as the store, its
+    retriever as the pipeline's retrieve step. P5-7: through the LangGraph
+    orchestrator by default, or NativePipeline when
+    TESSERA_LC_ORCHESTRATION=native."""
+    pytest.importorskip("langgraph", reason="the lc extra isn't installed")
+    monkeypatch.setenv("TESSERA_LC_ORCHESTRATION", orchestration)
     seen: dict[str, object] = {}
 
     class NonEmptyStore:
@@ -1109,4 +1114,36 @@ def test_eval_stack_lc_retrieves_through_the_lc_index_and_retriever(
     assert result.exit_code == 0, result.output
     assert "Stack: lc" in result.output and "retriever lc" in result.output
     assert seen["store"] is lc_store and seen["embedder"] == "lc-embedder"
-    assert seen["pipeline"]._retrieve is lc_retrieve  # type: ignore[attr-defined]
+    pipeline = seen["pipeline"]
+    if orchestration == "graph":
+        from tessera.lc.graph import LangGraphPipeline
+
+        assert isinstance(pipeline, LangGraphPipeline)
+        assert pipeline.context.retrieve_fn is lc_retrieve
+    else:
+        assert type(pipeline).__name__ == "NativePipeline"
+        assert pipeline._retrieve is lc_retrieve  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    ("env", "message"),
+    [
+        ({"TESSERA_LC_CORRECTIVE": "llm", "TESSERA_LC_ORCHESTRATION": "native"}, "TESSERA_LC_CORRECTIVE needs"),
+        ({"TESSERA_LC_RETRIEVER": "multiquery_send", "TESSERA_LC_ORCHESTRATION": "native"},
+         "multiquery_send needs"),
+    ],
+)
+def test_langgraph_only_switches_need_a_langgraph_orchestration(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], message: str
+) -> None:
+    """P5-7: the corrective loop and the Send multi-query exist only in
+    the LangGraph orchestrators; with native orchestration the eval stops
+    with a clear message instead of silently ignoring the switch."""
+    pytest.importorskip("langgraph", reason="the lc extra isn't installed")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    settings = cli._load_settings()
+    with pytest.raises(cli.typer.Exit) as exit_info:
+        cli._lc_generation(settings, cli.LLMs(answer=None, router=None, name="x"), pacer=None)  # type: ignore[arg-type]
+    assert exit_info.value.exit_code == 2

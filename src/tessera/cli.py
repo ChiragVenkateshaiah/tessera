@@ -41,7 +41,7 @@ from tessera.ingestion.data_quality import (
 from tessera.ingestion.loader import indexable, load_corpus, scan_corpus
 from tessera.labels import ARCHETYPE_LABELS
 from tessera.observability.guard import TracingEnvError, check_tracing_env
-from tessera.pipeline import AnswerResult, NativePipeline, answer_query
+from tessera.pipeline import AnswerResult, NativePipeline, Pipeline, answer_query
 from tessera.principal import Principal
 from tessera.store.base import ExpertiseStore, VectorStore
 from tessera.store.chroma import ChromaVectorStore
@@ -331,15 +331,33 @@ def _native_pipeline(
     expertise_store: ExpertiseStore | None,
     tracer: LangSmithTracer | None,
     steps: dict[str, Callable[..., object]] | None = None,
-) -> NativePipeline:
+    *,
+    orchestration: str = "native",
+    corrective: str = "off",
+    multiquery_send: bool = False,
+) -> Pipeline:
     """The native pipeline. With a tracer, its steps and LLM ports are
     wrapped as LangSmith runs here, at the composition root — never in the
     core (plan §3.9.2). ``steps`` swaps in the LangChain stack's layers
     (``retrieve``, ``route``, ``generate``, ``find_experts``,
-    ``generate_expertise``); any step not given stays native."""
+    ``generate_expertise``); any step not given stays native.
+    ``orchestration`` ``graph`` or ``functional`` runs the same steps
+    through the LangGraph orchestrator (P5-7), imported only then;
+    ``corrective`` (off, score, llm) is its corrective loop and
+    ``multiquery_send`` its Send multi-query retrieval."""
     steps = steps or {}
+    kind: Callable[..., Pipeline] = NativePipeline
+    if orchestration in ("graph", "functional"):
+        from functools import partial
+
+        if orchestration == "graph":
+            from tessera.lc.graph import LangGraphPipeline as flow
+        else:
+            from tessera.lc.functional import FunctionalPipeline as flow
+
+        kind = partial(flow, corrective=corrective, multiquery_send=multiquery_send)
     if tracer is None:
-        return NativePipeline(
+        return kind(
             llms.answer,
             embedder,
             store,
@@ -347,7 +365,7 @@ def _native_pipeline(
             router_llm=llms.router,
             **{f"{name}_fn": fn for name, fn in steps.items()},  # type: ignore[arg-type]
         )
-    return NativePipeline(
+    return kind(
         tracer.llm(llms.answer, "answer"),
         embedder,
         store,
@@ -378,8 +396,8 @@ class LcRetrieval:
 
 def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None) -> LcRetrieval:
     """The LangChain stack's layers, per the TESSERA_LC_* switches:
-    retrieval (P5-4/5) and generation (P5-6). Orchestration stays native
-    until P5-7."""
+    retrieval (P5-4/5) and generation (P5-6). Orchestration (P5-7) is
+    applied where the pipeline is built (``_native_pipeline``)."""
     try:
         from tessera.integrations.langchain import hf_cross_encoder, hf_embeddings, lc_chroma
     except ImportError as exc:
@@ -401,7 +419,9 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None)
         raise typer.Exit(code=1)
     kind = settings.lc_retriever
     retrieve = None
-    if kind != "native":
+    # multiquery_send isn't a retrieve step: the LangGraph orchestrator
+    # runs it as a subgraph (passed to the pipeline where it's built).
+    if kind not in ("native", "multiquery_send"):
         retrieve = lc_retrieve_fn(
             store,
             "vector" if kind == "lc" else kind,
@@ -423,7 +443,8 @@ def _lc_retrieval(settings: Settings, llms: LLMs, *, pacer: Pacer | None = None)
         "model_client": settings.lc_model_client,
         "retry": settings.lc_retry,
         "expertise": settings.lc_expertise,
-        "orchestration": "native",
+        "orchestration": settings.lc_orchestration,
+        "corrective": settings.lc_corrective,
     }
     return LcRetrieval(
         store=store, embedder=embedder, retrieve=retrieve, switches=switches, steps=steps, llms=lc_llms
@@ -438,6 +459,13 @@ def _lc_generation(
     from tessera.lc.expertise import find_experts_step
     from tessera.lc.generation import LcModel, generate_expertise_step, generate_step, route_step
 
+    langgraph = settings.lc_orchestration in ("graph", "functional")
+    if settings.lc_corrective != "off" and not langgraph:
+        typer.echo("TESSERA_LC_CORRECTIVE needs TESSERA_LC_ORCHESTRATION=graph or functional.", err=True)
+        raise typer.Exit(code=2)
+    if settings.lc_retriever == "multiquery_send" and not langgraph:
+        typer.echo("TESSERA_LC_RETRIEVER=multiquery_send needs TESSERA_LC_ORCHESTRATION=graph or functional.", err=True)
+        raise typer.Exit(code=2)
     if settings.lc_retry == "lc" and settings.lc_model_client != "lc":
         typer.echo("TESSERA_LC_RETRY=lc needs TESSERA_LC_MODEL_CLIENT=lc.", err=True)
         raise typer.Exit(code=2)
@@ -519,7 +547,7 @@ class Answerer:
     store: VectorStore
     expertise_store: ExpertiseStore | None
     tracer: LangSmithTracer | None = None
-    _pipeline: NativePipeline | None = field(default=None, init=False, repr=False)
+    _pipeline: Pipeline | None = field(default=None, init=False, repr=False)
 
     def new_trace_id(self) -> str:
         return self.tracer.new_trace_id() if self.tracer is not None else uuid.uuid4().hex
@@ -1114,7 +1142,15 @@ def eval_command(
     if tracer is not None:
         typer.echo(f"Tracing to LangSmith project {settings.langsmith_project!r} (redacted)", err=True)
     native = _native_pipeline(
-        llms, embedder, store, expertise_store, tracer, steps=lc.pipeline_steps() if lc is not None else None
+        llms,
+        embedder,
+        store,
+        expertise_store,
+        tracer,
+        steps=lc.pipeline_steps() if lc is not None else None,
+        orchestration=settings.lc_orchestration if lc is not None else "native",
+        corrective=settings.lc_corrective if lc is not None else "off",
+        multiquery_send=lc is not None and settings.lc_retriever == "multiquery_send",
     )
     pipeline = tracer.pipeline(native) if tracer is not None else native
 
